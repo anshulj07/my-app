@@ -2,14 +2,15 @@
   "extends": "expo/tsconfig.base.json",
   "compilerOptions": {
     "strict": true,
-    "paths": {
-      "@/*": [
-        "./*"
-      ]
-    }
+    "skipLibCheck": true,
+    "skipDefaultLibCheck": true,
+    "noEmit": true
   },
-  "include": [
-    "**/*.ts",
-    "**/*.tsx"
-  ]
+  "exclude": [
+    "node_modules",
+    "scripts",
+    "test-reanimated.ts",
+    "test.ts"
+  ],
+  "include": ["app/**/*.tsx", "app/**/*.ts"]
 }

@@ -1,9 +1,10 @@
 // app/index.tsx
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { TouchableOpacity, Text, StyleSheet, Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import MapView from "../components/MapView";
 import ModalizeEventSheet from "../components/AddEventModal";
+import Constants from "expo-constants";
 
 type EventPin = { title: string; lat: number; lng: number; emoji: string; when?: string };
 
@@ -12,6 +13,34 @@ export default function Home() {
   const [events, setEvents] = useState<EventPin[]>([]);
 
   const fabSize = useMemo(() => (Platform.OS === "ios" ? 60 : 64), []);
+
+  const API_BASE = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
+  const EVENT_API_KEY = (Constants.expoConfig?.extra as any)?.eventApiKey as string | undefined;
+
+  const loadEvents = useCallback(async () => {
+    if (!API_BASE) return;
+
+    const res = await fetch(`${API_BASE}/api/events/get-events?limit=200`, {
+      headers: EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : undefined,
+    });
+
+    const json = await res.json();
+    const list = Array.isArray(json?.events) ? json.events : [];
+
+    setEvents(
+      list.map((e: any) => ({
+        title: e.title,
+        lat: e.lat,
+        lng: e.lng,
+        emoji: e.emoji ?? "📍",
+        when: [e.date, e.time].filter(Boolean).join(" · "),
+      }))
+    );
+  }, [API_BASE, EVENT_API_KEY]);
+
+  useEffect(() => {
+    loadEvents();
+  }, [loadEvents]);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -29,8 +58,9 @@ export default function Home() {
         visible={open}
         onClose={() => setOpen(false)}
         onCreate={(e: EventPin) => {
-          setEvents((prev) => [...prev, e]); // e = { title, lat, lng, emoji, when? }
+          setEvents((prev) => [e, ...prev]);
           setOpen(false);
+          loadEvents();
         }}
       />
     </GestureHandlerRootView>

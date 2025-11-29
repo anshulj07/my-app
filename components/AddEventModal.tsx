@@ -37,6 +37,43 @@ export default function AddEventModal({
   const mapRef = useRef<WebView>(null);
 
   const GOOGLE_KEY = (Constants.expoConfig?.extra as any)?.googleMapsKey as string | undefined;
+  const API_BASE = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
+  const EVENT_API_KEY = (Constants.expoConfig?.extra as any)?.eventApiKey as string | undefined; // optional
+
+  async function createEventInDb(args: {
+    apiBase: string;
+    apiKey?: string;
+    title: string;
+    emoji: string;
+    lat: number;
+    lng: number;
+    address?: string;
+    date?: string;
+    time?: string;
+  }) {
+    const res = await fetch(`${args.apiBase}/api/events/create-event`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(args.apiKey ? { "x-api-key": args.apiKey } : {}),
+      },
+      body: JSON.stringify({
+        title: args.title,
+        emoji: args.emoji,
+        lat: args.lat,
+        lng: args.lng,
+        address: args.address ?? "",
+        date: args.date ?? "",
+        time: args.time ?? "",
+      }),
+    });
+  
+    const json = await res.json();
+    if (!res.ok) throw new Error(json?.error || "Failed to create event");
+    return json; // { ok, id, event }
+  }
+  
+
   const H = Dimensions.get("window").height;
 
   // Form
@@ -164,25 +201,46 @@ export default function AddEventModal({
     }
   };
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!coord) return;
+    if (!API_BASE) {
+      setErr("Missing API base URL (extra.apiBaseUrl).");
+      return;
+    }
+  
     setSubmitting(true);
     setErr(null);
+  
     try {
-      onCreate({
+      // 1) Save to DB
+      const created = await createEventInDb({
+        apiBase: API_BASE,
+        apiKey: EVENT_API_KEY,
         title: buildTitle(title.trim(), dateISO.trim(), time24.trim()),
+        emoji,
         lat: coord.lat,
         lng: coord.lng,
-        emoji,
+        address: selectedAddress || query || "",
+        date: dateISO.trim(),
+        time: time24.trim(),
       });
+  
+      // 2) Update UI immediately (parent can add pin)
+      const ev = created?.event;
+      onCreate({
+        title: ev?.title ?? buildTitle(title.trim(), dateISO.trim(), time24.trim()),
+        lat: ev?.lat ?? coord.lat,
+        lng: ev?.lng ?? coord.lng,
+        emoji: ev?.emoji ?? emoji,
+      });
+  
       sheetRef.current?.close();
-      // onClosed will reset + call onClose
-    } catch {
-      setErr("Something went wrong. Please try again.");
+    } catch (e: any) {
+      setErr(e?.message || "Something went wrong. Please try again.");
       setSubmitting(false);
     }
   };
-
+  
   const mapHtml = useMemo(() => makeGoogleMapHtml(GOOGLE_KEY, coord), [GOOGLE_KEY]);
 
   return (

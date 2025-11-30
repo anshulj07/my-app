@@ -32,14 +32,31 @@ export default function Home() {
 
   const loadEvents = useCallback(async () => {
     if (!API_BASE) return;
-
-    const res = await fetch(`${API_BASE}/api/events/get-events?limit=200`, {
+  
+    const url = `${API_BASE}/api/events/get-events?limit=200`;
+  
+    const res = await fetch(url, {
       headers: EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : undefined,
     });
-
-    const json = await res.json();
+  
+    const text = await res.text(); // read raw first
+  
+    if (!res.ok) {
+      console.log("[Home] loadEvents failed", res.status, url);
+      console.log("[Home] body (first 200 chars):", text.slice(0, 200));
+      return;
+    }
+  
+    let json: any;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      console.log("[Home] Expected JSON but got:", text.slice(0, 200));
+      console.log("[Home] URL:", url);
+      return;
+    }
+  
     const list = Array.isArray(json?.events) ? json.events : [];
-
     setEvents(
       list.map((e: any) => ({
         title: e.title,
@@ -51,7 +68,7 @@ export default function Home() {
       }))
     );
   }, [API_BASE, EVENT_API_KEY]);
-
+  
   const loadMyLocation = useCallback(async () => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();

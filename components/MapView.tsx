@@ -4,9 +4,17 @@ import { View, StyleSheet, Platform, Text } from "react-native";
 import { WebView } from "react-native-webview";
 import Constants from "expo-constants";
 
-type EventPin = { title: string; lat: number; lng: number; emoji: string };
+export type EventPin = { title: string; lat: number; lng: number; emoji: string };
 
-export default function MapView({ events }: { events: EventPin[] }) {
+export default function MapView({
+  events,
+  initialCenter,
+  locationStatus = "unknown",
+}: {
+  events: EventPin[];
+  initialCenter?: { lat: number; lng: number } | null;
+  locationStatus?: "unknown" | "granted" | "denied";
+}) {
   if (Platform.OS === "web") {
     return (
       <View style={[styles.container, styles.center]}>
@@ -41,6 +49,18 @@ export default function MapView({ events }: { events: EventPin[] }) {
       }))
     );
 
+    // Avoid snapping to random event-city while we're still waiting for user location.
+    const canFallbackToEvents = locationStatus === "denied";
+
+    const center =
+      initialCenter ??
+      (canFallbackToEvents && safeEvents[0] ? { lat: safeEvents[0].lat, lng: safeEvents[0].lng } : { lat: 0, lng: 0 });
+
+    const zoom =
+      initialCenter || (canFallbackToEvents && safeEvents[0])
+        ? 12
+        : 2;
+
     return `<!doctype html>
 <html>
 <head>
@@ -50,14 +70,14 @@ export default function MapView({ events }: { events: EventPin[] }) {
     html,body,#map{height:100%;margin:0;padding:0}
 
     .emoji-pin{
-      position:absolute;               /* critical */
+      position:absolute;
       width:42px;height:42px;border-radius:21px;
       display:flex;align-items:center;justify-content:center;
       font-size:22px;
       background:#fff;
       border:1px solid rgba(2,6,23,.10);
       box-shadow:0 10px 22px rgba(2,6,23,.20);
-      transform:translate(-50%,-50%);  /* default centered */
+      transform:translate(-50%,-50%);
       user-select:none;-webkit-user-select:none;
       pointer-events:none;
       will-change:left,top,transform;
@@ -71,7 +91,7 @@ export default function MapView({ events }: { events: EventPin[] }) {
       border-radius:10px;
       padding:8px 10px;
       font:12px/1.2 -apple-system, system-ui, Segoe UI, Roboto, sans-serif;
-      max-width:90%;
+      max-width:92%;
       z-index:9999;
     }
   </style>
@@ -82,8 +102,10 @@ export default function MapView({ events }: { events: EventPin[] }) {
 
   <script>
     const DATA = ${data};
+    const INITIAL_CENTER = { lat: ${center.lat}, lng: ${center.lng} };
+
     let map;
-    const overlays = []; // OverlayView instances
+    const overlays = [];
 
     function post(type, payload){
       try {
@@ -108,7 +130,6 @@ export default function MapView({ events }: { events: EventPin[] }) {
       }
     }
 
-    // --- layout scheduler: ensures stacking is reapplied AFTER overlays redraw (zoom/pan) ---
     let layoutPending = false;
     function scheduleLayout(){
       if (layoutPending) return;
@@ -125,26 +146,17 @@ export default function MapView({ events }: { events: EventPin[] }) {
         return;
       }
 
-      const center = DATA.length
-        ? { lat: DATA[0].lat, lng: DATA[0].lng }
-        : { lat: 40.7128, lng: -74.0060 };
-
       map = new google.maps.Map(document.getElementById('map'), {
-        center,
-        zoom: 12,
+        center: INITIAL_CENTER,
+        zoom: ${zoom},
         disableDefaultUI: true,
         clickableIcons: false,
         gestureHandling: 'greedy'
       });
 
-      log("Map initialized", { center, zoom: map.getZoom(), pins: DATA.length });
+      log("Map initialized", { center: INITIAL_CENTER, zoom: map.getZoom(), pins: DATA.length });
 
-      // Re-stack on every stable moment + as the map changes
-      google.maps.event.addListener(map, "idle", () => {
-        const c = map.getCenter();
-        log("map idle", { center: { lat: c.lat(), lng: c.lng() }, zoom: map.getZoom() });
-        scheduleLayout();
-      });
+      google.maps.event.addListener(map, "idle", () => scheduleLayout());
       google.maps.event.addListener(map, "zoom_changed", () => scheduleLayout());
       google.maps.event.addListener(map, "bounds_changed", () => scheduleLayout());
 
@@ -157,9 +169,6 @@ export default function MapView({ events }: { events: EventPin[] }) {
 
     function makeEmojiOverlay(ev, idx){
       const overlay = new google.maps.OverlayView();
-      overlay._didFirstDraw = false;
-      overlay._ev = ev;
-      overlay._idx = idx;
       overlay._px = null;
 
       overlay.onAdd = function() {
@@ -169,10 +178,7 @@ export default function MapView({ events }: { events: EventPin[] }) {
         div.title = ev.title || '';
         div.dataset.id = ev._id || String(idx);
         this._div = div;
-
         this.getPanes().overlayLayer.appendChild(div);
-
-        log("overlay added", { idx, lat: ev.lat, lng: ev.lng, emoji: ev.emoji || "📍" });
       };
 
       overlay.draw = function() {
@@ -183,20 +189,10 @@ export default function MapView({ events }: { events: EventPin[] }) {
         const point = projection.fromLatLngToDivPixel(pos);
         if (!point) return;
 
-        // store raw pixels for stacking
         this._px = { x: point.x, y: point.y };
-
-        // ONLY set left/top here. DO NOT reset transform here,
-        // otherwise stacking offsets get wiped on zoom/pan redraw.
         this._div.style.left = Math.round(point.x) + 'px';
         this._div.style.top  = Math.round(point.y) + 'px';
 
-        if (!this._didFirstDraw) {
-          this._didFirstDraw = true;
-          log("overlay first draw", { idx, lat: ev.lat, lng: ev.lng, x: Math.round(point.x), y: Math.round(point.y) });
-        }
-
-        // Re-apply stacking after *any* draw cycle (zoom/pan triggers draw)
         scheduleLayout();
       };
 
@@ -205,20 +201,17 @@ export default function MapView({ events }: { events: EventPin[] }) {
           this._div.remove();
           this._div = null;
         }
-        log("overlay removed", { idx });
       };
 
       return overlay;
     }
 
-    // --- STACKING LOGIC ---
-    // Group overlays that are within THRESH pixels and fan them out.
     function layoutStacks(){
       const alive = overlays.filter(o => o && o._div && o._px);
       if (alive.length === 0) return;
 
-      const THRESH = 18; // pixels
-      const RADIUS = 22; // pixels
+      const THRESH = 18;
+      const RADIUS = 22;
 
       function dist2(a,b){
         const dx = a.x - b.x, dy = a.y - b.y;
@@ -232,11 +225,10 @@ export default function MapView({ events }: { events: EventPin[] }) {
         for (const g of groups) {
           if (dist2(o._px, g.anchor) <= THRESH*THRESH) {
             g.items.push(o);
-            // update anchor as average (stable)
             const n = g.items.length;
             g.anchor = {
               x: (g.anchor.x*(n-1) + o._px.x) / n,
-              y: (g.anchor.y*(n-1) + o._px.y) / n
+              y: (g.anchor.y*(n-1) + o._px.y) / n,
             };
             placed = true;
             break;
@@ -245,7 +237,6 @@ export default function MapView({ events }: { events: EventPin[] }) {
         if (!placed) groups.push({ anchor: { ...o._px }, items: [o] });
       }
 
-      // Apply transforms (do NOT touch left/top here unless you want a shared anchor)
       for (const g of groups) {
         const items = g.items;
 
@@ -262,14 +253,11 @@ export default function MapView({ events }: { events: EventPin[] }) {
           const dx = Math.cos(angle) * RADIUS;
           const dy = Math.sin(angle) * RADIUS;
 
-          // fan out around the point (keeps them "stuck" even while map redraws)
           o._div.style.transform =
             'translate(calc(-50% + ' + dx.toFixed(1) + 'px), calc(-50% + ' + dy.toFixed(1) + 'px))';
           o._div.style.zIndex = String(1000 + i);
         }
       }
-
-      log("stack layout", { groups: groups.map(g => g.items.length) });
     }
 
     window.initMap = initMap;
@@ -285,7 +273,7 @@ export default function MapView({ events }: { events: EventPin[] }) {
   </script>
 </body>
 </html>`;
-  }, [GOOGLE_KEY, safeEvents]);
+  }, [GOOGLE_KEY, JSON.stringify(safeEvents), initialCenter?.lat, initialCenter?.lng, locationStatus]);
 
   return (
     <View style={styles.container}>
@@ -294,7 +282,7 @@ export default function MapView({ events }: { events: EventPin[] }) {
         javaScriptEnabled
         domStorageEnabled
         source={{ html, baseUrl: "https://localhost" }}
-        key={JSON.stringify(safeEvents)}
+        key={JSON.stringify(safeEvents) + JSON.stringify(initialCenter) + locationStatus}
         onMessage={(e) => {
           try {
             const msg = JSON.parse(e.nativeEvent.data);

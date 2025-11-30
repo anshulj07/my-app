@@ -7,7 +7,7 @@ export default {
     scheme: "yoag",
     extra: {
       googleMapsKey: process.env.GOOGLE_MAPS_KEY,
-      apiBaseUrl: "https://efcf5a6d0306.ngrok-free.app",
+      apiBaseUrl: process.env.API_BASE_URL,
       eventApiKey: "super-secret"
     },
   },

@@ -6,6 +6,7 @@ import MapView from "../../components/Map/MapView";
 import ModalizeEventSheet from "../../components/Map/AddEventModal";
 import EventsListModal from "../../components/List/EventsListModal";
 import Constants from "expo-constants";
+import Ionicons from "@expo/vector-icons/Ionicons";
 
 type EventPin = {
   title: string;
@@ -107,9 +108,15 @@ export default function Home() {
         <Text style={styles.fabText}>+</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.listPill} activeOpacity={0.92} onPress={() => setShowList(true)}>
-        <Text style={styles.listPillText}>List</Text>
+      <TouchableOpacity
+        style={styles.listPill}
+        activeOpacity={0.92}
+        onPress={() => setShowList(true)}
+      >
+        <Ionicons name="list" size={18} color="#fff" />
+        <Text style={styles.listPillText}>Nearby</Text>
       </TouchableOpacity>
+
 
       <EventsListModal visible={showList} onClose={() => setShowList(false)} events={events as any} myCity={myCity} />
 
@@ -145,17 +152,29 @@ const styles = StyleSheet.create({
     position: "absolute",
     bottom: 44,
     left: "50%",
-    transform: [{ translateX: -42 }],
-    width: 84,
+    transform: [{ translateX: -62 }],
+    width: 124,
+    height: 46,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 12,
+    gap: 8,
     borderRadius: 999,
-    backgroundColor: "rgba(15,23,42,0.92)",
-    shadowColor: "#0B1220",
-    shadowOpacity: 0.28,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 12 },
+    backgroundColor: "rgba(17, 24, 39, 0.72)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.18)",
+    shadowColor: "#000",
+    shadowOpacity: 0.3,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 14 },
+    elevation: 10,
   },
+  listPillText: {
+    color: "#fff",
+    fontWeight: "900",
+    fontSize: 13,
+    letterSpacing: 0.2,
+  },
+  
   listPillText: { color: "#fff", fontWeight: "900", fontSize: 14 },
 });

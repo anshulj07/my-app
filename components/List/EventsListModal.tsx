@@ -12,6 +12,9 @@ import {
   Platform,
 } from "react-native";
 
+import Ionicons from "@expo/vector-icons/Ionicons";
+
+
 type EventPin = {
   title: string;
   lat: number;
@@ -206,7 +209,7 @@ export default function EventsListModal({
             <View style={styles.searchCard}>
               <Text style={styles.searchLabel}>Search city</Text>
               <View style={styles.searchRow}>
-                <Text style={styles.searchIcon}>⌕</Text>
+                <Ionicons name="search-outline" size={18} color="rgba(255,255,255,0.75)" />
 
                 <TextInput
                   value={q}

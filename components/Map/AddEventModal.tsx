@@ -18,11 +18,31 @@ import { Modalize } from "react-native-modalize";
 import Constants from "expo-constants";
 import { WebView } from "react-native-webview";
 
-/** The parent expects: onCreate({ title, lat, lng, emoji }) */
+/** Parent expects: onCreate({ title, lat, lng, emoji }) */
 type CreateEvent = { title: string; lat: number; lng: number; emoji: string };
 type Suggestion = { id: string; main: string; secondary?: string };
-
 type Option = { label: string; value: string };
+
+type LocationPayload = {
+  lat: number;
+  lng: number;
+  formattedAddress?: string;
+  placeId?: string;
+
+  countryCode: string; // "US"
+  countryName?: string;
+
+  admin1?: string; // "New York"
+  admin1Code?: string; // "NY"
+
+  city: string; // "Potsdam"
+  cityKey?: string;
+
+  postalCode?: string;
+  neighborhood?: string;
+
+  source?: "user_typed" | "places_autocomplete" | "reverse_geocode";
+};
 
 export default function AddEventModal({
   visible,
@@ -40,40 +60,6 @@ export default function AddEventModal({
   const API_BASE = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
   const EVENT_API_KEY = (Constants.expoConfig?.extra as any)?.eventApiKey as string | undefined; // optional
 
-  async function createEventInDb(args: {
-    apiBase: string;
-    apiKey?: string;
-    title: string;
-    emoji: string;
-    lat: number;
-    lng: number;
-    address?: string;
-    date?: string;
-    time?: string;
-  }) {
-    const res = await fetch(`${args.apiBase}/api/events/create-event`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(args.apiKey ? { "x-api-key": args.apiKey } : {}),
-      },
-      body: JSON.stringify({
-        title: args.title,
-        emoji: args.emoji,
-        lat: args.lat,
-        lng: args.lng,
-        address: args.address ?? "",
-        date: args.date ?? "",
-        time: args.time ?? "",
-      }),
-    });
-  
-    const json = await res.json();
-    if (!res.ok) throw new Error(json?.error || "Failed to create event");
-    return json; // { ok, id, event }
-  }
-  
-
   const H = Dimensions.get("window").height;
 
   // Form
@@ -87,10 +73,12 @@ export default function AddEventModal({
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [loadingSug, setLoadingSug] = useState(false);
-  const [selectedAddress, setSelectedAddress] = useState<string>("");
 
-  // Map selection
+  // Location state (NEW structured)
   const [coord, setCoord] = useState<{ lat: number; lng: number } | null>(null);
+  const [selectedAddress, setSelectedAddress] = useState<string>("");
+  const [locationPayload, setLocationPayload] = useState<LocationPayload | null>(null);
+  const [locLoading, setLocLoading] = useState(false);
   const [mapReady, setMapReady] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
@@ -110,9 +98,12 @@ export default function AddEventModal({
     setSuggestions([]);
     setSelectedAddress("");
     setCoord(null);
+    setLocationPayload(null);
     setErr(null);
     setSubmitting(false);
     setMapReady(false);
+    setLoadingSug(false);
+    setLocLoading(false);
   };
 
   // reset on close
@@ -171,76 +162,137 @@ export default function AddEventModal({
   // when coord changes, update map marker
   useEffect(() => {
     if (!mapReady || !coord) return;
-    mapRef.current?.postMessage(
-      JSON.stringify({ type: "setMarker", lat: coord.lat, lng: coord.lng })
-    );
+    mapRef.current?.postMessage(JSON.stringify({ type: "setMarker", lat: coord.lat, lng: coord.lng }));
   }, [coord, mapReady]);
 
-  const canCreate = !!GOOGLE_KEY && !!title.trim() && !!coord && !submitting;
+  const hasStructuredLocation =
+    !!locationPayload?.countryCode && !!locationPayload?.city && Number.isFinite(locationPayload.lat) && Number.isFinite(locationPayload.lng);
+
+  const canCreate = !!GOOGLE_KEY && !!title.trim() && !!coord && hasStructuredLocation && !submitting && !locLoading;
+
+  async function createEventInDb(args: {
+    apiBase: string;
+    apiKey?: string;
+    title: string;
+    emoji: string;
+    date?: string;
+    time?: string;
+    timezone?: string;
+    location: LocationPayload;
+  }) {
+    const res = await fetch(`${args.apiBase}/api/events/create-event`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(args.apiKey ? { "x-api-key": args.apiKey } : {}),
+      },
+      body: JSON.stringify({
+        title: args.title,
+        emoji: args.emoji,
+        date: args.date ?? "",
+        time: args.time ?? "",
+        timezone: args.timezone ?? "",
+        location: {
+          ...args.location,
+          cityKey: args.location.cityKey || cityKey(args.location.city),
+          formattedAddress: args.location.formattedAddress ?? "",
+          source: args.location.source ?? "user_typed",
+        },
+      }),
+    });
+
+    const json = await res.json();
+    if (!res.ok) throw new Error(json?.error || "Failed to create event");
+    return json; // { ok, id, event }
+  }
 
   const handlePickSuggestion = async (s: Suggestion) => {
     if (!GOOGLE_KEY) return;
     Keyboard.dismiss();
     setErr(null);
     setLoadingSug(true);
+    setLocLoading(true);
+
     try {
       const details = await fetchPlaceDetails(GOOGLE_KEY, s.id);
       if (!details?.latLng) {
         setErr("Couldn’t get coordinates for that place. Try another search.");
         return;
       }
+
+      const addr = details.formattedAddress || [s.main, s.secondary].filter(Boolean).join(", ");
       setCoord(details.latLng);
-      const addr = details.display || [s.main, s.secondary].filter(Boolean).join(", ");
       setSelectedAddress(addr);
       setQuery(addr);
-      setSuggestions([]); // dropdown closes
+      setSuggestions([]);
+
+      const loc = buildLocationFromAddressComponents({
+        lat: details.latLng.lat,
+        lng: details.latLng.lng,
+        formattedAddress: addr,
+        placeId: s.id,
+        components: details.addressComponents ?? [],
+        source: "places_autocomplete",
+      });
+
+      if (!loc?.countryCode || !loc?.city) {
+        setLocationPayload(null);
+        setErr("Couldn’t extract city/country from that place. Try a different result.");
+        return;
+      }
+
+      setLocationPayload(loc);
     } catch {
       setErr("Something went wrong while selecting that place.");
     } finally {
       setLoadingSug(false);
+      setLocLoading(false);
     }
   };
 
   const handleCreate = async () => {
-    if (!coord) return;
+    if (!coord || !locationPayload) return;
+
     if (!API_BASE) {
       setErr("Missing API base URL (extra.apiBaseUrl).");
       return;
     }
-  
+
     setSubmitting(true);
     setErr(null);
-  
+
     try {
-      // 1) Save to DB
+      const timezone =
+        typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "";
+
       const created = await createEventInDb({
         apiBase: API_BASE,
         apiKey: EVENT_API_KEY,
-        title: buildTitle(title.trim(), dateISO.trim(), time24.trim()),
+        title: title.trim(),
         emoji,
-        lat: coord.lat,
-        lng: coord.lng,
-        address: selectedAddress || query || "",
         date: dateISO.trim(),
         time: time24.trim(),
+        timezone,
+        location: locationPayload,
       });
-  
-      // 2) Update UI immediately (parent can add pin)
+
       const ev = created?.event;
+
+      // Parent needs only the map pin essentials
       onCreate({
-        title: ev?.title ?? buildTitle(title.trim(), dateISO.trim(), time24.trim()),
-        lat: ev?.lat ?? coord.lat,
-        lng: ev?.lng ?? coord.lng,
+        title: ev?.title ?? title.trim(),
+        lat: ev?.location?.lat ?? coord.lat,
+        lng: ev?.location?.lng ?? coord.lng,
         emoji: ev?.emoji ?? emoji,
       });
-  
+
       sheetRef.current?.close();
     } catch (e: any) {
       setErr(e?.message || "Something went wrong. Please try again.");
       setSubmitting(false);
     }
   };
-  
+
   const mapHtml = useMemo(() => makeGoogleMapHtml(GOOGLE_KEY, coord), [GOOGLE_KEY]);
 
   return (
@@ -314,7 +366,8 @@ export default function AddEventModal({
               onChangeText={(t) => {
                 setQuery(t);
                 setSelectedAddress("");
-                // don’t clear coord immediately: user may just edit a char
+                setLocationPayload(null); // important: user is editing -> require repick
+                setErr(null);
               }}
               placeholder="Search an address or place"
               placeholderTextColor="#94A3B8"
@@ -328,6 +381,7 @@ export default function AddEventModal({
                   setQuery("");
                   setSuggestions([]);
                   setSelectedAddress("");
+                  setLocationPayload(null);
                   setErr(null);
                 }}
                 style={styles.clearBtn}
@@ -380,6 +434,23 @@ export default function AddEventModal({
             </View>
           )}
 
+          {!!locationPayload && (
+            <View style={[styles.selectedPill, { backgroundColor: "rgba(14,165,233,0.10)", borderColor: "rgba(14,165,233,0.25)" }]}>
+              <Text numberOfLines={1} style={[styles.selectedPillText, { color: "#075985" }]}>
+                {locationPayload.city}
+                {locationPayload.admin1Code ? `, ${locationPayload.admin1Code}` : locationPayload.admin1 ? `, ${locationPayload.admin1}` : ""}
+                {locationPayload.countryCode ? ` • ${locationPayload.countryCode}` : ""}
+              </Text>
+            </View>
+          )}
+
+          {locLoading && (
+            <View style={{ marginTop: 10, flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <ActivityIndicator />
+              <Text style={{ color: "#64748B", fontWeight: "800" }}>Resolving address…</Text>
+            </View>
+          )}
+
           {/* Map */}
           <View style={styles.mapWrap}>
             {!GOOGLE_KEY ? (
@@ -398,25 +469,61 @@ export default function AddEventModal({
                 javaScriptEnabled
                 domStorageEnabled
                 source={{ html: mapHtml, baseUrl: "https://localhost" }}
-                onMessage={(e) => {
+                onMessage={async (e) => {
                   try {
                     const msg = JSON.parse(e.nativeEvent.data);
                     if (msg?.type === "ready") setMapReady(true);
+
                     if (msg?.type === "picked" && typeof msg.lat === "number" && typeof msg.lng === "number") {
-                      setCoord({ lat: msg.lat, lng: msg.lng });
-                      setSelectedAddress("Dropped pin");
+                      const picked = { lat: msg.lat, lng: msg.lng };
+                      setCoord(picked);
                       setSuggestions([]);
                       setErr(null);
+
+                      if (!GOOGLE_KEY) return;
+
+                      // Reverse geocode for structured fields (city/country) for DB schema
+                      setLocLoading(true);
+                      setSelectedAddress("Dropped pin");
+
+                      const geo = await reverseGeocode(GOOGLE_KEY, picked.lat, picked.lng);
+                      if (!geo?.formattedAddress || !geo?.components?.length) {
+                        setLocationPayload(null);
+                        setSelectedAddress("Dropped pin (no address found)");
+                        setErr("Couldn’t resolve city/country for that pin. Try a different spot.");
+                        return;
+                      }
+
+                      setSelectedAddress(geo.formattedAddress);
+
+                      const loc = buildLocationFromAddressComponents({
+                        lat: picked.lat,
+                        lng: picked.lng,
+                        formattedAddress: geo.formattedAddress,
+                        placeId: geo.placeId,
+                        components: geo.components,
+                        source: "reverse_geocode",
+                      });
+
+                      if (!loc?.countryCode || !loc?.city) {
+                        setLocationPayload(null);
+                        setErr("Couldn’t extract city/country for that pin. Try a different spot.");
+                        return;
+                      }
+
+                      setLocationPayload(loc);
                     }
                   } catch {
                     // ignore
+                  } finally {
+                    setLocLoading(false);
                   }
                 }}
               />
             )}
           </View>
 
-          <Text style={styles.mapHint}>Tip: tap on the map to drop a pin.</Text>
+          <Text style={styles.mapHint}>Tip: tap on the map to drop a pin (we’ll resolve city/country automatically).</Text>
 
           {!!err && <Text style={styles.err}>{err}</Text>}
         </View>
@@ -510,10 +617,13 @@ async function fetchAutocomplete(
   try {
     setLoading(true);
     setErr(null);
+
+    // If you want global, remove components=country:us
     const url =
       `https://maps.googleapis.com/maps/api/place/autocomplete/json` +
       `?input=${encodeURIComponent(q)}` +
       `&types=geocode&components=country:us&key=${key}`;
+
     const res = await fetch(url);
     const json = await res.json();
     const preds = Array.isArray(json?.predictions) ? json.predictions : [];
@@ -531,30 +641,127 @@ async function fetchAutocomplete(
   }
 }
 
-async function fetchPlaceDetails(key: string, placeId: string): Promise<{
+type AddressComponent = { long_name: string; short_name: string; types: string[] };
+
+async function fetchPlaceDetails(
+  key: string,
+  placeId: string
+): Promise<{
   latLng: { lat: number; lng: number } | null;
-  display?: string;
+  formattedAddress?: string;
+  addressComponents?: AddressComponent[];
 } | null> {
   const u =
     `https://maps.googleapis.com/maps/api/place/details/json` +
-    `?place_id=${placeId}&fields=geometry,formatted_address,name&key=${key}`;
+    `?place_id=${placeId}` +
+    `&fields=geometry,formatted_address,address_component,place_id,name` +
+    `&key=${key}`;
+
   const res = await fetch(u);
   const json = await res.json();
+
   const loc = json?.result?.geometry?.location;
   const lat = loc?.lat;
   const lng = loc?.lng;
-  const display = json?.result?.formatted_address || json?.result?.name;
+
+  const formattedAddress = json?.result?.formatted_address || json?.result?.name;
+  const addressComponents = (json?.result?.address_components || []) as AddressComponent[];
+
   if (typeof lat === "number" && typeof lng === "number") {
-    return { latLng: { lat, lng }, display };
+    return { latLng: { lat, lng }, formattedAddress, addressComponents };
   }
-  return { latLng: null, display };
+  return { latLng: null, formattedAddress, addressComponents };
 }
 
-function buildTitle(t: string, d?: string, tm?: string) {
-  const parts = [t];
-  if (d) parts.push(d);
-  if (tm) parts.push(tm);
-  return parts.join(" · ");
+async function reverseGeocode(
+  key: string,
+  lat: number,
+  lng: number
+): Promise<{ formattedAddress: string; components: AddressComponent[]; placeId?: string } | null> {
+  const u =
+    `https://maps.googleapis.com/maps/api/geocode/json` +
+    `?latlng=${encodeURIComponent(`${lat},${lng}`)}` +
+    `&key=${key}`;
+
+  const res = await fetch(u);
+  const json = await res.json();
+  const results = Array.isArray(json?.results) ? json.results : [];
+  const top = results[0];
+  if (!top) return null;
+
+  return {
+    formattedAddress: top.formatted_address || "Dropped pin",
+    components: (top.address_components || []) as AddressComponent[],
+    placeId: top.place_id,
+  };
+}
+
+function getComp(components: AddressComponent[], type: string) {
+  return components.find((c) => c.types?.includes(type));
+}
+
+function cityKey(city: string) {
+  return city
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/[^\p{L}\p{N}\s-]/gu, "")
+    .replace(/\s/g, "-");
+}
+
+function buildLocationFromAddressComponents(args: {
+  lat: number;
+  lng: number;
+  formattedAddress?: string;
+  placeId?: string;
+  components: AddressComponent[];
+  source: LocationPayload["source"];
+}): LocationPayload | null {
+  const c = args.components || [];
+
+  const country = getComp(c, "country");
+  const admin1 = getComp(c, "administrative_area_level_1");
+
+  // city-ish fallbacks
+  const locality = getComp(c, "locality");
+  const postalTown = getComp(c, "postal_town");
+  const admin2 = getComp(c, "administrative_area_level_2");
+  const admin3 = getComp(c, "administrative_area_level_3");
+  const sublocality = getComp(c, "sublocality") || getComp(c, "sublocality_level_1");
+
+  const postal = getComp(c, "postal_code");
+
+  const city =
+    locality?.long_name ||
+    postalTown?.long_name ||
+    admin3?.long_name ||
+    admin2?.long_name ||
+    "";
+
+  const countryCode = (country?.short_name || "").toUpperCase();
+
+  if (!city || !countryCode) return null;
+
+  return {
+    lat: args.lat,
+    lng: args.lng,
+    formattedAddress: args.formattedAddress ?? "",
+    placeId: args.placeId,
+
+    countryCode,
+    countryName: country?.long_name || "",
+
+    admin1: admin1?.long_name || "",
+    admin1Code: admin1?.short_name || "",
+
+    city,
+    cityKey: cityKey(city),
+
+    postalCode: postal?.long_name || "",
+    neighborhood: sublocality?.long_name || "",
+
+    source: args.source,
+  };
 }
 
 function formatTime12h(hh: number, mm: number) {
@@ -579,13 +786,8 @@ function textToEmoji(t: string): string {
   return "📍";
 }
 
-function makeGoogleMapHtml(
-  key?: string,
-  initial?: { lat: number; lng: number } | null
-) {
+function makeGoogleMapHtml(key?: string, initial?: { lat: number; lng: number } | null) {
   const center = initial ?? { lat: 40.7128, lng: -74.006 }; // default NYC-ish
-  // NOTE: Using Google Maps JS in a WebView.
-  // Enable: Maps JavaScript API. (Places API already used above for autocomplete/details.)
   return `<!doctype html>
 <html>
 <head>
@@ -594,7 +796,6 @@ function makeGoogleMapHtml(
   <style>
     html, body { height: 100%; margin: 0; padding: 0; background: #0b1220; }
     #map { height: 100%; width: 100%; border-radius: 16px; overflow: hidden; }
-    .gm-style .gm-style-iw-c { border-radius: 12px !important; }
   </style>
 </head>
 <body>

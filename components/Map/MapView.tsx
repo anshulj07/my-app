@@ -4,7 +4,71 @@ import { View, StyleSheet, Platform, Text } from "react-native";
 import { WebView } from "react-native-webview";
 import Constants from "expo-constants";
 
-export type EventPin = { title: string; lat: number; lng: number; emoji: string };
+/**
+ * Backward + forward compatible pin type:
+ * - Old shape: { title, lat, lng, emoji }
+ * - New shape (your updated schema): { title, emoji, location: { lat, lng, ... } }
+ */
+export type EventPin = {
+  _id: string;
+
+  title: string;
+  lat: number;
+  lng: number;
+  emoji: string;
+
+  // common / display helpers
+  when?: string;
+  address?: string;
+
+  // ✅ old schema (flat) support
+  city?: string;
+  state?: string;
+  region?: string;     // if you used region instead of state
+  country?: string;
+  date?: string;       // if you still store date/time separately
+  time?: string;
+
+  // ✅ new schema (nested) support
+  location?: {
+    city?: string;
+    state?: string;
+    region?: string;
+    country?: string;
+
+    address?: string;           // if your API uses this key
+    formattedAddress?: string;  // if your API uses this key
+    placeId?: string;
+
+    lat?: number;
+    lng?: number;
+  };
+};
+
+
+function normalizeEvent(e: any, i: number): EventPin | null {
+  const lat = e?.lat ?? e?.location?.lat;
+  const lng = e?.lng ?? e?.location?.lng;
+
+  if (typeof lat !== "number" || !Number.isFinite(lat)) return null;
+  if (typeof lng !== "number" || !Number.isFinite(lng)) return null;
+
+  const title = typeof e?.title === "string" ? e.title : "";
+  const emoji = typeof e?.emoji === "string" && e.emoji.trim() ? e.emoji : "📍";
+  const _id =
+    (typeof e?._id === "string" && e._id) ||
+    (typeof e?.id === "string" && e.id) ||
+    `${i}-${lat}-${lng}-${title}`;
+
+  return {
+    _id,
+    title,
+    emoji,
+    lat,
+    lng,
+    location: e?.location ?? undefined,
+  };
+}
 
 export default function MapView({
   events,
@@ -12,7 +76,7 @@ export default function MapView({
   locationStatus = "unknown",
   onPinPress,
 }: {
-  events: EventPin[];
+  events: any[]; // accept whatever comes from API; we normalize it
   initialCenter?: { lat: number; lng: number } | null;
   locationStatus?: "unknown" | "granted" | "denied";
   onPinPress?: (pin: EventPin) => void;
@@ -27,13 +91,15 @@ export default function MapView({
 
   const GOOGLE_KEY = (Constants.expoConfig?.extra as any)?.googleMapsKey as string | undefined;
 
-  const safeEvents = (events || []).filter(
-    (e) =>
-      typeof e.lat === "number" &&
-      Number.isFinite(e.lat) &&
-      typeof e.lng === "number" &&
-      Number.isFinite(e.lng)
-  );
+  const safeEvents: EventPin[] = useMemo(() => {
+    const list = Array.isArray(events) ? events : [];
+    const out: EventPin[] = [];
+    for (let i = 0; i < list.length; i++) {
+      const n = normalizeEvent(list[i], i);
+      if (n) out.push(n);
+    }
+    return out;
+  }, [events]);
 
   if (!GOOGLE_KEY) {
     return (
@@ -43,11 +109,13 @@ export default function MapView({
     );
   }
 
+  const safeEventsJson = useMemo(() => JSON.stringify(safeEvents), [safeEvents]);
+
   const html = useMemo(() => {
     const data = JSON.stringify(
       safeEvents.map((e, i) => ({
         ...e,
-        _id: `${i}-${e.lat}-${e.lng}-${e.title ?? ""}`,
+        _id: e._id ?? `${i}-${e.lat}-${e.lng}-${e.title ?? ""}`,
       }))
     );
 
@@ -56,12 +124,11 @@ export default function MapView({
 
     const center =
       initialCenter ??
-      (canFallbackToEvents && safeEvents[0] ? { lat: safeEvents[0].lat, lng: safeEvents[0].lng } : { lat: 0, lng: 0 });
+      (canFallbackToEvents && safeEvents[0]
+        ? { lat: safeEvents[0].lat, lng: safeEvents[0].lng }
+        : { lat: 0, lng: 0 });
 
-    const zoom =
-      initialCenter || (canFallbackToEvents && safeEvents[0])
-        ? 12
-        : 2;
+    const zoom = initialCenter || (canFallbackToEvents && safeEvents[0]) ? 12 : 2;
 
     return `<!doctype html>
 <html>
@@ -81,7 +148,7 @@ export default function MapView({
       box-shadow:0 10px 22px rgba(2,6,23,.20);
       transform:translate(-50%,-50%);
       user-select:none;-webkit-user-select:none;
-      pointer-events:auto;              
+      pointer-events:auto;
       will-change:left,top,transform;
       cursor:pointer;
       touch-action: manipulation;
@@ -182,36 +249,33 @@ export default function MapView({
         div.title = ev.title || '';
         div.dataset.id = ev._id || String(idx);
         this._div = div;
+
         let fired = false;
-      
         const fire = (e) => {
           if (fired) return;
           fired = true;
           setTimeout(() => (fired = false), 400);
-        
+
           if (e) {
             e.preventDefault?.();
             e.stopPropagation?.();
           }
-        
+
           post("pinClick", { event: ev });
           log("Pin pressed", { title: ev.title, lat: ev.lat, lng: ev.lng });
         };
-      
-        // Mobile-friendly events
+
         div.addEventListener('pointerdown', fire, { passive: false });
         div.addEventListener('touchstart', fire, { passive: false });
         div.addEventListener('click', fire);
-      
-        // IMPORTANT: prevent map from swallowing interactions on this div
+
         if (window.google?.maps?.OverlayView?.preventMapHitsAndGesturesFrom) {
           google.maps.OverlayView.preventMapHitsAndGesturesFrom(div);
         }
-      
-        // IMPORTANT: interactive pane
+
         this.getPanes().overlayMouseTarget.appendChild(div);
       };
-      
+
       overlay.draw = function() {
         const projection = this.getProjection();
         if (!projection || !this._div) return;
@@ -304,7 +368,7 @@ export default function MapView({
   </script>
 </body>
 </html>`;
-  }, [GOOGLE_KEY, JSON.stringify(safeEvents), initialCenter?.lat, initialCenter?.lng, locationStatus]);
+  }, [GOOGLE_KEY, safeEventsJson, initialCenter?.lat, initialCenter?.lng, locationStatus]);
 
   return (
     <View style={styles.container}>
@@ -313,15 +377,16 @@ export default function MapView({
         javaScriptEnabled
         domStorageEnabled
         source={{ html, baseUrl: "https://localhost" }}
-        key={JSON.stringify(safeEvents) + JSON.stringify(initialCenter) + locationStatus}
+        key={safeEventsJson + JSON.stringify(initialCenter) + locationStatus}
         onMessage={(e) => {
           try {
             const msg = JSON.parse(e.nativeEvent.data);
             if (msg?.type === "log") {
               console.log("[MapView]", msg.msg, msg.extra ?? "");
             } else if (msg?.type === "pinClick" && msg.event) {
-              // 👇 bubble to React Native
-              onPinPress?.(msg.event as EventPin);
+              // normalize click payload (it already has lat/lng, but keep it consistent)
+              const n = normalizeEvent(msg.event, 0);
+              if (n) onPinPress?.(n);
             }
           } catch {}
         }}

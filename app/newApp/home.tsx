@@ -8,15 +8,40 @@ import EventsListModal from "../../components/List/EventsListModal";
 import Constants from "expo-constants";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import PersonBookingSheet from "../../components/ClickPin/PersonBookingSheet";
+import type { EventPin } from "../../components/Map/MapView";
 
-type EventPin = {
-  title: string;
-  lat: number;
-  lng: number;
-  emoji: string;
-  when?: string;
-  address?: string;
-};
+
+function toNumber(v: any): number | null {
+  const n = typeof v === "string" ? Number(v) : v;
+  return typeof n === "number" && Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Normalizes API event into the pin shape MapView expects:
+ * - Supports BOTH old schema (e.lat/e.lng) and new schema (e.location.lat/e.location.lng)
+ */
+function normalizeEvent(e: any): EventPin | null {
+  const lat = toNumber(e?.location?.lat ?? e?.lat);
+  const lng = toNumber(e?.location?.lng ?? e?.lng);
+  if (lat == null || lng == null) return null;
+
+  const when = [e?.date, e?.time].filter(Boolean).join(" · ");
+  const address =
+    e?.location?.formattedAddress ??
+    e?.location?.address ??
+    e?.address ??
+    "";
+
+  return {
+    ...e, // preserve extra fields
+    title: e?.title ?? "",
+    lat,
+    lng,
+    emoji: e?.emoji ?? "📍",
+    when,
+    address,
+  };
+}
 
 export default function Home() {
   const [open, setOpen] = useState(false);
@@ -25,9 +50,9 @@ export default function Home() {
   const [myLoc, setMyLoc] = useState<{ lat: number; lng: number } | null>(null);
   const [myCity, setMyCity] = useState("");
   const [locStatus, setLocStatus] = useState<"unknown" | "granted" | "denied">("unknown");
+
   const [selectedPin, setSelectedPin] = useState<EventPin | null>(null);
   const [showPersonSheet, setShowPersonSheet] = useState(false);
-
 
   const fabSize = useMemo(() => (Platform.OS === "ios" ? 60 : 64), []);
 
@@ -43,7 +68,7 @@ export default function Home() {
       headers: EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : undefined,
     });
 
-    const text = await res.text(); // read raw first
+    const text = await res.text();
 
     if (!res.ok) {
       console.log("[Home] loadEvents failed", res.status, url);
@@ -61,16 +86,10 @@ export default function Home() {
     }
 
     const list = Array.isArray(json?.events) ? json.events : [];
-    setEvents(
-      list.map((e: any) => ({
-        title: e.title,
-        lat: e.lat,
-        lng: e.lng,
-        emoji: e.emoji ?? "📍",
-        when: [e.date, e.time].filter(Boolean).join(" · "),
-        address: e.address ?? "",
-      }))
-    );
+
+    // ✅ KEY FIX: normalize new schema -> keeps top-level lat/lng for MapView
+    const normalized = list.map(normalizeEvent).filter(Boolean) as EventPin[];
+    setEvents(normalized);
   }, [API_BASE, EVENT_API_KEY]);
 
   const loadMyLocation = useCallback(async () => {
@@ -83,7 +102,6 @@ export default function Home() {
       }
       setLocStatus("granted");
 
-      // fast path
       const last = await Location.getLastKnownPositionAsync();
       if (last?.coords?.latitude && last?.coords?.longitude) {
         const lat = last.coords.latitude;
@@ -92,7 +110,6 @@ export default function Home() {
         console.log("[Home] Last known loc", { lat, lng });
       }
 
-      // accurate path
       const cur = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Balanced,
       });
@@ -135,8 +152,6 @@ export default function Home() {
         onClose={() => setShowPersonSheet(false)}
       />
 
-
-
       <TouchableOpacity
         style={[styles.fab, { width: fabSize, height: fabSize, borderRadius: fabSize / 2 }]}
         onPress={() => setOpen(true)}
@@ -145,23 +160,25 @@ export default function Home() {
         <Text style={styles.fabText}>+</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity
-        style={styles.listPill}
-        activeOpacity={0.92}
-        onPress={() => setShowList(true)}
-      >
+      <TouchableOpacity style={styles.listPill} activeOpacity={0.92} onPress={() => setShowList(true)}>
         <Ionicons name="list" size={18} color="#fff" />
         <Text style={styles.listPillText}>Nearby</Text>
       </TouchableOpacity>
 
-
-      <EventsListModal visible={showList} onClose={() => setShowList(false)} events={events as any} myCity={myCity} />
+      <EventsListModal
+        visible={showList}
+        onClose={() => setShowList(false)}
+        events={events as any}
+        myCity={myCity}
+      />
 
       <ModalizeEventSheet
         visible={open}
         onClose={() => setOpen(false)}
         onCreate={(e: any) => {
-          setEvents((prev) => [e, ...prev]);
+          // normalize newly-created event too (handles new schema safely)
+          const n = normalizeEvent(e) ?? (e as EventPin);
+          setEvents((prev) => [n, ...prev]);
           setOpen(false);
           loadEvents();
         }}

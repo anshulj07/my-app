@@ -9,6 +9,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Platform,
 } from "react-native";
 
 type EventPin = {
@@ -57,10 +58,6 @@ function isStreetLike(s: string) {
   );
 }
 
-// Handles:
-// "Potsdam, NY, USA" -> { city: "Potsdam", state: "NY" }
-// "14 Market St, Potsdam, NY 13676, USA" -> { city: "Potsdam", state: "NY" }
-// "NYC" -> { city: "NYC", state: "" }
 function extractCityState(address?: string) {
   const parts = splitParts(address);
   if (parts.length === 0) return { city: "", state: "" };
@@ -71,7 +68,7 @@ function extractCityState(address?: string) {
 
   const city = hasStreet ? parts[1] || "" : parts[0] || "";
   const statePart = hasStreet ? parts[2] || "" : parts[1] || "";
-  const state = (statePart.split(" ")[0] || "").trim(); // "NY 13676" -> "NY"
+  const state = (statePart.split(" ")[0] || "").trim();
 
   return { city: city.trim(), state: state.trim() };
 }
@@ -92,6 +89,17 @@ function normalizeQuery(s: string) {
     .replace(/\s+/g, " ");
 }
 
+function formatHeaderCity(myCity: string) {
+  const c = (myCity || "").trim();
+  return c ? c : "Unknown";
+}
+
+function niceDateLabel(key: string) {
+  if (key === "No date") return "No date";
+  // keep it simple: show YYYY-MM-DD as-is (fast + predictable)
+  return key;
+}
+
 export default function EventsListModal({
   visible,
   onClose,
@@ -110,7 +118,7 @@ export default function EventsListModal({
 
   const myCityEvents = useMemo(() => {
     const base = (events || []).filter((e) => (e.address || "").trim().length > 0);
-    if (!myCityKey) return []; // show none if we don't know city
+    if (!myCityKey) return [];
     return base.filter((e) => normalizeCity(extractCityState(e.address).city) === myCityKey);
   }, [events, myCityKey]);
 
@@ -118,12 +126,11 @@ export default function EventsListModal({
     const base = (events || []).filter((e) => (e.address || "").trim().length > 0);
     const query = normalizeCity(q);
     if (!query) return [];
-
     return base.filter((e) => {
       const { city, state } = extractCityState(e.address);
       const cityKey = normalizeCity(city);
       const fullKey = normalizeQuery(e.address || "");
-      const cityStateKey = normalizeQuery([city, state].filter(Boolean).join(" ")); // "new york ny"
+      const cityStateKey = normalizeQuery([city, state].filter(Boolean).join(" "));
       return cityKey.includes(query) || cityStateKey.includes(query) || fullKey.includes(query);
     });
   }, [events, q]);
@@ -132,102 +139,157 @@ export default function EventsListModal({
   const groupedOther = useMemo(() => groupByDate(otherCityEvents), [otherCityEvents]);
   const showing = tab === "my" ? groupedMy : groupedOther;
 
+  const headerPillText = tab === "my" ? `📍 ${formatHeaderCity(myCity)}` : "🌎 Explore";
+
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable style={styles.sheet} onPress={() => {}}>
-          <View style={styles.header}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.root}>
+        {/* Backdrop */}
+        <Pressable style={styles.backdrop} onPress={onClose} />
+
+        {/* Sheet */}
+        <View style={styles.sheet}>
+          {/* Grabber */}
+          <View style={styles.grabberWrap}>
+            <View style={styles.grabber} />
+          </View>
+
+          {/* Top header */}
+          <View style={styles.top}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.title}>Events</Text>
-              <Text style={styles.sub}>
-                {tab === "my"
-                  ? myCityKey
-                    ? `Your city: ${myCity}`
-                    : "Your city: (unknown) — enable location"
-                  : "Search a city to view events"}
-              </Text>
+              <Text style={styles.hTitle}>Events</Text>
+              <View style={styles.pillRow}>
+                <View style={styles.headerPill}>
+                  <Text style={styles.headerPillText}>{headerPillText}</Text>
+                </View>
+
+                <View style={styles.countPill}>
+                  <Text style={styles.countPillText}>
+                    {tab === "my" ? myCityEvents.length : otherCityEvents.length}
+                  </Text>
+                </View>
+              </View>
             </View>
 
             <TouchableOpacity onPress={onClose} style={styles.closeBtn} activeOpacity={0.9}>
-              <Text style={styles.closeText}>×</Text>
+              <Text style={styles.closeText}>✕</Text>
             </TouchableOpacity>
           </View>
 
-          <View style={styles.tabs}>
-            <TouchableOpacity
-              activeOpacity={0.9}
-              onPress={() => setTab("my")}
-              style={[styles.tab, tab === "my" && styles.tabActive]}
-            >
-              <Text style={[styles.tabText, tab === "my" && styles.tabTextActive]}>Your city</Text>
-            </TouchableOpacity>
+          {/* Tabs (segmented control) */}
+          <View style={styles.segmentWrap}>
+            <View style={styles.segment}>
+              <TouchableOpacity
+                activeOpacity={0.9}
+                onPress={() => setTab("my")}
+                style={[styles.segmentBtn, tab === "my" && styles.segmentBtnActive]}
+              >
+                <Text style={[styles.segmentText, tab === "my" && styles.segmentTextActive]}>
+                  Your city
+                </Text>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              activeOpacity={0.9}
-              onPress={() => setTab("other")}
-              style={[styles.tab, tab === "other" && styles.tabActive]}
-            >
-              <Text style={[styles.tabText, tab === "other" && styles.tabTextActive]}>Other city</Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                activeOpacity={0.9}
+                onPress={() => setTab("other")}
+                style={[styles.segmentBtn, tab === "other" && styles.segmentBtnActive]}
+              >
+                <Text style={[styles.segmentText, tab === "other" && styles.segmentTextActive]}>
+                  Other city
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
+          {/* Search (Other) */}
           {tab === "other" && (
-            <View style={styles.searchWrap}>
-              <TextInput
-                value={q}
-                onChangeText={setQ}
-                placeholder="Search city (e.g., New York)"
-                placeholderTextColor="#94A3B8"
-                style={styles.search}
-                autoCorrect={false}
-                autoCapitalize="words"
-                returnKeyType="search"
-              />
-              {!!q && (
-                <TouchableOpacity onPress={() => setQ("")} style={styles.clearBtn} activeOpacity={0.9}>
-                  <Text style={styles.clearText}>×</Text>
-                </TouchableOpacity>
-              )}
+            <View style={styles.searchCard}>
+              <Text style={styles.searchLabel}>Search city</Text>
+              <View style={styles.searchRow}>
+                <Text style={styles.searchIcon}>⌕</Text>
+
+                <TextInput
+                  value={q}
+                  onChangeText={setQ}
+                  placeholder="New York, Boston, Potsdam…"
+                  placeholderTextColor="rgba(255,255,255,0.55)"
+                  style={styles.searchInput}
+                  autoCorrect={false}
+                  autoCapitalize="words"
+                  returnKeyType="search"
+                />
+
+                {!!q && (
+                  <TouchableOpacity onPress={() => setQ("")} style={styles.xBtn} activeOpacity={0.9}>
+                    <Text style={styles.xBtnText}>×</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <Text style={styles.searchHint}>
+                Tip: “NYC” and “New York” both work.
+              </Text>
             </View>
           )}
 
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 28 }}>
+          {/* Content */}
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 24 }}
+          >
             {tab === "other" && !q.trim() ? (
               <View style={styles.emptyWrap}>
-                <Text style={styles.emptyTitle}>Search a city</Text>
-                <Text style={styles.emptySub}>Type “New York”, “NYC”, “Boston”, etc.</Text>
+                <Text style={styles.emptyEmoji}>🗺️</Text>
+                <Text style={styles.emptyTitle}>Find events anywhere</Text>
+                <Text style={styles.emptySub}>Search a city to see events grouped by date.</Text>
               </View>
             ) : showing.length === 0 ? (
               <View style={styles.emptyWrap}>
+                <Text style={styles.emptyEmoji}>{tab === "my" ? "🎈" : "🔎"}</Text>
                 <Text style={styles.emptyTitle}>No events found</Text>
                 <Text style={styles.emptySub}>
                   {tab === "my"
                     ? myCityKey
-                      ? "No events in your city yet."
-                      : "Location not available."
-                    : "Try another city name."}
+                      ? "Nothing in your city yet."
+                      : "Location is unavailable."
+                    : "Try a different city name."}
                 </Text>
               </View>
             ) : (
               showing.map((g) => (
-                <View key={g.date} style={styles.group}>
-                  <Text style={styles.groupTitle}>{g.date}</Text>
+                <View key={g.date} style={styles.section}>
+                  <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionTitle}>{niceDateLabel(g.date)}</Text>
+                    <View style={styles.sectionLine} />
+                    <Text style={styles.sectionCount}>{g.items.length}</Text>
+                  </View>
 
                   {g.items.map((e, idx) => {
                     const { city, state } = extractCityState(e.address);
                     const cityText = [city, state].filter(Boolean).join(", ") || "Unknown city";
 
                     return (
-                      <View key={`${e.title}-${e.lat}-${e.lng}-${idx}`} style={styles.row}>
-                        <Text style={styles.emoji}>{e.emoji ?? "📍"}</Text>
-                        <View style={{ flex: 1 }}>
-                          <Text numberOfLines={1} style={styles.rowTitle}>
+                      <View key={`${e.title}-${e.lat}-${e.lng}-${idx}`} style={styles.card}>
+                        <View style={styles.cardLeft}>
+                          <View style={styles.emojiBubble}>
+                            <Text style={styles.emojiText}>{e.emoji ?? "📍"}</Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.cardMid}>
+                          <Text numberOfLines={1} style={styles.cardTitle}>
                             {e.title}
                           </Text>
-                          <Text numberOfLines={1} style={styles.rowSub}>
+                          <Text numberOfLines={1} style={styles.cardMeta}>
                             {cityText}
-                            {e.when ? `  ·  ${e.when}` : ""}
+                            {e.when ? `  •  ${e.when}` : ""}
                           </Text>
+                        </View>
+
+                        <View style={styles.cardRight}>
+                          <View style={styles.chevron}>
+                            <Text style={styles.chevronText}>›</Text>
+                          </View>
                         </View>
                       </View>
                     );
@@ -236,92 +298,195 @@ export default function EventsListModal({
               ))
             )}
           </ScrollView>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: "rgba(2,6,23,0.45)", justifyContent: "flex-end", padding: 14 },
-  sheet: { backgroundColor: "#fff", borderRadius: 22, maxHeight: "96%", minHeight: "82%", overflow: "hidden" },
+  root: { flex: 1, justifyContent: "flex-end" },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(2,6,23,0.60)",
+  },
 
-  header: {
-    paddingHorizontal: 14,
-    paddingTop: 14,
+  sheet: {
+    backgroundColor: "#0B1220",
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+    minHeight: "86%",
+    maxHeight: "96%",
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOpacity: 0.35,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: -12 },
+  },
+
+  grabberWrap: { alignItems: "center", paddingTop: 10, paddingBottom: 6 },
+  grabber: { width: 54, height: 5, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.22)" },
+
+  top: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
     paddingBottom: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#E2E8F0",
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
   },
-  title: { fontSize: 16, fontWeight: "900", color: "#0F172A" },
-  sub: { marginTop: 4, fontSize: 12, fontWeight: "700", color: "#64748B" },
+  hTitle: {
+    color: "#fff",
+    fontSize: 22,
+    fontWeight: "900",
+    letterSpacing: 0.2,
+  },
+
+  pillRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 8 },
+  headerPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.10)",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.10)",
+  },
+  headerPillText: { color: "rgba(255,255,255,0.92)", fontWeight: "900", fontSize: 12 },
+
+  countPill: {
+    minWidth: 34,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "rgba(10,132,255,0.22)",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(10,132,255,0.35)",
+  },
+  countPillText: { color: "#fff", fontWeight: "900", fontSize: 12 },
+
   closeBtn: {
-    width: 36,
-    height: 36,
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.10)",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.12)",
+  },
+  closeText: { color: "#fff", fontSize: 16, fontWeight: "900" },
+
+  segmentWrap: { paddingHorizontal: 16, paddingBottom: 10 },
+  segment: {
+    flexDirection: "row",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderRadius: 999,
+    padding: 4,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.10)",
+  },
+  segmentBtn: { flex: 1, paddingVertical: 10, borderRadius: 999, alignItems: "center" },
+  segmentBtnActive: {
+    backgroundColor: "rgba(10,132,255,0.95)",
+    shadowColor: "#0A84FF",
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 10 },
+  },
+  segmentText: { color: "rgba(255,255,255,0.80)", fontWeight: "900" },
+  segmentTextActive: { color: "#fff" },
+
+  searchCard: {
+    marginHorizontal: 16,
+    borderRadius: 18,
+    padding: 14,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.10)",
+    marginBottom: 10,
+  },
+  searchLabel: { color: "rgba(255,255,255,0.85)", fontWeight: "900", fontSize: 12, marginBottom: 10 },
+  searchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: Platform.OS === "ios" ? 12 : 10,
+    backgroundColor: "rgba(2,6,23,0.55)",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.10)",
+    gap: 8,
+  },
+  searchIcon: { color: "rgba(255,255,255,0.75)", fontWeight: "900" },
+  searchInput: { flex: 1, color: "#fff", fontWeight: "900" },
+  xBtn: {
+    width: 30,
+    height: 30,
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(100,116,139,0.10)",
+    backgroundColor: "rgba(255,255,255,0.12)",
   },
-  closeText: { fontSize: 22, fontWeight: "900", color: "#0F172A", lineHeight: 22 },
+  xBtnText: { color: "#fff", fontSize: 18, fontWeight: "900", lineHeight: 18 },
+  searchHint: { marginTop: 10, color: "rgba(255,255,255,0.55)", fontWeight: "700", fontSize: 12 },
 
-  tabs: { flexDirection: "row", gap: 10, paddingHorizontal: 14, paddingTop: 12, paddingBottom: 10 },
-  tab: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
-    alignItems: "center",
-  },
-  tabActive: { backgroundColor: "#0A84FF", borderColor: "#0A84FF" },
-  tabText: { fontWeight: "900", color: "#0F172A" },
-  tabTextActive: { color: "#fff" },
+  section: { paddingHorizontal: 16, paddingTop: 12 },
+  sectionHeader: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 },
+  sectionTitle: { color: "rgba(255,255,255,0.92)", fontWeight: "900", fontSize: 13 },
+  sectionLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: "rgba(255,255,255,0.10)" },
+  sectionCount: { color: "rgba(255,255,255,0.60)", fontWeight: "900", fontSize: 12 },
 
-  searchWrap: {
-    marginHorizontal: 14,
-    marginBottom: 10,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+  card: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 12,
+    padding: 14,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.10)",
+    marginBottom: 10,
   },
-  search: { flex: 1, color: "#0F172A", fontWeight: "800" },
-  clearBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 10,
+  cardLeft: {},
+  emojiBubble: {
+    width: 44,
+    height: 44,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(100,116,139,0.12)",
+    backgroundColor: "rgba(10,132,255,0.18)",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(10,132,255,0.30)",
   },
-  clearText: { color: "#334155", fontSize: 18, fontWeight: "900", lineHeight: 18 },
+  emojiText: { fontSize: 20 },
 
-  emptyWrap: { padding: 18 },
-  emptyTitle: { fontSize: 16, fontWeight: "900", color: "#0F172A" },
-  emptySub: { marginTop: 6, color: "#64748B", fontWeight: "700" },
+  cardMid: { flex: 1 },
+  cardTitle: { color: "#fff", fontWeight: "900", fontSize: 14 },
+  cardMeta: { marginTop: 4, color: "rgba(255,255,255,0.65)", fontWeight: "800", fontSize: 12 },
 
-  group: { paddingHorizontal: 14, paddingTop: 14 },
-  groupTitle: { fontWeight: "900", color: "#0F172A", marginBottom: 10, fontSize: 13 },
-
-  row: {
-    flexDirection: "row",
+  cardRight: {},
+  chevron: {
+    width: 34,
+    height: 34,
+    borderRadius: 14,
     alignItems: "center",
-    gap: 10,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#E2E8F0",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.10)",
   },
-  emoji: { fontSize: 20, width: 28, textAlign: "center" },
-  rowTitle: { fontWeight: "900", color: "#0F172A" },
-  rowSub: { marginTop: 2, color: "#64748B", fontWeight: "700", fontSize: 12 },
+  chevronText: { color: "rgba(255,255,255,0.85)", fontSize: 22, fontWeight: "900", marginTop: -2 },
+
+  emptyWrap: { paddingHorizontal: 16, paddingTop: 32, paddingBottom: 22, alignItems: "center" },
+  emptyEmoji: { fontSize: 34, marginBottom: 10 },
+  emptyTitle: { color: "#fff", fontWeight: "900", fontSize: 18, textAlign: "center" },
+  emptySub: {
+    marginTop: 8,
+    color: "rgba(255,255,255,0.65)",
+    fontWeight: "700",
+    textAlign: "center",
+    lineHeight: 18,
+  },
 });

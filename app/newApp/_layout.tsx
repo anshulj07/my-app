@@ -10,7 +10,7 @@ export default function TabLayout() {
         headerShown: true,
         headerTitle: "myApp",
         headerTitleAlign: "center",
-        headerStyle: { backgroundColor: "#e34343ff" },
+        headerStyle: { backgroundColor: "#d45353" },
         headerShadowVisible: false,
         headerLeft: () => <ProfileHeaderButton />,
         headerRight: () => <View style={{ width: 44 }} />, // keeps title visually centered
@@ -41,7 +41,7 @@ export default function TabLayout() {
         name="message"
         options={{
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? "chatbubble" : "chatbubble-outline"} size={24} color={color} />
+            <Ionicons name={focused ? "heart" : "heart-outline"} size={24} color={color} />
           ),
         }}
       />

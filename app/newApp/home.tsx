@@ -2,9 +2,9 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { TouchableOpacity, Text, StyleSheet, Platform } from "react-native";
 import * as Location from "expo-location";
-import MapView from "../../components/MapView";
-import ModalizeEventSheet from "../../components/AddEventModal";
-import EventsListModal from "../../components/EventsListModal";
+import MapView from "../../components/Map/MapView";
+import ModalizeEventSheet from "../../components/Map/AddEventModal";
+import EventsListModal from "../../components/List/EventsListModal";
 import Constants from "expo-constants";
 
 type EventPin = {

@@ -1,38 +1,72 @@
 // app/_layout.tsx
-import React, { useEffect } from "react";
-import { Slot, useRouter, useSegments } from "expo-router";
+import React, { useEffect, useMemo } from "react";
+import { Stack, useRouter, useSegments } from "expo-router";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import "react-native-reanimated";
 import Constants from "expo-constants";
 
-import { ClerkProvider, useAuth } from "@clerk/clerk-expo";
+import { ClerkProvider, useAuth, useUser } from "@clerk/clerk-expo";
 import { tokenCache } from "@clerk/clerk-expo/token-cache";
 
 const APP_HOME = "/newApp/home";
 const SIGN_IN = "/(auth)/sign-in";
+const ONBOARDING_START = "/(onboarding)/name";
+
+function isOnboardingComplete(user: any) {
+  const pm = (user?.unsafeMetadata ?? {}) as any;
+  return pm?.onboardingComplete === true;
+}
 
 function AuthGate({ children }: { children: React.ReactNode }) {
-  const { isLoaded, isSignedIn } = useAuth();
+  const { isLoaded: authLoaded, isSignedIn } = useAuth();
+  const { isLoaded: userLoaded, user } = useUser();
   const segments = useSegments();
   const router = useRouter();
 
+  const inAuthGroup = segments[0] === "(auth)";
+  const inOnboardingGroup = segments[0] === "(onboarding)";
+
+  const onboardingDone = useMemo(() => {
+    if (!user) return false;
+    return isOnboardingComplete(user);
+  }, [user]);
+
   useEffect(() => {
-    if (!isLoaded) return;
+    if (!authLoaded) return;
 
-    const inAuthGroup = segments[0] === "(auth)";
-
-    if (!isSignedIn && !inAuthGroup) {
-      router.replace(SIGN_IN);
+    // signed out -> must be in auth screens
+    if (!isSignedIn) {
+      if (!inAuthGroup) router.replace(SIGN_IN);
       return;
     }
 
-    if (isSignedIn && inAuthGroup) {
+    // signed in but user not loaded yet
+    if (!userLoaded) return;
+
+    // signed in -> onboarding gate
+    if (!onboardingDone) {
+      if (!inOnboardingGroup) router.replace(ONBOARDING_START);
+      return;
+    }
+
+    // onboarding done -> keep people out of auth/onboarding groups
+    if (inAuthGroup || inOnboardingGroup) {
       router.replace(APP_HOME);
       return;
     }
-  }, [isLoaded, isSignedIn, segments, router]);
+  }, [
+    authLoaded,
+    userLoaded,
+    isSignedIn,
+    onboardingDone,
+    inAuthGroup,
+    inOnboardingGroup,
+    router,
+  ]);
 
-  if (!isLoaded) return null;
+  if (!authLoaded) return null;
+  if (isSignedIn && !userLoaded) return null;
+
   return <>{children}</>;
 }
 
@@ -49,11 +83,11 @@ export default function RootLayout() {
 
   return (
     <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
-      <GestureHandlerRootView style={{ flex: 1 }}>
-        <AuthGate>
-          <Slot />
-        </AuthGate>
-      </GestureHandlerRootView>
+      <AuthGate>
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <Stack screenOptions={{ headerShown: false }} />
+        </GestureHandlerRootView>
+      </AuthGate>
     </ClerkProvider>
   );
 }

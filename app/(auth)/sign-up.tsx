@@ -298,7 +298,7 @@ export default function SignUpScreen() {
           </View>
 
           <Text style={styles.footer}>
-            By continuing, you agree to basic app terms and acknowledge email verification.
+            By continuing, you agree to app terms and acknowledge email verification.
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>

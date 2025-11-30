@@ -10,10 +10,12 @@ export default function MapView({
   events,
   initialCenter,
   locationStatus = "unknown",
+  onPinPress,
 }: {
   events: EventPin[];
   initialCenter?: { lat: number; lng: number } | null;
   locationStatus?: "unknown" | "granted" | "denied";
+  onPinPress?: (pin: EventPin) => void;
 }) {
   if (Platform.OS === "web") {
     return (
@@ -79,8 +81,10 @@ export default function MapView({
       box-shadow:0 10px 22px rgba(2,6,23,.20);
       transform:translate(-50%,-50%);
       user-select:none;-webkit-user-select:none;
-      pointer-events:none;
+      pointer-events:auto;              
       will-change:left,top,transform;
+      cursor:pointer;
+      touch-action: manipulation;
     }
 
     .badge{
@@ -178,9 +182,36 @@ export default function MapView({
         div.title = ev.title || '';
         div.dataset.id = ev._id || String(idx);
         this._div = div;
-        this.getPanes().overlayLayer.appendChild(div);
+        let fired = false;
+      
+        const fire = (e) => {
+          if (fired) return;
+          fired = true;
+          setTimeout(() => (fired = false), 400);
+        
+          if (e) {
+            e.preventDefault?.();
+            e.stopPropagation?.();
+          }
+        
+          post("pinClick", { event: ev });
+          log("Pin pressed", { title: ev.title, lat: ev.lat, lng: ev.lng });
+        };
+      
+        // Mobile-friendly events
+        div.addEventListener('pointerdown', fire, { passive: false });
+        div.addEventListener('touchstart', fire, { passive: false });
+        div.addEventListener('click', fire);
+      
+        // IMPORTANT: prevent map from swallowing interactions on this div
+        if (window.google?.maps?.OverlayView?.preventMapHitsAndGesturesFrom) {
+          google.maps.OverlayView.preventMapHitsAndGesturesFrom(div);
+        }
+      
+        // IMPORTANT: interactive pane
+        this.getPanes().overlayMouseTarget.appendChild(div);
       };
-
+      
       overlay.draw = function() {
         const projection = this.getProjection();
         if (!projection || !this._div) return;
@@ -286,7 +317,12 @@ export default function MapView({
         onMessage={(e) => {
           try {
             const msg = JSON.parse(e.nativeEvent.data);
-            if (msg?.type === "log") console.log("[MapView]", msg.msg, msg.extra ?? "");
+            if (msg?.type === "log") {
+              console.log("[MapView]", msg.msg, msg.extra ?? "");
+            } else if (msg?.type === "pinClick" && msg.event) {
+              // 👇 bubble to React Native
+              onPinPress?.(msg.event as EventPin);
+            }
           } catch {}
         }}
       />

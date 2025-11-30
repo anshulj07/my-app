@@ -7,6 +7,7 @@ import ModalizeEventSheet from "../../components/Map/AddEventModal";
 import EventsListModal from "../../components/List/EventsListModal";
 import Constants from "expo-constants";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import PersonBookingSheet from "../../components/ClickPin/PersonBookingSheet";
 
 type EventPin = {
   title: string;
@@ -24,6 +25,9 @@ export default function Home() {
   const [myLoc, setMyLoc] = useState<{ lat: number; lng: number } | null>(null);
   const [myCity, setMyCity] = useState("");
   const [locStatus, setLocStatus] = useState<"unknown" | "granted" | "denied">("unknown");
+  const [selectedPin, setSelectedPin] = useState<EventPin | null>(null);
+  const [showPersonSheet, setShowPersonSheet] = useState(false);
+
 
   const fabSize = useMemo(() => (Platform.OS === "ios" ? 60 : 64), []);
 
@@ -32,21 +36,21 @@ export default function Home() {
 
   const loadEvents = useCallback(async () => {
     if (!API_BASE) return;
-  
+
     const url = `${API_BASE}/api/events/get-events?limit=200`;
-  
+
     const res = await fetch(url, {
       headers: EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : undefined,
     });
-  
+
     const text = await res.text(); // read raw first
-  
+
     if (!res.ok) {
       console.log("[Home] loadEvents failed", res.status, url);
       console.log("[Home] body (first 200 chars):", text.slice(0, 200));
       return;
     }
-  
+
     let json: any;
     try {
       json = JSON.parse(text);
@@ -55,7 +59,7 @@ export default function Home() {
       console.log("[Home] URL:", url);
       return;
     }
-  
+
     const list = Array.isArray(json?.events) ? json.events : [];
     setEvents(
       list.map((e: any) => ({
@@ -68,7 +72,7 @@ export default function Home() {
       }))
     );
   }, [API_BASE, EVENT_API_KEY]);
-  
+
   const loadMyLocation = useCallback(async () => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -115,7 +119,23 @@ export default function Home() {
 
   return (
     <>
-      <MapView events={events} initialCenter={myLoc} locationStatus={locStatus} />
+      <MapView
+        events={events}
+        initialCenter={myLoc}
+        locationStatus={locStatus}
+        onPinPress={(pin) => {
+          setSelectedPin(pin as any);
+          setShowPersonSheet(true);
+        }}
+      />
+
+      <PersonBookingSheet
+        visible={showPersonSheet}
+        person={selectedPin}
+        onClose={() => setShowPersonSheet(false)}
+      />
+
+
 
       <TouchableOpacity
         style={[styles.fab, { width: fabSize, height: fabSize, borderRadius: fabSize / 2 }]}

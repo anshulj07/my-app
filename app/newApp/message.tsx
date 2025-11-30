@@ -1,9 +1,9 @@
 import { View, Text, StyleSheet } from "react-native";
 
-export default function Create() {
+export default function Message() {
   return (
     <View style={styles.container}>
-      <Text style={styles.txt}>Create Screen (Coming Soon)</Text>
+      <Text style={styles.txt}>Messages</Text>
     </View>
   );
 }

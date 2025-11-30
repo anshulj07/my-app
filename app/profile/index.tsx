@@ -41,16 +41,16 @@ export default function ProfileScreen() {
     <ScrollView style={styles.screen} contentContainerStyle={{ paddingBottom: 28 }}>
       {/* Top bar */}
       <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => router.push("/newApp/settings")} style={styles.iconBtn} hitSlop={12}>
+        <TouchableOpacity onPress={() => router.push("/settings")} style={styles.iconBtn} hitSlop={12}>
           <Ionicons name="settings-outline" size={22} color="#FF4D6D" />
         </TouchableOpacity>
 
         <View style={{ flex: 1 }} />
 
-        <TouchableOpacity onPress={() => router.push("/newApp/settings/History")} style={styles.iconBtn} hitSlop={12}>
+        <TouchableOpacity onPress={() => router.push("/settings/History")} style={styles.iconBtn} hitSlop={12}>
           <Ionicons name="refresh-outline" size={22} color="#FF4D6D" />
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => router.push("/newApp/settings/Security")} style={styles.iconBtn} hitSlop={12}>
+        <TouchableOpacity onPress={() => router.push("/settings/Security")} style={styles.iconBtn} hitSlop={12}>
           <Ionicons name="eye-outline" size={22} color="#FF4D6D" />
         </TouchableOpacity>
       </View>
@@ -124,7 +124,7 @@ export default function ProfileScreen() {
       <View style={styles.sectionCard}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>About Me</Text>
-          <TouchableOpacity onPress={() => router.push("/newApp/settings/PersonalInfo")} hitSlop={12}>
+          <TouchableOpacity onPress={() => router.push("/settings/PersonalInfo")} hitSlop={12}>
             <Ionicons name="pencil" size={18} color="#FF4D6D" />
           </TouchableOpacity>
         </View>
@@ -135,7 +135,7 @@ export default function ProfileScreen() {
       <View style={styles.sectionCard}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Interests</Text>
-          <TouchableOpacity onPress={() => router.push("/newApp/settings/Preferences")} hitSlop={12}>
+          <TouchableOpacity onPress={() => router.push("/settings/Preferences")} hitSlop={12}>
             <Ionicons name="pencil" size={18} color="#FF4D6D" />
           </TouchableOpacity>
         </View>
@@ -153,7 +153,7 @@ export default function ProfileScreen() {
       <View style={styles.sectionCard}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Languages</Text>
-          <TouchableOpacity onPress={() => router.push("/newApp/settings/Preferences")} hitSlop={12}>
+          <TouchableOpacity onPress={() => router.push("/settings/Preferences")} hitSlop={12}>
             <Ionicons name="pencil" size={18} color="#FF4D6D" />
           </TouchableOpacity>
         </View>

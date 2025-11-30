@@ -12,5 +12,5 @@
     "test-reanimated.ts",
     "test.ts"
   ],
-  "include": ["app/**/*.tsx", "app/**/*.ts"]
+  "include": ["app/**/*.tsx", "app/**/*.ts", "../vision-transformer-robotics/models/profile_old.tsx"]
 }

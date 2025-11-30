@@ -175,6 +175,4 @@ const styles = StyleSheet.create({
     fontSize: 13,
     letterSpacing: 0.2,
   },
-  
-  listPillText: { color: "#fff", fontWeight: "900", fontSize: 14 },
 });

@@ -14,15 +14,21 @@ import {
 import { useRouter } from "expo-router";
 import { useUser } from "@clerk/clerk-expo";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import Constants from "expo-constants";
 
 export default function NameScreen() {
   const router = useRouter();
   const { isLoaded, user } = useUser();
 
-  const [firstName, setFirstName] = useState(user?.firstName ?? "");
-  const [lastName, setLastName] = useState(user?.lastName ?? "");
+  // ✅ user enters manually (do NOT prefill from Clerk)
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  const API_BASE = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
+  const EVENT_API_KEY = (Constants.expoConfig?.extra as any)?.eventApiKey as string | undefined;
 
   const canContinue = useMemo(
     () => firstName.trim().length >= 1 && !saving,
@@ -36,28 +42,41 @@ export default function NameScreen() {
     setErr(null);
 
     try {
-      // ✅ Use camelCase only
-      await user.update({
+      if (!API_BASE) {
+        throw new Error("Missing API base URL (extra.apiBaseUrl).");
+      }
+
+      // ✅ your backend should save onboarding info keyed by clerk user id
+      const payload = {
+        clerkUserId: user.id,
         firstName: firstName.trim(),
-        lastName: lastName.trim() || null, // optional; avoids sending empty string
-      });
+        lastName: lastName.trim(), // can be empty
+      };
 
-      // ✅ If you want app-specific fields, store in unsafeMetadata (client-writable)
-      await user.update({
-        unsafeMetadata: {
-          ...(user.unsafeMetadata as any),
-          displayName: `${firstName.trim()} ${lastName.trim()}`.trim(),
+      const res = await fetch(`${API_BASE}/api/onboarding/name`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {}),
         },
+        body: JSON.stringify(payload),
       });
 
+      const text = await res.text();
+      if (!res.ok) {
+        // try to surface backend message
+        let msg = `Failed to save name (${res.status}).`;
+        try {
+          const j = JSON.parse(text);
+          msg = j?.message || j?.error || msg;
+        } catch {}
+        throw new Error(msg);
+      }
+
+      // ✅ continue onboarding flow
       router.push("/(onboarding)/interests");
     } catch (e: any) {
-      const msg =
-        e?.errors?.[0]?.longMessage ||
-        e?.errors?.[0]?.message ||
-        e?.message ||
-        "Failed to save name.";
-      setErr(msg);
+      setErr(e?.message || "Failed to save name.");
     } finally {
       setSaving(false);
     }
@@ -119,6 +138,12 @@ export default function NameScreen() {
                 </>
               )}
             </TouchableOpacity>
+
+            {!API_BASE ? (
+              <Text style={[styles.err, { marginTop: 10 }]}>
+                Config issue: extra.apiBaseUrl is missing.
+              </Text>
+            ) : null}
           </View>
         </View>
       </KeyboardAvoidingView>

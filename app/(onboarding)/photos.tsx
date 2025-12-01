@@ -4,6 +4,7 @@ import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ActivityIndicat
 import { useRouter } from "expo-router";
 import { useUser } from "@clerk/clerk-expo";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import Constants from "expo-constants";
 
 export default function PhotosScreen() {
   const router = useRouter();
@@ -13,6 +14,9 @@ export default function PhotosScreen() {
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  const API_BASE = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
+  const EVENT_API_KEY = (Constants.expoConfig?.extra as any)?.eventApiKey as string | undefined;
+
   const canFinish = useMemo(() => hasPhotos && !saving, [hasPhotos, saving]);
 
   const onMockAddPhoto = () => {
@@ -20,29 +24,56 @@ export default function PhotosScreen() {
     setHasPhotos(true);
   };
 
-  const onFinish = async () => {
-    if (!isLoaded || !user) return;
+ const onFinish = async () => {
+  if (!isLoaded || !user) return;
 
-    setSaving(true);
-    setErr(null);
+  setSaving(true);
+  setErr(null);
 
-    try {
-      await user.update({
-        unsafeMetadata: {
-          ...(user.publicMetadata as any),
-          hasPhotos: true,
-          onboardingComplete: true,
-        },
-      });
+  try {
+    if (!API_BASE) throw new Error("Missing API base URL (extra.apiBaseUrl).");
 
-      // ✅ go to root; AuthGate will route you to /newApp/home
-      router.replace("/");
-    } catch (e: any) {
-      setErr(e?.errors?.[0]?.longMessage || e?.message || "Failed to finish onboarding.");
-    } finally {
-      setSaving(false);
+    const payload = {
+      clerkUserId: user.id,
+      hasPhotos: true,
+    };
+
+    const res = await fetch(`${API_BASE}/api/onboarding/photos`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {}),
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const text = await res.text();
+    if (!res.ok) {
+      let msg = `Failed to finish onboarding (${res.status}).`;
+      try {
+        const j = JSON.parse(text);
+        msg = j?.message || j?.error || msg;
+      } catch {}
+      throw new Error(msg);
     }
-  };
+
+    // ✅ ADD THIS: keep your existing AuthGate happy
+    await user.update({
+      unsafeMetadata: {
+        ...((user.unsafeMetadata as any) ?? {}),
+        hasPhotos: true,
+        onboardingComplete: true,
+      },
+    });
+
+    router.replace("/");
+  } catch (e: any) {
+    setErr(e?.message || "Failed to finish onboarding.");
+  } finally {
+    setSaving(false);
+  }
+};
+
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -81,6 +112,12 @@ export default function PhotosScreen() {
               </>
             )}
           </TouchableOpacity>
+
+          {!API_BASE ? (
+            <Text style={[styles.err, { marginTop: 10 }]}>
+              Config issue: extra.apiBaseUrl is missing.
+            </Text>
+          ) : null}
 
           <Text style={styles.note}>
             (Next: we can plug in real photo picking + upload and store URLs in your DB.)

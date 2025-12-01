@@ -1,9 +1,10 @@
 // app/(onboarding)/interests.tsx
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
 import { useUser } from "@clerk/clerk-expo";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import Constants from "expo-constants";
 
 const OPTIONS = [
   "Music",
@@ -22,10 +23,61 @@ export default function InterestsScreen() {
   const router = useRouter();
   const { isLoaded, user } = useUser();
 
-  const initial = (user?.publicMetadata as any)?.interests;
-  const [selected, setSelected] = useState<string[]>(Array.isArray(initial) ? initial : []);
+  const [selected, setSelected] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+
+  const API_BASE = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
+  const EVENT_API_KEY = (Constants.expoConfig?.extra as any)?.eventApiKey as string | undefined;
+
+  // ✅ load existing interests from your DB
+  useEffect(() => {
+    const load = async () => {
+      if (!isLoaded || !user) return;
+
+      setErr(null);
+      setLoading(true);
+
+      try {
+        if (!API_BASE) throw new Error("Missing API base URL (extra.apiBaseUrl).");
+
+        const res = await fetch(
+          `${API_BASE}/api/onboarding/interests?clerkUserId=${encodeURIComponent(user.id)}`,
+          {
+            method: "GET",
+            headers: {
+              "Content-Type": "application/json",
+              ...(EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {}),
+            },
+          }
+        );
+
+        const text = await res.text();
+        if (!res.ok) {
+          let msg = `Failed to load interests (${res.status}).`;
+          try {
+            const j = JSON.parse(text);
+            msg = j?.message || j?.error || msg;
+          } catch {}
+          throw new Error(msg);
+        }
+
+        let data: any = {};
+        try {
+          data = JSON.parse(text);
+        } catch {}
+
+        if (Array.isArray(data?.interests)) setSelected(data.interests);
+      } catch (e: any) {
+        setErr(e?.message || "Failed to load interests.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    load();
+  }, [isLoaded, user?.id, API_BASE, EVENT_API_KEY]);
 
   const canContinue = useMemo(() => selected.length >= 1 && !saving, [selected.length, saving]);
 
@@ -35,20 +87,40 @@ export default function InterestsScreen() {
 
   const onNext = async () => {
     if (!isLoaded || !user) return;
+
     setSaving(true);
     setErr(null);
 
     try {
-      await user.update({
-        unsafeMetadata: {
-          ...(user.publicMetadata as any),
-          interests: selected,
+      if (!API_BASE) throw new Error("Missing API base URL (extra.apiBaseUrl).");
+
+      const payload = {
+        clerkUserId: user.id,
+        interests: selected,
+      };
+
+      const res = await fetch(`${API_BASE}/api/onboarding/interests`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {}),
         },
+        body: JSON.stringify(payload),
       });
+
+      const text = await res.text();
+      if (!res.ok) {
+        let msg = `Failed to save interests (${res.status}).`;
+        try {
+          const j = JSON.parse(text);
+          msg = j?.message || j?.error || msg;
+        } catch {}
+        throw new Error(msg);
+      }
 
       router.push("/(onboarding)/about");
     } catch (e: any) {
-      setErr(e?.errors?.[0]?.longMessage || e?.message || "Failed to save interests.");
+      setErr(e?.message || "Failed to save interests.");
     } finally {
       setSaving(false);
     }
@@ -69,21 +141,25 @@ export default function InterestsScreen() {
         </View>
 
         <View style={styles.card}>
-          <View style={styles.chips}>
-            {OPTIONS.map((x) => {
-              const on = selected.includes(x);
-              return (
-                <TouchableOpacity
-                  key={x}
-                  onPress={() => toggle(x)}
-                  activeOpacity={0.9}
-                  style={[styles.chip, on && styles.chipOn]}
-                >
-                  <Text style={[styles.chipText, on && styles.chipTextOn]}>{x}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+          {loading ? (
+            <ActivityIndicator />
+          ) : (
+            <View style={styles.chips}>
+              {OPTIONS.map((x) => {
+                const on = selected.includes(x);
+                return (
+                  <TouchableOpacity
+                    key={x}
+                    onPress={() => toggle(x)}
+                    activeOpacity={0.9}
+                    style={[styles.chip, on && styles.chipOn]}
+                  >
+                    <Text style={[styles.chipText, on && styles.chipTextOn]}>{x}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
 
           {!!err && <Text style={styles.err}>{err}</Text>}
 
@@ -102,6 +178,12 @@ export default function InterestsScreen() {
               </>
             )}
           </TouchableOpacity>
+
+          {!API_BASE ? (
+            <Text style={[styles.err, { marginTop: 10 }]}>
+              Config issue: extra.apiBaseUrl is missing.
+            </Text>
+          ) : null}
         </View>
       </View>
     </SafeAreaView>

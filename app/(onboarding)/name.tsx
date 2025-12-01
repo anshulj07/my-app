@@ -74,7 +74,7 @@ export default function NameScreen() {
       }
 
       // ✅ continue onboarding flow
-      router.push("/(onboarding)/interests");
+      router.push("/(onboarding)/gender");
     } catch (e: any) {
       setErr(e?.message || "Failed to save name.");
     } finally {

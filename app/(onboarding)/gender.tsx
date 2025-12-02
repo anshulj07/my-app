@@ -1,26 +1,19 @@
-// app/(onboarding)/about.tsx
+// app/(onboarding)/gender.tsx
 import React, { useEffect, useMemo, useState } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  SafeAreaView,
-  KeyboardAvoidingView,
-  Platform,
-  ActivityIndicator,
-} from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
 import { useUser } from "@clerk/clerk-expo";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import Constants from "expo-constants";
 
-export default function AboutScreen() {
+const OPTIONS = ["Male", "Female", "Non-binary", "Prefer not to say", "Other"] as const;
+type GenderOption = (typeof OPTIONS)[number];
+
+export default function GenderScreen() {
   const router = useRouter();
   const { isLoaded, user } = useUser();
 
-  const [about, setAbout] = useState("");
+  const [selected, setSelected] = useState<GenderOption | null>(null);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -28,7 +21,6 @@ export default function AboutScreen() {
   const API_BASE = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
   const EVENT_API_KEY = (Constants.expoConfig?.extra as any)?.eventApiKey as string | undefined;
 
-  // ✅ load existing about from DB
   useEffect(() => {
     const load = async () => {
       if (!isLoaded || !user) return;
@@ -40,7 +32,7 @@ export default function AboutScreen() {
         if (!API_BASE) throw new Error("Missing API base URL (extra.apiBaseUrl).");
 
         const res = await fetch(
-          `${API_BASE}/api/onboarding/about?clerkUserId=${encodeURIComponent(user.id)}`,
+          `${API_BASE}/api/onboarding/gender?clerkUserId=${encodeURIComponent(user.id)}`,
           {
             method: "GET",
             headers: {
@@ -52,7 +44,7 @@ export default function AboutScreen() {
 
         const text = await res.text();
         if (!res.ok) {
-          let msg = `Failed to load about (${res.status}).`;
+          let msg = `Failed to load gender (${res.status}).`;
           try {
             const j = JSON.parse(text);
             msg = j?.message || j?.error || msg;
@@ -65,10 +57,12 @@ export default function AboutScreen() {
           data = JSON.parse(text);
         } catch {}
 
-        const fromDb = data?.about;
-        if (typeof fromDb === "string") setAbout(fromDb);
+        const g = data?.gender;
+        if (typeof g === "string" && (OPTIONS as readonly string[]).includes(g)) {
+          setSelected(g as GenderOption);
+        }
       } catch (e: any) {
-        setErr(e?.message || "Failed to load about.");
+        setErr(e?.message || "Failed to load gender.");
       } finally {
         setLoading(false);
       }
@@ -77,7 +71,7 @@ export default function AboutScreen() {
     load();
   }, [isLoaded, user?.id, API_BASE, EVENT_API_KEY]);
 
-  const canContinue = useMemo(() => about.trim().length >= 10 && !saving, [about, saving]);
+  const canContinue = useMemo(() => !!selected && !saving && !loading, [selected, saving, loading]);
 
   const onNext = async () => {
     if (!isLoaded || !user) return;
@@ -87,13 +81,14 @@ export default function AboutScreen() {
 
     try {
       if (!API_BASE) throw new Error("Missing API base URL (extra.apiBaseUrl).");
+      if (!selected) throw new Error("Please select a gender.");
 
       const payload = {
         clerkUserId: user.id,
-        about: about.trim(),
+        gender: selected,
       };
 
-      const res = await fetch(`${API_BASE}/api/onboarding/about`, {
+      const res = await fetch(`${API_BASE}/api/onboarding/gender`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -104,7 +99,7 @@ export default function AboutScreen() {
 
       const text = await res.text();
       if (!res.ok) {
-        let msg = `Failed to save about (${res.status}).`;
+        let msg = `Failed to save gender (${res.status}).`;
         try {
           const j = JSON.parse(text);
           msg = j?.message || j?.error || msg;
@@ -112,9 +107,10 @@ export default function AboutScreen() {
         throw new Error(msg);
       }
 
-      router.push("/(onboarding)/photos");
+      // ✅ choose where gender should go in your flow:
+      router.push("/(onboarding)/dateOfBirth");
     } catch (e: any) {
-      setErr(e?.message || "Failed to save about.");
+      setErr(e?.message || "Failed to save gender.");
     } finally {
       setSaving(false);
     }
@@ -122,73 +118,67 @@ export default function AboutScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.select({ ios: "padding", android: undefined })}
-      >
-        <View style={styles.page}>
-          <View style={styles.headerRow}>
-            <View style={styles.logo}>
-              <Ionicons name="chatbubble-ellipses-outline" size={18} color="#0A84FF" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.kicker}>Step 3 of 4</Text>
-              <Text style={styles.title}>Write something about you</Text>
-              <Text style={styles.sub}>Keep it short and real.</Text>
-            </View>
+      <View style={styles.page}>
+        <View style={styles.headerRow}>
+          <View style={styles.logo}>
+            <Ionicons name="male-female-outline" size={18} color="#0A84FF" />
           </View>
-
-          <View style={styles.card}>
-            {loading ? (
-              <ActivityIndicator />
-            ) : (
-              <>
-                <Text style={styles.label}>About</Text>
-                <TextInput
-                  value={about}
-                  onChangeText={setAbout}
-                  placeholder="Example: I love coffee, hikes, and finding fun events around the city."
-                  placeholderTextColor="#94A3B8"
-                  style={styles.textarea}
-                  multiline
-                />
-
-                <Text style={styles.counter}>{Math.min(about.length, 500)}/500</Text>
-              </>
-            )}
-
-            {!!err && <Text style={styles.err}>{err}</Text>}
-
-            <TouchableOpacity
-              onPress={onNext}
-              activeOpacity={0.9}
-              disabled={!canContinue || loading}
-              style={[styles.primaryBtn, (!canContinue || loading) && { opacity: 0.5 }]}
-            >
-              {saving ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <>
-                  <Text style={styles.primaryText}>Continue</Text>
-                  <Ionicons name="arrow-forward" size={18} color="#fff" />
-                </>
-              )}
-            </TouchableOpacity>
-
-            {!API_BASE ? (
-              <Text style={[styles.err, { marginTop: 10 }]}>
-                Config issue: extra.apiBaseUrl is missing.
-              </Text>
-            ) : null}
+          <View style={{ flex: 1 }}>
+            <Text style={styles.kicker}>Step</Text>
+            <Text style={styles.title}>Select your gender</Text>
+            <Text style={styles.sub}>This helps personalize your profile.</Text>
           </View>
         </View>
-      </KeyboardAvoidingView>
+
+        <View style={styles.card}>
+          {loading ? (
+            <ActivityIndicator />
+          ) : (
+            <View style={styles.chips}>
+              {OPTIONS.map((x) => {
+                const on = selected === x;
+                return (
+                  <TouchableOpacity
+                    key={x}
+                    onPress={() => setSelected(x)}
+                    activeOpacity={0.9}
+                    style={[styles.chip, on && styles.chipOn]}
+                  >
+                    <Text style={[styles.chipText, on && styles.chipTextOn]}>{x}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+
+          {!!err && <Text style={styles.err}>{err}</Text>}
+
+          <TouchableOpacity
+            onPress={onNext}
+            activeOpacity={0.9}
+            disabled={!canContinue}
+            style={[styles.primaryBtn, !canContinue && { opacity: 0.5 }]}
+          >
+            {saving ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <Text style={styles.primaryText}>Continue</Text>
+                <Ionicons name="arrow-forward" size={18} color="#fff" />
+              </>
+            )}
+          </TouchableOpacity>
+
+          {!API_BASE ? (
+            <Text style={[styles.err, { marginTop: 10 }]}>Config issue: extra.apiBaseUrl is missing.</Text>
+          ) : null}
+        </View>
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
   safe: { flex: 1, backgroundColor: "#F8FAFC" },
   page: { flex: 1, padding: 16, justifyContent: "center", gap: 14 },
 
@@ -219,19 +209,18 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 12 },
   },
 
-  label: { color: "#0F172A", fontWeight: "900", fontSize: 12, marginBottom: 8 },
-  textarea: {
-    minHeight: 140,
-    borderRadius: 16,
+  chips: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 999,
     borderWidth: 1,
     borderColor: "#E2E8F0",
     backgroundColor: "#F8FAFC",
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    color: "#0F172A",
-    fontWeight: "800",
   },
-  counter: { marginTop: 8, color: "#94A3B8", fontWeight: "800", textAlign: "right" },
+  chipOn: { backgroundColor: "#0A84FF", borderColor: "#0A84FF" },
+  chipText: { color: "#0F172A", fontWeight: "900" },
+  chipTextOn: { color: "#fff" },
 
   err: { marginTop: 12, color: "#B91C1C", fontWeight: "800" },
 

@@ -47,7 +47,6 @@ export default function SignInScreen() {
 
       if (res.status === "complete") {
         await setActive({ session: res.createdSessionId });
-        // ✅ Let AuthGate / index route user to /newApp/home
         router.replace("/");
       } else {
         setErr(`Sign-in not complete (status: ${res.status}).`);
@@ -66,26 +65,37 @@ export default function SignInScreen() {
         behavior={Platform.select({ ios: "padding", android: undefined })}
       >
         <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
-          {/* Header */}
-          <View style={styles.header}>
-            <View style={styles.logo}>
-              <Ionicons name="map-outline" size={18} color="#0A84FF" />
+          {/* Hero */}
+          <View style={styles.hero}>
+            <View style={styles.heroTop}>
+              <View style={styles.badge}>
+                <Ionicons name="flame" size={16} color={COLORS.primary} />
+                <Text style={styles.badgeText}>Welcome back</Text>
+              </View>
+
+              {/* <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => router.push("/(auth)/sign-up")}
+                style={styles.heroLinkPill}
+              >
+                <Text style={styles.heroLinkText}>Sign up</Text>
+                <Ionicons name="arrow-forward" size={16} color={COLORS.ink} />
+              </TouchableOpacity> */}
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.brand}>Welcome back</Text>
-              <Text style={styles.tagline}>Sign in to see nearby pins</Text>
-            </View>
+
+            <Text style={styles.h1}>Sign in</Text>
+            <Text style={styles.h2}>Pick up where you left off.</Text>
           </View>
 
-          {/* Card */}
-          <View style={styles.card}>
-            <Text style={styles.title}>Sign in</Text>
-            <Text style={styles.sub}>Use the same email you signed up with.</Text>
-
-            <View style={styles.field}>
+          {/* Glass surface */}
+          <View style={styles.surface}>
+            {/* Email */}
+            <View style={styles.group}>
               <Text style={styles.label}>Email</Text>
-              <View style={styles.inputWrap}>
-                <Ionicons name="mail-outline" size={18} color="#64748B" />
+              <View style={[styles.inputWrap, emailAddress.trim() && (emailOk ? styles.ok : styles.bad)]}>
+                <View style={styles.leftIcon}>
+                  <Ionicons name="mail-outline" size={18} color={COLORS.muted} />
+                </View>
                 <TextInput
                   value={emailAddress}
                   onChangeText={setEmailAddress}
@@ -93,193 +103,313 @@ export default function SignInScreen() {
                   autoCorrect={false}
                   keyboardType="email-address"
                   placeholder="you@email.com"
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor={COLORS.placeholder}
                   style={styles.input}
                 />
-                {emailAddress.trim().length > 0 ? (
-                  <Ionicons
-                    name={emailOk ? "checkmark-circle" : "alert-circle"}
-                    size={18}
-                    color={emailOk ? "#16A34A" : "#DC2626"}
-                  />
-                ) : (
-                  <View style={{ width: 18 }} />
-                )}
+                <View style={styles.rightIcon}>
+                  {emailAddress.trim().length > 0 ? (
+                    <Ionicons
+                      name={emailOk ? "checkmark-circle" : "alert-circle"}
+                      size={18}
+                      color={emailOk ? COLORS.success : COLORS.danger}
+                    />
+                  ) : (
+                    <View style={{ width: 18 }} />
+                  )}
+                </View>
               </View>
             </View>
 
-            <View style={styles.field}>
+            {/* Password */}
+            <View style={styles.group}>
               <Text style={styles.label}>Password</Text>
               <View style={styles.inputWrap}>
-                <Ionicons name="lock-closed-outline" size={18} color="#64748B" />
+                <View style={styles.leftIcon}>
+                  <Ionicons name="lock-closed-outline" size={18} color={COLORS.muted} />
+                </View>
                 <TextInput
                   value={password}
                   onChangeText={setPassword}
                   secureTextEntry={!showPw}
                   placeholder="••••••••"
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor={COLORS.placeholder}
                   style={styles.input}
                 />
                 <TouchableOpacity
                   onPress={() => setShowPw((s) => !s)}
                   activeOpacity={0.85}
                   hitSlop={10}
-                  style={styles.iconTap}
+                  style={[styles.rightIcon, styles.iconTap]}
                 >
                   <Ionicons
                     name={showPw ? "eye-off-outline" : "eye-outline"}
                     size={18}
-                    color="#475569"
+                    color={COLORS.inkSoft}
                   />
                 </TouchableOpacity>
               </View>
             </View>
 
             {!!err && (
-              <View style={styles.errBox}>
-                <Ionicons name="warning-outline" size={18} color="#DC2626" />
-                <Text style={styles.errText}>{err}</Text>
+              <View style={styles.alert}>
+                <View style={styles.alertIcon}>
+                  <Ionicons name="warning-outline" size={18} color={COLORS.danger} />
+                </View>
+                <Text style={styles.alertText}>{err}</Text>
               </View>
             )}
 
             <TouchableOpacity
               onPress={onSignInPress}
-              activeOpacity={0.9}
+              activeOpacity={0.92}
               disabled={!canSubmit}
-              style={[styles.primaryBtn, !canSubmit && { opacity: 0.55 }]}
+              style={[styles.cta, !canSubmit && styles.ctaDisabled]}
             >
               {submitting ? (
                 <ActivityIndicator color="#fff" />
               ) : (
                 <>
-                  <Text style={styles.primaryText}>Sign in</Text>
-                  <Ionicons name="log-in-outline" size={18} color="#fff" />
+                  <Text style={styles.ctaText}>Sign in</Text>
+                  <View style={styles.ctaIcon}>
+                    <Ionicons name="log-in-outline" size={18} color="#fff" />
+                  </View>
                 </>
               )}
             </TouchableOpacity>
 
+            <View style={styles.dividerRow}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>or</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
             <TouchableOpacity
               onPress={() => router.push("/(auth)/sign-up")}
               activeOpacity={0.9}
-              style={styles.linkBtn}
+              style={styles.secondary}
             >
-              <Text style={styles.linkText}>New here? Create an account</Text>
+              <Ionicons name="sparkles-outline" size={18} color={COLORS.ink} />
+              <Text style={styles.secondaryText}>Create a new account</Text>
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.footer}>Secure sign-in powered by Clerk.</Text>
+          {/* <Text style={styles.footer}>Secure sign-in powered by Clerk.</Text> */}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
+/** Same “Tinder/Bumble-ish” palette used in your sign-up tweak */
+const COLORS = {
+  bgTop: "#0B0B12",
+  bgBottom: "#0F172A",
+  card: "rgba(255,255,255,0.10)",
+  card2: "rgba(255,255,255,0.14)",
+  ink: "#FFFFFF",
+  inkSoft: "rgba(255,255,255,0.78)",
+  muted: "rgba(255,255,255,0.62)",
+  placeholder: "rgba(255,255,255,0.45)",
+  border: "rgba(255,255,255,0.12)",
+  borderSoft: "rgba(255,255,255,0.08)",
+  primary: "#FF4D6D",
+  primary2: "#FF8A00",
+  primarySoft: "rgba(255,77,109,0.18)",
+  success: "#22C55E",
+  danger: "#FB7185",
+};
+
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  safe: { flex: 1, backgroundColor: "#F8FAFC" },
+  safe: { flex: 1, backgroundColor: COLORS.bgTop },
 
   page: {
     flexGrow: 1,
-    padding: 16,
+    paddingHorizontal: 18,
+    paddingTop: 10,
+    paddingBottom: 18,
     justifyContent: "center",
-    gap: 14,
+    gap: 16,
+    backgroundColor: COLORS.bgTop,
   },
 
-  header: {
+  // HERO
+  hero: { paddingHorizontal: 2, gap: 10 },
+  heroTop: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
     gap: 12,
-    paddingHorizontal: 2,
   },
-  logo: {
-    width: 44,
-    height: 44,
-    borderRadius: 16,
-    backgroundColor: "#E0F2FE",
-    borderWidth: 1,
-    borderColor: "#BAE6FD",
+
+  badge: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-  },
-  brand: { color: "#0F172A", fontWeight: "900", fontSize: 18 },
-  tagline: { color: "#64748B", fontWeight: "700", marginTop: 2 },
-
-  card: {
-    borderRadius: 22,
-    padding: 16,
-    backgroundColor: "#FFFFFF",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,77,109,0.14)",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
-    shadowColor: "#0B1220",
-    shadowOpacity: 0.08,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 12 },
+    borderColor: "rgba(255,77,109,0.25)",
   },
-  title: { color: "#0F172A", fontSize: 22, fontWeight: "900" },
-  sub: { marginTop: 6, color: "#64748B", fontWeight: "700", lineHeight: 18 },
+  badgeText: { color: COLORS.ink, fontWeight: "800", fontSize: 12, letterSpacing: 0.3 },
 
-  field: { marginTop: 14 },
-  label: { color: "#0F172A", fontWeight: "900", marginBottom: 8, fontSize: 12 },
+  heroLinkPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.10)",
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  heroLinkText: { color: COLORS.ink, fontWeight: "800", fontSize: 12 },
+
+  h1: {
+    color: COLORS.ink,
+    fontSize: 34,
+    fontWeight: "900",
+    letterSpacing: -1.1,
+    lineHeight: 40,
+  },
+  h2: { color: COLORS.muted, fontSize: 14, fontWeight: "700", lineHeight: 20 },
+
+  // SURFACE
+  surface: {
+    backgroundColor: COLORS.card,
+    borderRadius: 28,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    shadowColor: "#000",
+    shadowOpacity: 0.35,
+    shadowRadius: 26,
+    shadowOffset: { width: 0, height: 16 },
+    elevation: 6,
+  },
+
+  group: { marginTop: 12 },
+  label: { color: COLORS.inkSoft, fontWeight: "800", marginBottom: 8, fontSize: 12 },
 
   inputWrap: {
-    height: 52,
-    borderRadius: 16,
-    paddingHorizontal: 12,
+    height: 56,
+    borderRadius: 18,
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "rgba(255,255,255,0.08)",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: COLORS.borderSoft,
   },
+  leftIcon: { width: 46, height: 56, alignItems: "center", justifyContent: "center", opacity: 0.9 },
+  rightIcon: { width: 46, height: 56, alignItems: "center", justifyContent: "center", opacity: 0.95 },
+
   input: {
     flex: 1,
-    color: "#0F172A",
+    color: COLORS.ink,
     fontWeight: "800",
     fontSize: 15,
     paddingVertical: 0,
-  },
-  iconTap: {
-    width: 34,
-    height: 34,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
+    paddingRight: 8,
+    letterSpacing: 0.2,
   },
 
-  errBox: {
+  iconTap: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.10)",
+  },
+
+  ok: { borderColor: "rgba(34,197,94,0.35)", backgroundColor: "rgba(34,197,94,0.06)" },
+  bad: { borderColor: "rgba(251,113,133,0.35)", backgroundColor: "rgba(251,113,133,0.06)" },
+
+  // ALERT
+  alert: {
     marginTop: 14,
-    borderRadius: 16,
+    borderRadius: 18,
     padding: 12,
     flexDirection: "row",
     gap: 10,
     alignItems: "center",
-    backgroundColor: "#FEF2F2",
+    backgroundColor: "rgba(251,113,133,0.10)",
     borderWidth: 1,
-    borderColor: "#FECACA",
+    borderColor: "rgba(251,113,133,0.24)",
   },
-  errText: { color: "#B91C1C", fontWeight: "800", flex: 1, lineHeight: 18 },
+  alertIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 14,
+    backgroundColor: "rgba(251,113,133,0.14)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  alertText: { color: "#FFE4EA", fontWeight: "800", flex: 1, lineHeight: 18 },
 
-  primaryBtn: {
+  // CTA
+  cta: {
     marginTop: 16,
-    height: 52,
-    borderRadius: 16,
-    backgroundColor: "#0A84FF",
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: COLORS.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 10,
+    shadowColor: COLORS.primary,
+    shadowOpacity: 0.35,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.16)",
+  },
+  ctaDisabled: { opacity: 0.5 },
+  ctaText: { color: "#fff", fontWeight: "900", fontSize: 16, letterSpacing: 0.3 },
+  ctaIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.16)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.18)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  // DIVIDER
+  dividerRow: { marginTop: 14, flexDirection: "row", alignItems: "center", gap: 10 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: "rgba(255,255,255,0.12)" },
+  dividerText: { color: COLORS.muted, fontWeight: "800", fontSize: 12 },
+
+  // SECONDARY
+  secondary: {
+    marginTop: 12,
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.10)",
+    borderWidth: 1,
+    borderColor: COLORS.border,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
     gap: 10,
   },
-  primaryText: { color: "#fff", fontWeight: "900", fontSize: 16 },
-
-  linkBtn: { marginTop: 14, alignItems: "center" },
-  linkText: { color: "#0A84FF", fontWeight: "900" },
+  secondaryText: { color: COLORS.ink, fontWeight: "900" },
 
   footer: {
-    color: "#94A3B8",
+    color: "rgba(255,255,255,0.55)",
     textAlign: "center",
     fontWeight: "700",
     fontSize: 12,
     paddingHorizontal: 10,
+    marginTop: 2,
+    lineHeight: 18,
   },
 });

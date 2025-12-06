@@ -79,7 +79,6 @@ export default function SignUpScreen() {
 
       if (attempt.status === "complete") {
         await setActive({ session: attempt.createdSessionId });
-        // ✅ Let AuthGate/index decide where to go next
         router.replace("/");
         return;
       }
@@ -108,39 +107,46 @@ export default function SignUpScreen() {
         style={styles.flex}
         behavior={Platform.select({ ios: "padding", android: undefined })}
       >
-        <ScrollView
-          contentContainerStyle={styles.page}
-          keyboardShouldPersistTaps="handled"
-        >
-          {/* Header */}
-          <View style={styles.header}>
-            <View style={styles.logo}>
-              <Ionicons name="sparkles" size={18} color="#0A84FF" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.brand}>Hey there 👋</Text>
-              <Text style={styles.tagline}>Find what’s happening near you</Text>
-            </View>
-          </View>
+        <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
+          {/* Hero */}
+          <View style={styles.hero}>
+            <View style={styles.heroTop}>
+              <View style={styles.badge}>
+                <Ionicons name="sparkles" size={16} color={COLORS.primary} />
+                <Text style={styles.badgeText}>Welcome</Text>
+              </View>
 
-          {/* Card */}
-          <View style={styles.card}>
-            <Text style={styles.title}>
+              {/* <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => router.push("/(auth)/sign-in")}
+                style={styles.heroLinkPill}
+              >
+                <Text style={styles.heroLinkText}>Sign in</Text>
+                <Ionicons name="arrow-forward" size={16} color={COLORS.ink} />
+              </TouchableOpacity> */}
+            </View>
+
+            <Text style={styles.h1}>
               {pendingVerification ? "Verify your email" : "Create your account"}
             </Text>
-            <Text style={styles.sub}>
+            <Text style={styles.h2}>
               {pendingVerification
-                ? "Enter the 6-digit code we sent to your email."
-                : "Sign up with your email and a secure password."}
+                ? "Enter the 6-digit code we sent you. It only takes a moment."
+                : "Light, fast, and secure. You'll be ready in under a minute."}
             </Text>
+          </View>
 
+          {/* Surface */}
+          <View style={styles.surface}>
             {!pendingVerification ? (
               <>
                 {/* Email */}
-                <View style={styles.field}>
-                  <Text style={styles.label}>Email</Text>
-                  <View style={styles.inputWrap}>
-                    <Ionicons name="mail-outline" size={18} color="#64748B" />
+                <View style={styles.group}>
+                  <Text style={styles.label}>Email address</Text>
+                  <View style={[styles.inputWrap, emailAddress.trim() && (emailOk ? styles.ok : styles.bad)]}>
+                    <View style={styles.leftIcon}>
+                      <Ionicons name="mail-outline" size={18} color={COLORS.muted} />
+                    </View>
                     <TextInput
                       value={emailAddress}
                       onChangeText={setEmailAddress}
@@ -148,135 +154,152 @@ export default function SignUpScreen() {
                       autoCorrect={false}
                       keyboardType="email-address"
                       placeholder="you@email.com"
-                      placeholderTextColor="#94A3B8"
+                      placeholderTextColor={COLORS.placeholder}
                       style={styles.input}
                     />
-                    {emailAddress.trim().length > 0 ? (
-                      <Ionicons
-                        name={emailOk ? "checkmark-circle" : "alert-circle"}
-                        size={18}
-                        color={emailOk ? "#16A34A" : "#DC2626"}
-                      />
-                    ) : (
-                      <View style={{ width: 18 }} />
-                    )}
+                    <View style={styles.rightIcon}>
+                      {emailAddress.trim().length > 0 ? (
+                        <Ionicons
+                          name={emailOk ? "checkmark-circle" : "alert-circle"}
+                          size={18}
+                          color={emailOk ? COLORS.success : COLORS.danger}
+                        />
+                      ) : (
+                        <View style={{ width: 18 }} />
+                      )}
+                    </View>
                   </View>
                 </View>
 
                 {/* Password */}
-                <View style={styles.field}>
+                <View style={styles.group}>
                   <Text style={styles.label}>Password</Text>
-                  <View style={styles.inputWrap}>
-                    <Ionicons
-                      name="lock-closed-outline"
-                      size={18}
-                      color="#64748B"
-                    />
+                  <View style={[styles.inputWrap, password.length > 0 && (pwOk ? styles.ok : styles.bad)]}>
+                    <View style={styles.leftIcon}>
+                      <Ionicons name="lock-closed-outline" size={18} color={COLORS.muted} />
+                    </View>
                     <TextInput
                       value={password}
                       onChangeText={setPassword}
                       secureTextEntry={!showPw}
-                      placeholder="At least 8 characters"
-                      placeholderTextColor="#94A3B8"
+                      placeholder="8+ characters"
+                      placeholderTextColor={COLORS.placeholder}
                       style={styles.input}
                     />
                     <TouchableOpacity
                       onPress={() => setShowPw((s) => !s)}
                       activeOpacity={0.85}
                       hitSlop={10}
-                      style={styles.iconTap}
+                      style={[styles.rightIcon, styles.iconTap]}
                     >
                       <Ionicons
                         name={showPw ? "eye-off-outline" : "eye-outline"}
                         size={18}
-                        color="#475569"
+                        color={COLORS.inkSoft}
                       />
                     </TouchableOpacity>
                   </View>
-                  <Text style={styles.hint}>
-                    {password.length === 0
-                      ? " "
-                      : pwOk
-                      ? "Looks good."
-                      : "Use 8+ characters."}
+                  <Text style={styles.helper}>
+                    {password.length === 0 ? " " : pwOk ? "Strong enough." : "Use at least 8 characters."}
                   </Text>
                 </View>
 
                 {!!err && (
-                  <View style={styles.errBox}>
-                    <Ionicons name="warning-outline" size={18} color="#DC2626" />
-                    <Text style={styles.errText}>{err}</Text>
+                  <View style={styles.alert}>
+                    <View style={styles.alertIcon}>
+                      <Ionicons name="warning-outline" size={18} color={COLORS.danger} />
+                    </View>
+                    <Text style={styles.alertText}>{err}</Text>
                   </View>
                 )}
 
+                {/* Primary CTA */}
                 <TouchableOpacity
                   onPress={onSignUpPress}
-                  activeOpacity={0.9}
+                  activeOpacity={0.92}
                   disabled={!canSubmitSignUp}
-                  style={[styles.primaryBtn, !canSubmitSignUp && { opacity: 0.55 }]}
+                  style={[styles.cta, !canSubmitSignUp && styles.ctaDisabled]}
                 >
                   {submitting ? (
                     <ActivityIndicator color="#fff" />
                   ) : (
                     <>
-                      <Text style={styles.primaryText}>Create account</Text>
-                      <Ionicons name="arrow-forward" size={18} color="#fff" />
+                      <Text style={styles.ctaText}>Create account</Text>
+                      <View style={styles.ctaIcon}>
+                        <Ionicons name="arrow-forward" size={18} color="#fff" />
+                      </View>
                     </>
                   )}
                 </TouchableOpacity>
 
+                {/* Quiet divider + alt */}
+                <View style={styles.dividerRow}>
+                  <View style={styles.dividerLine} />
+                  <Text style={styles.dividerText}>or</Text>
+                  <View style={styles.dividerLine} />
+                </View>
+
                 <TouchableOpacity
                   onPress={() => router.push("/(auth)/sign-in")}
                   activeOpacity={0.9}
-                  style={styles.linkBtn}
+                  style={styles.secondary}
                 >
-                  <Text style={styles.linkText}>Already have an account? Sign in</Text>
+                  <Ionicons name="log-in-outline" size={18} color={COLORS.ink} />
+                  <Text style={styles.secondaryText}>I already have an account</Text>
                 </TouchableOpacity>
               </>
             ) : (
               <>
-                <View style={styles.field}>
-                  <Text style={styles.label}>Verification code</Text>
-                  <View style={styles.inputWrap}>
-                    <Ionicons name="key-outline" size={18} color="#64748B" />
+                <View style={styles.group}>
+                  <Text style={styles.label}>6-digit code</Text>
+                  <View style={[styles.inputWrap, styles.codeWrap, codeDigits.length === 6 && styles.ok]}>
+                    <View style={styles.leftIcon}>
+                      <Ionicons name="key-outline" size={18} color={COLORS.muted} />
+                    </View>
                     <TextInput
                       value={codeDigits}
                       onChangeText={(t) => setCode(t.replace(/\D/g, "").slice(0, 6))}
                       keyboardType="number-pad"
                       placeholder="123456"
-                      placeholderTextColor="#94A3B8"
-                      style={[styles.input, { letterSpacing: 6 }]}
+                      placeholderTextColor={COLORS.placeholder}
+                      style={[styles.input, styles.codeInput]}
                       maxLength={6}
                       returnKeyType="done"
                     />
-                    <Ionicons
-                      name={codeDigits.length === 6 ? "checkmark-circle" : "ellipse-outline"}
-                      size={18}
-                      color={codeDigits.length === 6 ? "#16A34A" : "#94A3B8"}
-                    />
+                    <View style={styles.rightIcon}>
+                      <Ionicons
+                        name={codeDigits.length === 6 ? "checkmark-circle" : "ellipse-outline"}
+                        size={18}
+                        color={codeDigits.length === 6 ? COLORS.success : COLORS.placeholder}
+                      />
+                    </View>
                   </View>
-                  <Text style={styles.hint}>Check spam/promotions if you don’t see it.</Text>
+                  <Text style={styles.helper}>Check spam/promotions if you don’t see it.</Text>
                 </View>
 
                 {!!err && (
-                  <View style={styles.errBox}>
-                    <Ionicons name="warning-outline" size={18} color="#DC2626" />
-                    <Text style={styles.errText}>{err}</Text>
+                  <View style={styles.alert}>
+                    <View style={styles.alertIcon}>
+                      <Ionicons name="warning-outline" size={18} color={COLORS.danger} />
+                    </View>
+                    <Text style={styles.alertText}>{err}</Text>
                   </View>
                 )}
 
                 <TouchableOpacity
                   onPress={onVerifyPress}
-                  activeOpacity={0.9}
+                  activeOpacity={0.92}
                   disabled={!canSubmitVerify}
-                  style={[styles.primaryBtn, !canSubmitVerify && { opacity: 0.55 }]}
+                  style={[styles.cta, !canSubmitVerify && styles.ctaDisabled]}
                 >
                   {submitting ? (
                     <ActivityIndicator color="#fff" />
                   ) : (
                     <>
-                      <Text style={styles.primaryText}>Verify & continue</Text>
-                      <Ionicons name="checkmark" size={18} color="#fff" />
+                      <Text style={styles.ctaText}>Verify & continue</Text>
+                      <View style={styles.ctaIcon}>
+                        <Ionicons name="checkmark" size={18} color="#fff" />
+                      </View>
                     </>
                   )}
                 </TouchableOpacity>
@@ -288,17 +311,17 @@ export default function SignUpScreen() {
                     setErr(null);
                   }}
                   activeOpacity={0.9}
-                  style={styles.secondaryBtn}
+                  style={styles.ghost}
                 >
-                  <Ionicons name="arrow-back" size={18} color="#0F172A" />
-                  <Text style={styles.secondaryText}>Back</Text>
+                  <Ionicons name="arrow-back" size={18} color={COLORS.ink} />
+                  <Text style={styles.ghostText}>Back to sign up</Text>
                 </TouchableOpacity>
               </>
             )}
           </View>
 
           <Text style={styles.footer}>
-            By continuing, you agree to app terms and acknowledge email verification.
+            By continuing, you agree to the terms and acknowledge email verification.
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -306,128 +329,308 @@ export default function SignUpScreen() {
   );
 }
 
+// Replace ONLY your COLORS + styles with this (same style keys).
+// "Tinder/Bumble-ish": high-contrast header, soft gradient vibe, pill chips, glossy card, bold typography.
+
+const COLORS = {
+  // base
+  bgTop: "#0B0B12",
+  bgBottom: "#0F172A",
+  card: "rgba(255,255,255,0.10)",
+  card2: "rgba(255,255,255,0.14)",
+  ink: "#FFFFFF",
+  inkSoft: "rgba(255,255,255,0.78)",
+  muted: "rgba(255,255,255,0.62)",
+  placeholder: "rgba(255,255,255,0.45)",
+
+  // borders
+  border: "rgba(255,255,255,0.12)",
+  borderSoft: "rgba(255,255,255,0.08)",
+
+  // accent (hot pink -> orange vibe)
+  primary: "#FF4D6D",
+  primary2: "#FF8A00",
+  primarySoft: "rgba(255,77,109,0.18)",
+
+  success: "#22C55E",
+  danger: "#FB7185",
+};
+
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  safe: { flex: 1, backgroundColor: "#F8FAFC" },
+
+  // IMPORTANT: your SafeAreaView uses styles.safe; this gives the “premium dark + glow” base.
+  safe: {
+    flex: 1,
+    backgroundColor: COLORS.bgTop,
+  },
 
   page: {
     flexGrow: 1,
-    padding: 16,
+    paddingHorizontal: 18,
+    paddingTop: 10,
+    paddingBottom: 18,
     justifyContent: "center",
-    gap: 14,
+    gap: 16,
+    // “soft glow / neon” feel without extra libs
+    backgroundColor: COLORS.bgTop,
   },
 
-  header: {
+  // HERO
+  hero: {
+    paddingHorizontal: 2,
+    gap: 10,
+  },
+  heroTop: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
     gap: 12,
-    paddingHorizontal: 2,
   },
-  logo: {
-    width: 44,
-    height: 44,
-    borderRadius: 16,
-    backgroundColor: "#E0F2FE",
-    borderWidth: 1,
-    borderColor: "#BAE6FD",
+
+  badge: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-  },
-  brand: { color: "#0F172A", fontWeight: "900", fontSize: 18 },
-  tagline: { color: "#64748B", fontWeight: "700", marginTop: 2 },
-
-  card: {
-    borderRadius: 22,
-    padding: 16,
-    backgroundColor: "#FFFFFF",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,77,109,0.14)",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
-    shadowColor: "#0B1220",
-    shadowOpacity: 0.08,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 12 },
+    borderColor: "rgba(255,77,109,0.25)",
   },
-  title: { color: "#0F172A", fontSize: 22, fontWeight: "900" },
-  sub: { marginTop: 6, color: "#64748B", fontWeight: "700", lineHeight: 18 },
+  badgeText: {
+    color: COLORS.ink,
+    fontWeight: "800",
+    fontSize: 12,
+    letterSpacing: 0.3,
+  },
 
-  field: { marginTop: 14 },
-  label: { color: "#0F172A", fontWeight: "900", marginBottom: 8, fontSize: 12 },
+  heroLinkPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.10)",
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  heroLinkText: { color: COLORS.ink, fontWeight: "800", fontSize: 12 },
+
+  h1: {
+    color: COLORS.ink,
+    fontSize: 34,
+    fontWeight: "900",
+    letterSpacing: -1.1,
+    lineHeight: 40,
+  },
+  h2: {
+    color: COLORS.muted,
+    fontSize: 14,
+    fontWeight: "700",
+    lineHeight: 20,
+  },
+
+  // SURFACE (glass card)
+  surface: {
+    backgroundColor: COLORS.card,
+    borderRadius: 28,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    shadowColor: "#000",
+    shadowOpacity: 0.35,
+    shadowRadius: 26,
+    shadowOffset: { width: 0, height: 16 },
+    elevation: 6,
+  },
+
+  group: { marginTop: 12 },
+  label: {
+    color: COLORS.inkSoft,
+    fontWeight: "800",
+    marginBottom: 8,
+    fontSize: 12,
+    letterSpacing: 0.25,
+  },
 
   inputWrap: {
-    height: 52,
-    borderRadius: 16,
-    paddingHorizontal: 12,
+    height: 56,
+    borderRadius: 18,
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "rgba(255,255,255,0.08)",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: COLORS.borderSoft,
+  },
+  leftIcon: {
+    width: 46,
+    height: 56,
+    alignItems: "center",
+    justifyContent: "center",
+    opacity: 0.9,
+  },
+  rightIcon: {
+    width: 46,
+    height: 56,
+    alignItems: "center",
+    justifyContent: "center",
+    opacity: 0.95,
   },
   input: {
     flex: 1,
-    color: "#0F172A",
+    color: COLORS.ink,
     fontWeight: "800",
     fontSize: 15,
     paddingVertical: 0,
+    paddingRight: 8,
+    letterSpacing: 0.2,
   },
   iconTap: {
-    width: 34,
-    height: 34,
-    borderRadius: 12,
+    width: 42,
+    height: 42,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.10)",
   },
 
-  hint: { marginTop: 8, color: "#64748B", fontWeight: "700", fontSize: 12 },
+  // validation states (sleek: tiny tint + accent border)
+  ok: {
+    borderColor: "rgba(34,197,94,0.35)",
+    backgroundColor: "rgba(34,197,94,0.06)",
+  },
+  bad: {
+    borderColor: "rgba(251,113,133,0.35)",
+    backgroundColor: "rgba(251,113,133,0.06)",
+  },
 
-  errBox: {
+  helper: {
+    marginTop: 8,
+    color: COLORS.muted,
+    fontWeight: "700",
+    fontSize: 12,
+    lineHeight: 16,
+  },
+
+  // CODE
+  codeWrap: { backgroundColor: "rgba(255,255,255,0.08)" },
+  codeInput: { letterSpacing: 10, fontVariant: ["tabular-nums"] },
+
+  // ALERT (glass red)
+  alert: {
     marginTop: 14,
-    borderRadius: 16,
+    borderRadius: 18,
     padding: 12,
     flexDirection: "row",
     gap: 10,
     alignItems: "center",
-    backgroundColor: "#FEF2F2",
+    backgroundColor: "rgba(251,113,133,0.10)",
     borderWidth: 1,
-    borderColor: "#FECACA",
+    borderColor: "rgba(251,113,133,0.24)",
   },
-  errText: { color: "#B91C1C", fontWeight: "800", flex: 1, lineHeight: 18 },
+  alertIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 14,
+    backgroundColor: "rgba(251,113,133,0.14)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  alertText: {
+    color: "#FFE4EA",
+    fontWeight: "800",
+    flex: 1,
+    lineHeight: 18,
+  },
 
-  primaryBtn: {
+  // CTA (fake gradient feel using layered “shine” + strong shadow)
+  cta: {
     marginTop: 16,
-    height: 52,
-    borderRadius: 16,
-    backgroundColor: "#0A84FF",
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: COLORS.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 10,
+    shadowColor: COLORS.primary,
+    shadowOpacity: 0.35,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.16)",
+  },
+  ctaDisabled: { opacity: 0.5 },
+  ctaText: {
+    color: "#fff",
+    fontWeight: "900",
+    fontSize: 16,
+    letterSpacing: 0.3,
+  },
+  ctaIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.16)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.18)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  // DIVIDER
+  dividerRow: {
+    marginTop: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  dividerLine: { flex: 1, height: 1, backgroundColor: "rgba(255,255,255,0.12)" },
+  dividerText: { color: COLORS.muted, fontWeight: "800", fontSize: 12 },
+
+  // SECONDARY (premium glass)
+  secondary: {
+    marginTop: 12,
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.10)",
+    borderWidth: 1,
+    borderColor: COLORS.border,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
     gap: 10,
   },
-  primaryText: { color: "#fff", fontWeight: "900", fontSize: 16 },
+  secondaryText: { color: COLORS.ink, fontWeight: "900" },
 
-  linkBtn: { marginTop: 14, alignItems: "center" },
-  linkText: { color: "#0A84FF", fontWeight: "900" },
-
-  secondaryBtn: {
+  // GHOST
+  ghost: {
     marginTop: 12,
-    height: 52,
-    borderRadius: 16,
-    backgroundColor: "#F1F5F9",
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.06)",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "rgba(255,255,255,0.10)",
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
-    gap: 8,
+    gap: 10,
   },
-  secondaryText: { color: "#0F172A", fontWeight: "900" },
+  ghostText: { color: COLORS.ink, fontWeight: "900" },
 
   footer: {
-    color: "#94A3B8",
+    color: "rgba(255,255,255,0.55)",
     textAlign: "center",
     fontWeight: "700",
     fontSize: 12,
     paddingHorizontal: 10,
+    marginTop: 2,
+    lineHeight: 18,
   },
 });

@@ -4,13 +4,10 @@
     "strict": true,
     "skipLibCheck": true,
     "skipDefaultLibCheck": true,
-    "noEmit": true
+    "noEmit": true,
+    "module": "esnext",
+    "moduleResolution": "bundler"
   },
-  "exclude": [
-    "node_modules",
-    "scripts",
-    "test-reanimated.ts",
-    "test.ts"
-  ],
+  "exclude": ["node_modules", "scripts", "test-reanimated.ts", "test.ts"],
   "include": ["app/**/*.tsx", "app/**/*.ts", "../vision-transformer-robotics/models/profile_old.tsx"]
 }

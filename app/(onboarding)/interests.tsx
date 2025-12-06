@@ -126,6 +126,7 @@ export default function InterestsScreen() {
 
   const [selected, setSelected] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
   const API_BASE = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
@@ -144,6 +145,7 @@ export default function InterestsScreen() {
 
   const onNext = async () => {
     if (!isLoaded || !user) return;
+
     setSaving(true);
     setErr(null);
 
@@ -174,6 +176,7 @@ export default function InterestsScreen() {
 
       router.push("/(onboarding)/about");
     } catch (e: any) {
+      setErr(e?.message || "Failed to save interests.");
       setErr(e?.message || "Failed to save interests.");
     } finally {
       setSaving(false);

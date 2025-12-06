@@ -124,7 +124,7 @@ export default function GenderScreen() {
         throw new Error(msg);
       }
 
-      router.push("/(onboarding)/dateOfBirth");
+      router.push("/(onboarding)/interests");
     } catch (e: any) {
       setErr(e?.message || "Failed to save gender.");
     } finally {

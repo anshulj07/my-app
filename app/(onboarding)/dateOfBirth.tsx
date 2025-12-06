@@ -23,6 +23,11 @@ function toISODate(d: Date) {
   return `${y}-${m}-${day}`;
 }
 
+function prettyDate(d: Date) {
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+}
+
 function calcAge(dob: Date) {
   const now = new Date();
   let age = now.getFullYear() - dob.getFullYear();
@@ -32,15 +37,19 @@ function calcAge(dob: Date) {
 }
 
 const COLORS = {
-  bg: "#0B0B12",
-  card: "rgba(255,255,255,0.10)",
+  bg: "#07070C",
+  bg2: "#0B0B12",
+  ink: "#FFFFFF",
+  inkSoft: "rgba(255,255,255,0.82)",
+  muted: "rgba(255,255,255,0.62)",
+  faint: "rgba(255,255,255,0.38)",
+  card: "rgba(255,255,255,0.08)",
   border: "rgba(255,255,255,0.12)",
   borderSoft: "rgba(255,255,255,0.08)",
-  ink: "#FFFFFF",
-  muted: "rgba(255,255,255,0.62)",
   primary: "#FF4D6D",
-  primary2: "#FF8A00",
+  accent: "#FF8A00",
   danger: "#FB7185",
+  success: "#22C55E",
 };
 
 export default function DobScreen() {
@@ -55,12 +64,12 @@ export default function DobScreen() {
   const [err, setErr] = useState<string | null>(null);
 
   const [androidShowPicker, setAndroidShowPicker] = useState(false);
-
   const [iosModalOpen, setIosModalOpen] = useState(false);
   const [iosTempDob, setIosTempDob] = useState<Date>(dob);
 
   const age = useMemo(() => calcAge(dob), [dob]);
-  const canContinue = useMemo(() => age >= 18 && !saving, [age, saving]);
+  const under18 = age < 18;
+  const canContinue = useMemo(() => !under18 && !saving, [under18, saving]);
 
   const openPicker = () => {
     setErr(null);
@@ -85,7 +94,7 @@ export default function DobScreen() {
 
     try {
       if (!API_BASE) throw new Error("Missing API base URL (extra.apiBaseUrl).");
-      if (age < 18) throw new Error("You must be at least 18 years old to continue.");
+      if (under18) throw new Error("You must be at least 18 years old to continue.");
 
       const apiBase = API_BASE.replace(/\/$/, "");
       const payload = { clerkUserId: user.id, dob: toISODate(dob), age };
@@ -109,7 +118,8 @@ export default function DobScreen() {
         throw new Error(msg);
       }
 
-      router.push("/(onboarding)/interests");
+      // ✅ flow: name -> dob -> gender -> interests -> about -> photos
+      router.push("/(onboarding)/gender");
     } catch (e: any) {
       setErr(e?.message || "Failed to save DOB.");
     } finally {
@@ -119,51 +129,67 @@ export default function DobScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
+      {/* Background glows */}
+      <View pointerEvents="none" style={styles.bgLayer}>
+        <View style={[styles.glow, styles.glowA]} />
+        <View style={[styles.glow, styles.glowB]} />
+        <View style={[styles.glow, styles.glowC]} />
+        <View style={styles.noiseWash} />
+      </View>
+
       <View style={styles.page}>
         {/* Hero */}
         <View style={styles.hero}>
           <View style={styles.heroTop}>
-            <View style={styles.pill}>
-              <View style={styles.pillDot} />
-              <Text style={styles.pillText}>Step 3 of 4</Text>
+            <View style={styles.stepPill}>
+              <View style={styles.stepDot} />
+              <Text style={styles.stepText}>Step 2 of 6</Text>
             </View>
 
-            <View style={styles.spark}>
-              <Ionicons name="calendar-outline" size={16} color={COLORS.primary} />
+            <View style={styles.heroIcon}>
+              <Ionicons name="calendar-outline" size={18} color={COLORS.primary} />
             </View>
           </View>
 
-          <Text style={styles.h1}>Your date of birth</Text>
-          <Text style={styles.h2}>We only use this to confirm you’re 18+. You can edit it later.</Text>
+          <Text style={styles.h1}>When were you born?</Text>
+          <Text style={styles.h2}>We use this only to confirm you’re 18+. You can change it later.</Text>
         </View>
 
         {/* Card */}
         <View style={styles.card}>
-          {/* Picker tile */}
-          <TouchableOpacity onPress={openPicker} activeOpacity={0.92} style={styles.pickTile}>
-            <View style={styles.pickLeft}>
-              <View style={styles.pickIcon}>
-                <Ionicons name="calendar" size={18} color={COLORS.muted} />
+          {/* Big date display */}
+          <TouchableOpacity onPress={openPicker} activeOpacity={0.92} style={styles.dateCard}>
+            <View style={styles.dateTopRow}>
+              <View style={styles.dateBadge}>
+                <Ionicons name="time-outline" size={14} color={COLORS.inkSoft} />
+                <Text style={styles.dateBadgeText}>Date of Birth</Text>
               </View>
-              <View style={{ gap: 3 }}>
-                <Text style={styles.pickLabel}>Date of birth</Text>
-                <Text style={styles.pickValue}>{toISODate(dob)}</Text>
+
+              <View style={[styles.ageChip, under18 && styles.ageChipBad]}>
+                <Ionicons
+                  name={under18 ? "alert-circle-outline" : "checkmark-circle-outline"}
+                  size={14}
+                  color={under18 ? COLORS.danger : COLORS.success}
+                />
+                <Text style={styles.ageChipText}>{age} years</Text>
               </View>
             </View>
 
-            <View style={styles.pickRight}>
-              <View style={styles.agePill}>
-                <Text style={styles.ageText}>{age}</Text>
-                <Text style={styles.ageCaption}>years</Text>
+            <Text style={styles.bigDate}>{prettyDate(dob)}</Text>
+            <Text style={styles.smallDate}>{toISODate(dob)}</Text>
+
+            <View style={styles.tapRow}>
+              <Text style={styles.tapHint}>Tap to change</Text>
+              <View style={styles.chev}>
+                <Ionicons name="chevron-forward" size={18} color={COLORS.muted} />
               </View>
-              <Ionicons name="chevron-forward" size={18} color={COLORS.muted} />
             </View>
           </TouchableOpacity>
 
-          {age < 18 ? (
-            <View style={[styles.hint, { marginTop: 12 }]}>
+          {under18 ? (
+            <View style={styles.inlineWarn}>
               <Ionicons name="information-circle-outline" size={18} color={COLORS.danger} />
-              <Text style={styles.hintText}>You must be at least 18 years old to continue.</Text>
+              <Text style={styles.inlineWarnText}>You must be at least 18 years old to continue.</Text>
             </View>
           ) : null}
 
@@ -197,6 +223,8 @@ export default function DobScreen() {
             )}
           </TouchableOpacity>
 
+          <Text style={styles.footerNote}>Your DOB won’t be shown publicly.</Text>
+
           {!API_BASE ? (
             <View style={[styles.alert, { marginTop: 12 }]}>
               <View style={styles.alertIcon}>
@@ -219,7 +247,7 @@ export default function DobScreen() {
         />
       ) : null}
 
-      {/* iOS modal picker */}
+      {/* iOS modal (bottom sheet style) */}
       <Modal
         visible={iosModalOpen}
         transparent
@@ -227,33 +255,39 @@ export default function DobScreen() {
         onRequestClose={() => setIosModalOpen(false)}
       >
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select date</Text>
+          <View style={styles.sheet}>
+            <View style={styles.sheetHeader}>
+              <View style={styles.sheetHandle} />
+            </View>
+
+            <View style={styles.sheetTitleRow}>
+              <Text style={styles.sheetTitle}>Select date</Text>
               <TouchableOpacity
                 onPress={() => setIosModalOpen(false)}
                 activeOpacity={0.9}
-                style={styles.modalClose}
+                style={styles.sheetClose}
               >
-                <Ionicons name="close" size={18} color="#fff" />
+                <Ionicons name="close" size={18} color={COLORS.ink} />
               </TouchableOpacity>
             </View>
 
-            <DateTimePicker
-              value={iosTempDob}
-              mode="date"
-              display="spinner"
-              onChange={(_, selected) => selected && setIosTempDob(selected)}
-              maximumDate={new Date()}
-            />
+            <View style={styles.pickerWrap}>
+              <DateTimePicker
+                value={iosTempDob}
+                mode="date"
+                display="spinner"
+                onChange={(_, selected) => selected && setIosTempDob(selected)}
+                maximumDate={new Date()}
+              />
+            </View>
 
-            <View style={styles.modalActions}>
+            <View style={styles.sheetActions}>
               <TouchableOpacity
                 onPress={() => setIosModalOpen(false)}
                 activeOpacity={0.9}
-                style={[styles.modalBtn, styles.modalBtnGhost]}
+                style={[styles.sheetBtn, styles.sheetBtnGhost]}
               >
-                <Text style={styles.modalBtnGhostText}>Cancel</Text>
+                <Text style={styles.sheetBtnGhostText}>Cancel</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -262,11 +296,13 @@ export default function DobScreen() {
                   setIosModalOpen(false);
                 }}
                 activeOpacity={0.9}
-                style={[styles.modalBtn, styles.modalBtnPrimary]}
+                style={[styles.sheetBtn, styles.sheetBtnPrimary]}
               >
-                <Text style={styles.modalBtnPrimaryText}>Done</Text>
+                <Text style={styles.sheetBtnPrimaryText}>Done</Text>
               </TouchableOpacity>
             </View>
+
+            <View style={{ height: 8 }} />
           </View>
         </View>
       </Modal>
@@ -277,6 +313,41 @@ export default function DobScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.bg },
 
+  bgLayer: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: COLORS.bg,
+  },
+  glow: {
+    position: "absolute",
+    borderRadius: 9999,
+    opacity: 0.7,
+  },
+  glowA: {
+    width: 420,
+    height: 420,
+    top: -160,
+    left: -140,
+    backgroundColor: "rgba(255,77,109,0.16)",
+  },
+  glowB: {
+    width: 360,
+    height: 360,
+    bottom: -140,
+    right: -120,
+    backgroundColor: "rgba(255,138,0,0.14)",
+  },
+  glowC: {
+    width: 280,
+    height: 280,
+    top: 120,
+    right: -90,
+    backgroundColor: "rgba(99,102,241,0.10)",
+  },
+  noiseWash: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(255,255,255,0.02)",
+  },
+
   page: {
     flex: 1,
     paddingHorizontal: 18,
@@ -284,36 +355,35 @@ const styles = StyleSheet.create({
     paddingBottom: 18,
     justifyContent: "center",
     gap: 16,
-    backgroundColor: COLORS.bg,
   },
 
   hero: { paddingHorizontal: 2, gap: 10 },
   heroTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
 
-  pill: {
+  stepPill: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: "rgba(255,77,109,0.14)",
+    backgroundColor: "rgba(255,77,109,0.12)",
     borderWidth: 1,
-    borderColor: "rgba(255,77,109,0.25)",
+    borderColor: "rgba(255,77,109,0.22)",
   },
-  pillDot: {
+  stepDot: {
     width: 7,
     height: 7,
     borderRadius: 99,
-    backgroundColor: COLORS.primary2,
-    shadowColor: COLORS.primary2,
+    backgroundColor: COLORS.accent,
+    shadowColor: COLORS.accent,
     shadowOpacity: 0.35,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 6 },
   },
-  pillText: { color: COLORS.ink, fontWeight: "900", fontSize: 12, letterSpacing: 0.25 },
+  stepText: { color: COLORS.ink, fontWeight: "900", fontSize: 12, letterSpacing: 0.25 },
 
-  spark: {
+  heroIcon: {
     width: 40,
     height: 40,
     borderRadius: 16,
@@ -340,46 +410,78 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
 
-  pickTile: {
-    height: 86,
-    borderRadius: 22,
-    paddingHorizontal: 14,
+  dateCard: {
+    borderRadius: 24,
+    padding: 16,
     backgroundColor: "rgba(255,255,255,0.08)",
     borderWidth: 1,
     borderColor: COLORS.borderSoft,
+  },
+  dateTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+  dateBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.10)",
+  },
+  dateBadgeText: { color: COLORS.inkSoft, fontWeight: "900", fontSize: 12, letterSpacing: 0.2 },
+
+  ageChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "rgba(34,197,94,0.10)",
+    borderWidth: 1,
+    borderColor: "rgba(34,197,94,0.22)",
+  },
+  ageChipBad: {
+    backgroundColor: "rgba(251,113,133,0.10)",
+    borderColor: "rgba(251,113,133,0.22)",
+  },
+  ageChipText: { color: COLORS.ink, fontWeight: "900", fontSize: 12 },
+
+  bigDate: {
+    color: COLORS.ink,
+    fontWeight: "900",
+    fontSize: 26,
+    letterSpacing: -0.4,
+    marginTop: 2,
+  },
+  smallDate: { color: COLORS.faint, fontWeight: "800", marginTop: 6 },
+
+  tapRow: {
+    marginTop: 14,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
-  pickLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
-  pickIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 16,
-    backgroundColor: "rgba(255,255,255,0.10)",
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
+  tapHint: { color: COLORS.muted, fontWeight: "800" },
+  chev: {
+    width: 36,
+    height: 36,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-  },
-  pickLabel: { color: COLORS.muted, fontWeight: "900", fontSize: 12, letterSpacing: 0.2 },
-  pickValue: { color: COLORS.ink, fontWeight: "900", fontSize: 18, letterSpacing: 0.2 },
-
-  pickRight: { flexDirection: "row", alignItems: "center", gap: 10 },
-  agePill: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: "rgba(255,138,0,0.14)",
+    backgroundColor: "rgba(255,255,255,0.08)",
     borderWidth: 1,
-    borderColor: "rgba(255,138,0,0.25)",
-    alignItems: "center",
-    justifyContent: "center",
+    borderColor: "rgba(255,255,255,0.10)",
   },
-  ageText: { color: COLORS.ink, fontWeight: "900", fontSize: 14, lineHeight: 16 },
-  ageCaption: { color: COLORS.muted, fontWeight: "900", fontSize: 11, marginTop: 2 },
 
-  hint: {
+  inlineWarn: {
+    marginTop: 12,
     borderRadius: 18,
     padding: 12,
     flexDirection: "row",
@@ -389,7 +491,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(251,113,133,0.18)",
   },
-  hintText: { color: "#FFE4EA", fontWeight: "800", flex: 1, lineHeight: 18 },
+  inlineWarnText: { color: "#FFE4EA", fontWeight: "800", flex: 1, lineHeight: 18 },
 
   alert: {
     marginTop: 14,
@@ -442,31 +544,43 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  // iOS modal
+  footerNote: {
+    marginTop: 12,
+    color: "rgba(255,255,255,0.55)",
+    fontWeight: "800",
+    fontSize: 12,
+    lineHeight: 18,
+  },
+
+  // Modal
   modalBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(2,6,23,0.60)",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 16,
+    backgroundColor: "rgba(2,6,23,0.65)",
+    justifyContent: "flex-end",
   },
-  modalCard: {
-    width: "100%",
-    maxWidth: 520,
+  sheet: {
     backgroundColor: "#0E0E17",
-    borderRadius: 22,
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
     padding: 16,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
   },
-  modalHeader: {
+  sheetHeader: { alignItems: "center", paddingBottom: 10 },
+  sheetHandle: {
+    width: 44,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.22)",
+  },
+  sheetTitleRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     marginBottom: 10,
   },
-  modalTitle: { fontWeight: "900", fontSize: 16, color: "#fff" },
-  modalClose: {
+  sheetTitle: { fontWeight: "900", fontSize: 16, color: "#fff" },
+  sheetClose: {
     width: 34,
     height: 34,
     borderRadius: 14,
@@ -476,14 +590,21 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.14)",
   },
-  modalActions: { flexDirection: "row", gap: 10, marginTop: 12 },
-  modalBtn: { flex: 1, height: 48, borderRadius: 14, alignItems: "center", justifyContent: "center" },
-  modalBtnGhost: {
+  pickerWrap: {
+    borderRadius: 18,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.10)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+  },
+  sheetActions: { flexDirection: "row", gap: 10, marginTop: 12 },
+  sheetBtn: { flex: 1, height: 48, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  sheetBtnGhost: {
     backgroundColor: "rgba(255,255,255,0.10)",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.14)",
   },
-  modalBtnGhostText: { color: "#fff", fontWeight: "900" },
-  modalBtnPrimary: { backgroundColor: COLORS.primary },
-  modalBtnPrimaryText: { color: "#fff", fontWeight: "900" },
+  sheetBtnGhostText: { color: "#fff", fontWeight: "900" },
+  sheetBtnPrimary: { backgroundColor: COLORS.primary },
+  sheetBtnPrimaryText: { color: "#fff", fontWeight: "900" },
 });

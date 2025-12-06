@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { TouchableOpacity, Text, StyleSheet, Platform } from "react-native";
 import * as Location from "expo-location";
 import MapView from "../../components/Map/MapView";
-import ModalizeEventSheet from "../../components/Map/AddEventModal";
+import ModalizeEventSheet from "../../components/AddEventModal/AddEvent";
 import EventsListModal from "../../components/List/EventsListModal";
 import Constants from "expo-constants";
 import Ionicons from "@expo/vector-icons/Ionicons";

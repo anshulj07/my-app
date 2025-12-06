@@ -1,5 +1,4 @@
-// components/PersonBookingSheet.tsx
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Modal,
   View,
@@ -7,7 +6,14 @@ import {
   StyleSheet,
   TouchableOpacity,
   TouchableWithoutFeedback,
+  Pressable,
+  Image,
+  ActivityIndicator,
+  ScrollView,
 } from "react-native";
+import Constants from "expo-constants";
+import { useAuth } from "@clerk/clerk-expo";
+import { useRouter } from "expo-router";
 import type { EventPin } from "../Map/MapView";
 
 type Props = {
@@ -17,91 +23,216 @@ type Props = {
 };
 
 function pickFirst(...vals: Array<any>) {
-  for (const v of vals) {
-    if (typeof v === "string" && v.trim()) return v.trim();
-  }
+  for (const v of vals) if (typeof v === "string" && v.trim()) return v.trim();
   return "";
 }
 
+function moneyFromCents(cents: any) {
+  const n = typeof cents === "string" ? Number(cents) : cents;
+  if (typeof n !== "number" || !Number.isFinite(n) || n <= 0) return "";
+  return `$${(n / 100).toFixed(2)}`;
+}
+
 export default function PersonBookingSheet({ visible, onClose, person }: Props) {
+  const router = useRouter();
+  const { userId } = useAuth();
+
+  const API_BASE = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
+  const EVENT_API_KEY = (Constants.expoConfig?.extra as any)?.eventApiKey as string | undefined;
+
+  const creatorClerkId =
+    (person as any)?.creatorClerkId ||
+    (person as any)?.creator?.clerkUserId ||
+    (person as any)?.creatorId ||
+    "";
+
+  const kind: "free" | "service" = ((person as any)?.kind || "free") as any;
+  const priceLabel = moneyFromCents((person as any)?.priceCents);
+  const status = ((person as any)?.status || "active") as string;
+
+  const isCreator = !!userId && !!creatorClerkId && userId === creatorClerkId;
+
   const details = useMemo(() => {
     if (!person) return null;
 
-    // supports both old + new schema (because we preserved ...e in home normalization)
-    const city = pickFirst(person.city, person?.location?.city);
-    const region = pickFirst(person.region, person.state, person?.location?.region, person?.location?.state);
-    const country = pickFirst(person.country, person?.location?.country);
-    const address = pickFirst(
-      person.address,
-      person?.location?.formattedAddress,
-      person?.location?.address
-    );
+    const loc = (person as any)?.location || {};
+    const address = pickFirst(loc.formattedAddress, loc.address, (person as any)?.address, "");
+    const city = pickFirst(loc.city, (person as any)?.city);
+    const region = pickFirst(loc.admin1Code, loc.admin1, (person as any)?.region, (person as any)?.state);
+    const country = pickFirst(loc.countryCode, (person as any)?.country);
 
-    const when = pickFirst(person.when, person?.date && person?.time ? `${person.date} · ${person.time}` : "", person.date);
+    const when =
+      pickFirst(
+        (person as any)?.when,
+        (person as any)?.date && (person as any)?.time ? `${(person as any).date} · ${(person as any).time}` : "",
+        (person as any)?.date
+      ) || "";
 
-    return { city, region, country, address, when };
+    const tags = Array.isArray((person as any)?.tags) ? ((person as any).tags as string[]) : [];
+
+    return {
+      address,
+      locationLine: [city, region, country].filter(Boolean).join(", "),
+      when,
+      tags,
+      lat: (person as any)?.lat,
+      lng: (person as any)?.lng,
+    };
   }, [person]);
 
-  const locationLine =
-    details && (details.city || details.region || details.country)
-      ? [details.city, details.region, details.country].filter(Boolean).join(", ")
-      : "";
+  // ---- fetch creator from assist_users.users ----
+  const [creator, setCreator] = useState<any | null>(null);
+  const [loadingCreator, setLoadingCreator] = useState(false);
+
+  useEffect(() => {
+    if (!visible) return;
+    if (!API_BASE) return;
+    if (!creatorClerkId) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoadingCreator(true);
+        const url = `${API_BASE}/api/users/get-user?clerkUserId=${encodeURIComponent(creatorClerkId)}`;
+        const res = await fetch(url, { headers: EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : undefined });
+        const json = await res.json().catch(() => null);
+        if (cancelled) return;
+        setCreator(res.ok ? json?.user ?? null : null);
+      } catch {
+        if (!cancelled) setCreator(null);
+      } finally {
+        if (!cancelled) setLoadingCreator(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, API_BASE, EVENT_API_KEY, creatorClerkId]);
+
+  const creatorName = pickFirst(
+    creator?.profile?.firstName && creator?.profile?.lastName
+      ? `${creator.profile.firstName} ${creator.profile.lastName}`
+      : "",
+    creator?.profile?.firstName,
+    "Creator"
+  );
+
+  const creatorAbout = pickFirst(creator?.profile?.about, "");
+  const creatorPhoto = (creator?.profile?.photos && creator.profile.photos[0]) || "";
+
+  const actionLabel = isCreator
+    ? "Edit event"
+    : kind === "free"
+      ? "Join free event"
+      : priceLabel
+        ? `Book service • ${priceLabel}`
+        : "Book service";
+
+  const onPrimary = () => {
+    if (!person) return;
+
+    if (isCreator) {
+      // change to your edit route if you have one
+      router.push({ pathname: "/newtab/edit-event", params: { id: String((person as any)?._id || "") } } as any);
+      return;
+    }
+
+    if (kind === "free") {
+      // join flow here
+      return;
+    }
+
+    // booking flow here
+  };
+
+  const goToCreatorProfile = () => {
+    if (!creatorClerkId) return;
+    router.push({ pathname: "/newtab/profile", params: { clerkUserId: creatorClerkId } } as any);
+  };
 
   return (
     <Modal transparent visible={visible} animationType="slide" onRequestClose={onClose}>
       <TouchableWithoutFeedback onPress={onClose}>
-        <View style={styles.backdrop}>
+        <View style={styles.bg}>
           <TouchableWithoutFeedback onPress={() => {}}>
             <View style={styles.sheet}>
               {!person ? (
-                <Text style={styles.placeholder}>No person selected</Text>
+                <Text style={styles.placeholder}>Nothing selected</Text>
               ) : (
                 <>
-                  <View style={styles.handle} />
+                  <View style={styles.grabber} />
 
-                  <Text style={styles.name}>{person.title}</Text>
-
-                  <View style={styles.row}>
-                    <Text style={styles.emoji}>{person.emoji}</Text>
-
+                  {/* Hero */}
+                  <View style={styles.hero}>
+                    <Text style={styles.heroEmoji}>{(person as any)?.emoji || "📍"}</Text>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.label}>Location</Text>
+                      <Text style={styles.title} numberOfLines={2}>
+                        {person.title}
+                      </Text>
 
-                      {!!locationLine ? (
-                        <Text style={styles.value}>{locationLine}</Text>
-                      ) : !!details?.address ? (
-                        <Text style={styles.value} numberOfLines={2}>
-                          {details.address}
-                        </Text>
-                      ) : (
-                        <Text style={styles.valueMuted}>Location details not available</Text>
-                      )}
+                      <View style={styles.chips}>
+                        <View style={[styles.chip, kind === "service" ? styles.chipPurple : styles.chipGreen]}>
+                          <Text style={styles.chipText}>
+                            {kind === "service" ? (priceLabel ? `Service • ${priceLabel}` : "Service") : "Free"}
+                          </Text>
+                        </View>
 
-                      {!!details?.when && (
-                        <Text style={styles.whenText} numberOfLines={1}>
-                          {details.when}
-                        </Text>
-                      )}
+                        <View style={[styles.chip, status === "active" ? styles.chipBlue : styles.chipGray]}>
+                          <Text style={styles.chipText}>{status}</Text>
+                        </View>
+                      </View>
                     </View>
                   </View>
 
-                  {!!details?.address && (
-                    <>
-                      <Text style={styles.sectionTitle}>Address</Text>
-                      <Text style={styles.about} numberOfLines={3}>
-                        {details.address}
+                  {/* Creator */}
+                  <Pressable onPress={goToCreatorProfile} style={styles.creatorCard}>
+                    <View style={styles.avatarWrap}>
+                      {creatorPhoto ? (
+                        <Image source={{ uri: creatorPhoto }} style={styles.avatar} />
+                      ) : (
+                        <View style={styles.avatarFallback}>
+                          <Text style={styles.avatarFallbackText}>👤</Text>
+                        </View>
+                      )}
+                    </View>
+
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.creatorName}>{creatorName}</Text>
+                      <Text style={styles.creatorAbout} numberOfLines={1}>
+                        {creatorAbout || "Tap to view profile"}
                       </Text>
-                    </>
-                  )}
+                    </View>
 
-                  <Text style={styles.sectionTitle}>About</Text>
-                  <Text style={styles.about}>
-                    This is a placeholder profile description. You can replace this text with details like bio, skills,
-                    pricing, or availability.
-                  </Text>
+                    {loadingCreator && <ActivityIndicator />}
+                  </Pressable>
 
-                  <TouchableOpacity style={styles.bookBtn} activeOpacity={0.9}>
-                    <Text style={styles.bookBtnText}>Book this person</Text>
+                  {/* Details */}
+                  <ScrollView showsVerticalScrollIndicator={false} style={{ marginTop: 8 }}>
+                    <View style={styles.block}>
+                      <Text style={styles.blockLabel}>When</Text>
+                      <Text style={styles.blockValue}>{details?.when || "Not set"}</Text>
+                    </View>
+
+                    <View style={styles.block}>
+                      <Text style={styles.blockLabel}>Location</Text>
+                      <Text style={styles.blockValue}>
+                        {details?.locationLine || details?.address || "Not available"}
+                      </Text>
+                      {!!details?.address && <Text style={styles.subValue}>{details.address}</Text>}
+                    </View>
+
+                    {!!details?.tags?.length && (
+                      <View style={styles.block}>
+                        <Text style={styles.blockLabel}>Tags</Text>
+                        <Text style={styles.blockValue}>{details.tags.join(", ")}</Text>
+                      </View>
+                    )}
+                  </ScrollView>
+
+                  {/* Action */}
+                  <TouchableOpacity style={styles.primary} activeOpacity={0.9} onPress={onPrimary}>
+                    <Text style={styles.primaryText}>{actionLabel}</Text>
                   </TouchableOpacity>
                 </>
               )}
@@ -114,87 +245,87 @@ export default function PersonBookingSheet({ visible, onClose, person }: Props) 
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.35)",
-    justifyContent: "flex-end",
-  },
+  bg: { flex: 1, backgroundColor: "rgba(2,6,23,0.55)", justifyContent: "flex-end" },
   sheet: {
-    height: "70%",
-    backgroundColor: "#fff",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 24,
+    height: "82%",
+    backgroundColor: "#0B1220",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 16,
   },
-  handle: {
+  grabber: {
     alignSelf: "center",
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: "#CCC",
+    width: 52,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: "rgba(148,163,184,0.35)",
     marginBottom: 12,
   },
-  placeholder: {
-    textAlign: "center",
-    marginTop: 20,
-    color: "#666",
+  placeholder: { color: "rgba(226,232,240,0.75)", textAlign: "center", marginTop: 20 },
+
+  hero: {
+    flexDirection: "row",
+    gap: 12,
+    padding: 14,
+    borderRadius: 22,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.18)",
   },
-  name: {
-    fontSize: 22,
-    fontWeight: "600",
-    marginBottom: 12,
+  heroEmoji: { fontSize: 34 },
+  title: { color: "#E2E8F0", fontWeight: "900", fontSize: 18 },
+
+  chips: { flexDirection: "row", gap: 8, marginTop: 10, flexWrap: "wrap" },
+  chip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
   },
-  row: {
+  chipText: { color: "#E2E8F0", fontWeight: "800", fontSize: 12 },
+  chipGreen: { backgroundColor: "rgba(34,197,94,0.14)", borderColor: "rgba(34,197,94,0.25)" },
+  chipPurple: { backgroundColor: "rgba(139,92,246,0.16)", borderColor: "rgba(139,92,246,0.28)" },
+  chipBlue: { backgroundColor: "rgba(59,130,246,0.16)", borderColor: "rgba(59,130,246,0.28)" },
+  chipGray: { backgroundColor: "rgba(148,163,184,0.12)", borderColor: "rgba(148,163,184,0.22)" },
+
+  creatorCard: {
+    marginTop: 12,
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 16,
+    gap: 12,
+    padding: 12,
+    borderRadius: 22,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.16)",
   },
-  emoji: {
-    fontSize: 32,
-    marginRight: 12,
+  avatarWrap: { width: 48, height: 48, borderRadius: 18, overflow: "hidden" },
+  avatar: { width: "100%", height: "100%" },
+  avatarFallback: { flex: 1, backgroundColor: "rgba(148,163,184,0.18)", alignItems: "center", justifyContent: "center" },
+  avatarFallbackText: { fontSize: 18 },
+  creatorName: { color: "#E2E8F0", fontWeight: "900", fontSize: 14 },
+  creatorAbout: { color: "rgba(226,232,240,0.72)", fontWeight: "700", marginTop: 2, fontSize: 12 },
+
+  block: {
+    marginTop: 12,
+    padding: 14,
+    borderRadius: 22,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.14)",
   },
-  label: {
-    fontSize: 12,
-    color: "#555",
-  },
-  value: {
-    fontSize: 14,
-    color: "#111",
-    marginTop: 2,
-  },
-  valueMuted: {
-    fontSize: 14,
-    color: "#6B7280",
-    marginTop: 2,
-  },
-  whenText: {
-    marginTop: 6,
-    fontSize: 12,
-    color: "#64748B",
-    fontWeight: "600",
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "500",
-    marginBottom: 6,
-  },
-  about: {
-    fontSize: 14,
-    color: "#333",
-    marginBottom: 20,
-  },
-  bookBtn: {
-    marginTop: "auto",
+  blockLabel: { color: "rgba(226,232,240,0.72)", fontWeight: "800", fontSize: 12 },
+  blockValue: { color: "#E2E8F0", fontWeight: "900", fontSize: 13, marginTop: 6 },
+  subValue: { color: "rgba(226,232,240,0.68)", fontWeight: "700", fontSize: 12, marginTop: 6 },
+
+  primary: {
+    marginTop: 14,
     backgroundColor: "#0A84FF",
     paddingVertical: 14,
     borderRadius: 999,
     alignItems: "center",
   },
-  bookBtnText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
+  primaryText: { color: "#fff", fontWeight: "900", fontSize: 15 },
 });

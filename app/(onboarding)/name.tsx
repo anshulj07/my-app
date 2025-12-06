@@ -68,7 +68,7 @@ export default function NameScreen() {
         throw new Error(msg);
       }
 
-      router.push("/(onboarding)/interests");
+      router.push("/(onboarding)/dateOfBirth");
     } catch (e: any) {
       setErr(e?.message || "Failed to save name.");
     } finally {

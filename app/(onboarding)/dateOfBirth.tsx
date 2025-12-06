@@ -31,6 +31,18 @@ function calcAge(dob: Date) {
   return age;
 }
 
+const COLORS = {
+  bg: "#0B0B12",
+  card: "rgba(255,255,255,0.10)",
+  border: "rgba(255,255,255,0.12)",
+  borderSoft: "rgba(255,255,255,0.08)",
+  ink: "#FFFFFF",
+  muted: "rgba(255,255,255,0.62)",
+  primary: "#FF4D6D",
+  primary2: "#FF8A00",
+  danger: "#FB7185",
+};
+
 export default function DobScreen() {
   const router = useRouter();
   const { isLoaded, user } = useUser();
@@ -42,10 +54,8 @@ export default function DobScreen() {
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // Picker state
   const [androidShowPicker, setAndroidShowPicker] = useState(false);
 
-  // iOS modal picker (true popup feel)
   const [iosModalOpen, setIosModalOpen] = useState(false);
   const [iosTempDob, setIosTempDob] = useState<Date>(dob);
 
@@ -77,13 +87,10 @@ export default function DobScreen() {
       if (!API_BASE) throw new Error("Missing API base URL (extra.apiBaseUrl).");
       if (age < 18) throw new Error("You must be at least 18 years old to continue.");
 
-      const payload = {
-        clerkUserId: user.id,
-        dob: toISODate(dob), // "YYYY-MM-DD"
-        age,
-      };
+      const apiBase = API_BASE.replace(/\/$/, "");
+      const payload = { clerkUserId: user.id, dob: toISODate(dob), age };
 
-      const res = await fetch(`${API_BASE}/api/onboarding/dateOfBirth`, {
+      const res = await fetch(`${apiBase}/api/onboarding/dateOfBirth`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -113,66 +120,95 @@ export default function DobScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.page}>
-        {/* Header */}
-        <View style={styles.headerRow}>
-          <View style={styles.logo}>
-            <Ionicons name="calendar-outline" size={18} color="#0A84FF" />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.kicker}>Step</Text>
-            <Text style={styles.title}>Your date of Birth</Text>
-          </View>
-        </View>
-
-        <View style={styles.card}>
-          {/* DOB section */}
-          <Text style={styles.sectionTitle}>Date of Birth</Text>
-
-          <View style={styles.row}>
-            <View style={styles.leftPill}>
-              <Text style={styles.leftPillText}>DOB</Text>
+        {/* Hero */}
+        <View style={styles.hero}>
+          <View style={styles.heroTop}>
+            <View style={styles.pill}>
+              <View style={styles.pillDot} />
+              <Text style={styles.pillText}>Step 3 of 4</Text>
             </View>
 
-            <TouchableOpacity onPress={openPicker} activeOpacity={0.9} style={styles.rightPill}>
-              <Text style={styles.rightPillText}>{toISODate(dob)}</Text>
-              <View style={styles.iconBtn}>
-                <Ionicons name="calendar" size={18} color="#0A84FF" />
+            <View style={styles.spark}>
+              <Ionicons name="calendar-outline" size={16} color={COLORS.primary} />
+            </View>
+          </View>
+
+          <Text style={styles.h1}>Your date of birth</Text>
+          <Text style={styles.h2}>We only use this to confirm you’re 18+. You can edit it later.</Text>
+        </View>
+
+        {/* Card */}
+        <View style={styles.card}>
+          {/* Picker tile */}
+          <TouchableOpacity onPress={openPicker} activeOpacity={0.92} style={styles.pickTile}>
+            <View style={styles.pickLeft}>
+              <View style={styles.pickIcon}>
+                <Ionicons name="calendar" size={18} color={COLORS.muted} />
               </View>
-            </TouchableOpacity>
-          </View>
+              <View style={{ gap: 3 }}>
+                <Text style={styles.pickLabel}>Date of birth</Text>
+                <Text style={styles.pickValue}>{toISODate(dob)}</Text>
+              </View>
+            </View>
 
-          {/* Age section */}
-          <Text style={[styles.sectionTitle, { marginTop: 18 }]}>Age</Text>
+            <View style={styles.pickRight}>
+              <View style={styles.agePill}>
+                <Text style={styles.ageText}>{age}</Text>
+                <Text style={styles.ageCaption}>years</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={COLORS.muted} />
+            </View>
+          </TouchableOpacity>
 
-          <View style={styles.agePill}>
-            <Text style={styles.ageText}>{age}</Text>
-          </View>
+          {age < 18 ? (
+            <View style={[styles.hint, { marginTop: 12 }]}>
+              <Ionicons name="information-circle-outline" size={18} color={COLORS.danger} />
+              <Text style={styles.hintText}>You must be at least 18 years old to continue.</Text>
+            </View>
+          ) : null}
 
-          {!!err && <Text style={styles.err}>{err}</Text>}
+          {!!err && (
+            <View style={styles.alert}>
+              <View style={styles.alertIcon}>
+                <Ionicons name="warning-outline" size={18} color={COLORS.danger} />
+              </View>
+              <Text style={styles.alertText}>{err}</Text>
+            </View>
+          )}
 
           <TouchableOpacity
             onPress={onNext}
-            activeOpacity={0.9}
+            activeOpacity={0.92}
             disabled={!canContinue}
-            style={[styles.primaryBtn, !canContinue && { opacity: 0.5 }]}
+            style={[styles.cta, !canContinue && styles.ctaDisabled]}
           >
             {saving ? (
-              <ActivityIndicator color="#fff" />
+              <>
+                <Text style={styles.ctaText}>Saving…</Text>
+                <ActivityIndicator color="#fff" />
+              </>
             ) : (
               <>
-                <Text style={styles.primaryText}>Continue</Text>
-                <Ionicons name="arrow-forward" size={18} color="#fff" />
+                <Text style={styles.ctaText}>Continue</Text>
+                <View style={styles.ctaIcon}>
+                  <Ionicons name="arrow-forward" size={18} color="#fff" />
+                </View>
               </>
             )}
           </TouchableOpacity>
 
           {!API_BASE ? (
-            <Text style={[styles.err, { marginTop: 10 }]}>Config issue: extra.apiBaseUrl is missing.</Text>
+            <View style={[styles.alert, { marginTop: 12 }]}>
+              <View style={styles.alertIcon}>
+                <Ionicons name="bug-outline" size={18} color={COLORS.danger} />
+              </View>
+              <Text style={styles.alertText}>Config issue: extra.apiBaseUrl is missing.</Text>
+            </View>
           ) : null}
         </View>
       </View>
 
-      {/* Android native picker */}
+      {/* Android picker */}
       {androidShowPicker ? (
         <DateTimePicker
           value={dob}
@@ -184,10 +220,24 @@ export default function DobScreen() {
       ) : null}
 
       {/* iOS modal picker */}
-      <Modal visible={iosModalOpen} transparent animationType="fade" onRequestClose={() => setIosModalOpen(false)}>
+      <Modal
+        visible={iosModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIosModalOpen(false)}
+      >
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Select date</Text>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select date</Text>
+              <TouchableOpacity
+                onPress={() => setIosModalOpen(false)}
+                activeOpacity={0.9}
+                style={styles.modalClose}
+              >
+                <Ionicons name="close" size={18} color="#fff" />
+              </TouchableOpacity>
+            </View>
 
             <DateTimePicker
               value={iosTempDob}
@@ -225,101 +275,177 @@ export default function DobScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#F8FAFC" },
-  page: { flex: 1, padding: 16, justifyContent: "center", gap: 14 },
+  safe: { flex: 1, backgroundColor: COLORS.bg },
 
-  headerRow: { flexDirection: "row", alignItems: "center", gap: 12 },
-  logo: {
-    width: 44,
-    height: 44,
-    borderRadius: 16,
-    backgroundColor: "#E0F2FE",
+  page: {
+    flex: 1,
+    paddingHorizontal: 18,
+    paddingTop: 14,
+    paddingBottom: 18,
+    justifyContent: "center",
+    gap: 16,
+    backgroundColor: COLORS.bg,
+  },
+
+  hero: { paddingHorizontal: 2, gap: 10 },
+  heroTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+
+  pill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,77,109,0.14)",
     borderWidth: 1,
-    borderColor: "#BAE6FD",
+    borderColor: "rgba(255,77,109,0.25)",
+  },
+  pillDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 99,
+    backgroundColor: COLORS.primary2,
+    shadowColor: COLORS.primary2,
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+  },
+  pillText: { color: COLORS.ink, fontWeight: "900", fontSize: 12, letterSpacing: 0.25 },
+
+  spark: {
+    width: 40,
+    height: 40,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.10)",
+    borderWidth: 1,
+    borderColor: COLORS.borderSoft,
     alignItems: "center",
     justifyContent: "center",
   },
-  kicker: { color: "#0A84FF", fontWeight: "900", fontSize: 12 },
-  title: { color: "#0F172A", fontWeight: "900", fontSize: 22, marginTop: 2 },
+
+  h1: { color: COLORS.ink, fontSize: 34, fontWeight: "900", letterSpacing: -1.1, lineHeight: 40 },
+  h2: { color: COLORS.muted, fontSize: 14, fontWeight: "700", lineHeight: 20 },
 
   card: {
-    backgroundColor: "#fff",
+    backgroundColor: COLORS.card,
+    borderRadius: 28,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    shadowColor: "#000",
+    shadowOpacity: 0.35,
+    shadowRadius: 26,
+    shadowOffset: { width: 0, height: 16 },
+    elevation: 6,
+  },
+
+  pickTile: {
+    height: 86,
     borderRadius: 22,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    shadowColor: "#0B1220",
-    shadowOpacity: 0.08,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 12 },
-  },
-
-  sectionTitle: { color: "#0F172A", fontWeight: "900", fontSize: 14, marginBottom: 10 },
-
-  row: { flexDirection: "row", gap: 12, alignItems: "center" },
-  leftPill: {
-    width: 82,
-    height: 54,
-    borderRadius: 16,
-    backgroundColor: "#0A84FF",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  leftPillText: { color: "#fff", fontWeight: "900", fontSize: 16 },
-
-  rightPill: {
-    flex: 1,
-    height: 54,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
     paddingHorizontal: 14,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1,
+    borderColor: COLORS.borderSoft,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
-  rightPillText: { color: "#0F172A", fontWeight: "900", fontSize: 16 },
-  iconBtn: {
+  pickLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
+  pickIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.10)",
+    borderWidth: 1,
+    borderColor: COLORS.borderSoft,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pickLabel: { color: COLORS.muted, fontWeight: "900", fontSize: 12, letterSpacing: 0.2 },
+  pickValue: { color: COLORS.ink, fontWeight: "900", fontSize: 18, letterSpacing: 0.2 },
+
+  pickRight: { flexDirection: "row", alignItems: "center", gap: 10 },
+  agePill: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,138,0,0.14)",
+    borderWidth: 1,
+    borderColor: "rgba(255,138,0,0.25)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  ageText: { color: COLORS.ink, fontWeight: "900", fontSize: 14, lineHeight: 16 },
+  ageCaption: { color: COLORS.muted, fontWeight: "900", fontSize: 11, marginTop: 2 },
+
+  hint: {
+    borderRadius: 18,
+    padding: 12,
+    flexDirection: "row",
+    gap: 10,
+    alignItems: "center",
+    backgroundColor: "rgba(251,113,133,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(251,113,133,0.18)",
+  },
+  hintText: { color: "#FFE4EA", fontWeight: "800", flex: 1, lineHeight: 18 },
+
+  alert: {
+    marginTop: 14,
+    borderRadius: 18,
+    padding: 12,
+    flexDirection: "row",
+    gap: 10,
+    alignItems: "center",
+    backgroundColor: "rgba(251,113,133,0.10)",
+    borderWidth: 1,
+    borderColor: "rgba(251,113,133,0.24)",
+  },
+  alertIcon: {
     width: 36,
     height: 36,
-    borderRadius: 12,
-    backgroundColor: "#E0F2FE",
-    borderWidth: 1,
-    borderColor: "#BAE6FD",
+    borderRadius: 14,
+    backgroundColor: "rgba(251,113,133,0.14)",
     alignItems: "center",
     justifyContent: "center",
   },
+  alertText: { color: "#FFE4EA", fontWeight: "900", flex: 1, lineHeight: 18 },
 
-  agePill: {
-    height: 54,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  ageText: { color: "#0F172A", fontWeight: "900", fontSize: 18 },
-
-  err: { marginTop: 12, color: "#B91C1C", fontWeight: "800" },
-
-  primaryBtn: {
-    marginTop: 16,
-    height: 52,
-    borderRadius: 16,
-    backgroundColor: "#0A84FF",
+  cta: {
+    marginTop: 18,
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: COLORS.primary,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
     gap: 10,
+    shadowColor: COLORS.primary,
+    shadowOpacity: 0.35,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.16)",
   },
-  primaryText: { color: "#fff", fontWeight: "900", fontSize: 16 },
+  ctaDisabled: { opacity: 0.5 },
+  ctaText: { color: "#fff", fontWeight: "900", fontSize: 16, letterSpacing: 0.3 },
+  ctaIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.16)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.18)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
 
   // iOS modal
   modalBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(2,6,23,0.55)",
+    backgroundColor: "rgba(2,6,23,0.60)",
     alignItems: "center",
     justifyContent: "center",
     padding: 16,
@@ -327,17 +453,37 @@ const styles = StyleSheet.create({
   modalCard: {
     width: "100%",
     maxWidth: 520,
-    backgroundColor: "#fff",
+    backgroundColor: "#0E0E17",
     borderRadius: 22,
     padding: 16,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "rgba(255,255,255,0.12)",
   },
-  modalTitle: { fontWeight: "900", fontSize: 16, color: "#0F172A", marginBottom: 10 },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+  modalTitle: { fontWeight: "900", fontSize: 16, color: "#fff" },
+  modalClose: {
+    width: 34,
+    height: 34,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+  },
   modalActions: { flexDirection: "row", gap: 10, marginTop: 12 },
   modalBtn: { flex: 1, height: 48, borderRadius: 14, alignItems: "center", justifyContent: "center" },
-  modalBtnGhost: { backgroundColor: "#F1F5F9", borderWidth: 1, borderColor: "#E2E8F0" },
-  modalBtnGhostText: { color: "#0F172A", fontWeight: "900" },
-  modalBtnPrimary: { backgroundColor: "#0A84FF" },
+  modalBtnGhost: {
+    backgroundColor: "rgba(255,255,255,0.10)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+  },
+  modalBtnGhostText: { color: "#fff", fontWeight: "900" },
+  modalBtnPrimary: { backgroundColor: COLORS.primary },
   modalBtnPrimaryText: { color: "#fff", fontWeight: "900" },
 });

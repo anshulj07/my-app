@@ -9,8 +9,10 @@ import Constants from "expo-constants";
 import { ClerkProvider, useAuth, useUser } from "@clerk/clerk-expo";
 import { tokenCache } from "@clerk/clerk-expo/token-cache";
 
+const SIGN_IN = "/sign-in";
+
+
 const APP_HOME = "/newApp/home";
-const SIGN_IN = "/(auth)/sign-in";
 const ONBOARDING_START = "/(onboarding)/name";
 
 type OnboardingStatus = { completed: boolean; nextRoute?: string };

@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import MapView from "../../components/Map/MapView";
 import type { EventPin } from "../../components/Map/MapView";
-import MapSearchHeader from "../../components/Map/MapSearchHeader";
+import MapSearchHeader from "../../components/SearchHeaderHomeScreen/MapSearchHeader";
 
 import ModalizeEventSheet from "../../components/AddEventModal/AddEvent";
 import EventsListModal from "../../components/List/EventsListModal";

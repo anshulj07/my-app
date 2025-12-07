@@ -15,12 +15,14 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import Constants from "expo-constants";
 import ProfileHeaderButton from "../ProfileHeaderButton";
 
-type Suggestion = { place_id: string; description: string };
+// ✅ reuse your shared google places helpers
+import { fetchAutocomplete, fetchPlaceDetails } from "../AddEventModal/google/places";
+import type { Suggestion } from "../AddEventModal/types";
 
 export default function MapSearchHeader({
   top,
   onPick,
-  placeholder = "Search location",
+  placeholder = "Search Anshul",
 }: {
   top: number;
   onPick: (lat: number, lng: number, label?: string) => void;
@@ -32,91 +34,71 @@ export default function MapSearchHeader({
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<Suggestion[]>([]);
   const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
   const inputRef = useRef<TextInput>(null);
 
   const closePanel = () => {
     setOpen(false);
     setItems([]);
+    setErr(null);
     Keyboard.dismiss();
   };
 
-  // Autocomplete (debounced)
+  // Autocomplete (debounced) — via shared helper
   useEffect(() => {
     if (!open) return;
     if (!GOOGLE_KEY) return;
 
     const query = q.trim();
 
-    // ✅ don't show "type 2 letters" on first focus; only after user starts typing
+    // don't show anything until user types
     if (query.length === 0) {
       setItems([]);
+      setErr(null);
       return;
     }
 
+    // small guard to reduce calls
     if (query.length < 2) {
       setItems([]);
+      setErr(null);
       return;
     }
 
-    const t = setTimeout(async () => {
-      try {
-        setLoading(true);
-
-        const url =
-          `https://maps.googleapis.com/maps/api/place/autocomplete/json?` +
-          `input=${encodeURIComponent(query)}` +
-          `&key=${encodeURIComponent(GOOGLE_KEY)}` +
-          `&types=geocode`;
-
-        const res = await fetch(url);
-        const j: any = await res.json().catch(() => ({}));
-        const preds = Array.isArray(j?.predictions) ? j.predictions : [];
-
-        setItems(
-          preds
-            .map((p: any) => ({
-              place_id: String(p.place_id || ""),
-              description: String(p.description || ""),
-            }))
-            .filter((x: Suggestion) => x.place_id && x.description)
-        );
-      } catch {
-        setItems([]);
-      } finally {
-        setLoading(false);
-      }
+    const t = setTimeout(() => {
+      fetchAutocomplete({
+        key: GOOGLE_KEY,
+        q: query,
+        setLoading,
+        setList: setItems,
+        setErr,
+      });
     }, 250);
 
     return () => clearTimeout(t);
   }, [q, open, GOOGLE_KEY]);
 
-  async function pick(place_id: string, description: string) {
+  async function pick(placeId: string, label: string) {
     if (!GOOGLE_KEY) return;
 
     try {
       setLoading(true);
+      setErr(null);
 
-      const url =
-        `https://maps.googleapis.com/maps/api/place/details/json?` +
-        `place_id=${encodeURIComponent(place_id)}` +
-        `&fields=geometry` +
-        `&key=${encodeURIComponent(GOOGLE_KEY)}`;
-
-      const res = await fetch(url);
-      const j: any = await res.json().catch(() => ({}));
-      const loc = j?.result?.geometry?.location;
-
-      const lat = typeof loc?.lat === "number" ? loc.lat : Number(loc?.lat);
-      const lng = typeof loc?.lng === "number" ? loc.lng : Number(loc?.lng);
+      const details = await fetchPlaceDetails(GOOGLE_KEY, placeId);
+      const lat = details?.latLng?.lat;
+      const lng = details?.latLng?.lng;
 
       if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
 
-      setQ(description);
+      const finalLabel = details?.formattedAddress || label;
+
+      setQ(finalLabel);
       setOpen(false);
       setItems([]);
       Keyboard.dismiss();
-      onPick(lat, lng, description);
+      onPick(lat!, lng!, finalLabel);
     } finally {
       setLoading(false);
     }
@@ -128,15 +110,17 @@ export default function MapSearchHeader({
     <>
       {/* bar */}
       <View pointerEvents="box-none" style={[styles.wrap, { top }]}>
-        {/* Make entire bar clickable to focus input */}
+        {/* entire bar clickable */}
         <Pressable
-          style={styles.bar}
+          style={({ pressed }) => [styles.bar, pressed && styles.barPressed]}
           onPress={() => {
             setOpen(true);
             inputRef.current?.focus();
           }}
         >
-          <Ionicons name="search" size={20} color="#6B7280" />
+          <View style={styles.iconPill}>
+            <Ionicons name="search" size={18} color="#0F172A" />
+          </View>
 
           <TextInput
             ref={inputRef}
@@ -147,27 +131,33 @@ export default function MapSearchHeader({
             }}
             onFocus={() => setOpen(true)}
             placeholder={GOOGLE_KEY ? placeholder : "Missing googleMapsKey"}
-            placeholderTextColor="#9CA3AF"
+            placeholderTextColor="#94A3B8"
             style={styles.input}
             returnKeyType="search"
             autoCorrect={false}
           />
 
           {loading ? (
-            <ActivityIndicator size="small" />
+            <View style={styles.trailingPill}>
+              <ActivityIndicator size="small" />
+            </View>
           ) : q.trim().length ? (
             <Pressable
               hitSlop={10}
               onPress={() => {
                 setQ("");
                 setItems([]);
+                setErr(null);
                 setOpen(true);
                 inputRef.current?.focus();
               }}
+              style={styles.trailingPill}
             >
-              <Ionicons name="close-circle" size={18} color="#9CA3AF" />
+              <Ionicons name="close" size={16} color="#334155" />
             </Pressable>
-          ) : null}
+          ) : (
+            <View style={styles.trailingSpacer} />
+          )}
 
           <View style={styles.profile}>
             <ProfileHeaderButton size={44} />
@@ -175,39 +165,52 @@ export default function MapSearchHeader({
         </Pressable>
       </View>
 
-      {/* ✅ NOT a Modal anymore => keyboard won't disappear */}
+      {/* dropdown */}
       {open ? (
         <>
-          {/* Backdrop starts BELOW the bar so it can't "steal" the initial tap */}
-          <Pressable
-            style={[styles.backdrop, { top: panelTop }]}
-            onPress={closePanel}
-          />
+          {/* Backdrop starts BELOW the bar */}
+          <Pressable style={[styles.backdrop, { top: panelTop }]} onPress={closePanel} />
 
           <View style={[styles.card, { top: panelTop }]}>
             <FlatList
               data={items}
-              keyExtractor={(x) => x.place_id}
+              keyExtractor={(x) => x.id}
               keyboardShouldPersistTaps="always"
               renderItem={({ item }) => (
-                <Pressable style={styles.row} onPress={() => pick(item.place_id, item.description)}>
-                  <Ionicons name="location-outline" size={18} color="#6B7280" />
-                  <Text style={styles.rowText} numberOfLines={2}>
-                    {item.description}
-                  </Text>
+                <Pressable style={styles.row} onPress={() => pick(item.id, item.main)}>
+                  <View style={styles.rowIcon}>
+                    <Ionicons name="location-outline" size={18} color="#0F172A" />
+                  </View>
+
+                  <View style={styles.rowTextWrap}>
+                    <Text style={styles.rowMain} numberOfLines={1}>
+                      {item.main}
+                    </Text>
+                    {!!item.secondary ? (
+                      <Text style={styles.rowSecondary} numberOfLines={1}>
+                        {item.secondary}
+                      </Text>
+                    ) : null}
+                  </View>
+
+                  <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
                 </Pressable>
               )}
               ListEmptyComponent={
                 <View style={styles.empty}>
-                  <Text style={styles.emptyText}>
+                  <Text style={styles.emptyTitle}>
                     {q.trim().length === 0
                       ? "Start typing…"
                       : q.trim().length < 2
                       ? "Type at least 2 letters"
                       : loading
                       ? "Searching…"
+                      : err
+                      ? "Couldn’t fetch results"
                       : "No results"}
                   </Text>
+
+                  {!!err ? <Text style={styles.emptySub}>{err}</Text> : null}
                 </View>
               }
             />
@@ -226,29 +229,60 @@ const styles = StyleSheet.create({
     zIndex: 9999,
     elevation: 30,
   },
+
+  // ✅ upgraded "glassy" pill bar
   bar: {
-    height: 52,
+    height: 54,
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    paddingLeft: 12,
-    paddingRight: 6,
+    paddingLeft: 10,
+    paddingRight: 8,
     borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.98)",
+    backgroundColor: "rgba(255,255,255,0.92)",
     borderWidth: 1,
     borderColor: "rgba(15,23,42,0.10)",
     shadowColor: "#000",
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
+    shadowOpacity: 0.10,
+    shadowRadius: 18,
     shadowOffset: { width: 0, height: 12 },
   },
+  barPressed: {
+    transform: [{ scale: 0.995 }],
+    shadowOpacity: 0.14,
+  },
+
+  iconPill: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(15,23,42,0.04)",
+    borderWidth: 1,
+    borderColor: "rgba(15,23,42,0.06)",
+  },
+
   input: {
     flex: 1,
     fontSize: 15,
     fontWeight: "800",
-    color: "#111827",
+    color: "#0F172A",
     paddingVertical: Platform.OS === "ios" ? 10 : 8,
   },
+
+  trailingPill: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(15,23,42,0.04)",
+    borderWidth: 1,
+    borderColor: "rgba(15,23,42,0.06)",
+  },
+  trailingSpacer: { width: 32, height: 32 },
+
   profile: {
     width: 44,
     height: 44,
@@ -263,36 +297,55 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: "rgba(2,6,23,0.25)",
+    backgroundColor: "rgba(2,6,23,0.18)",
     zIndex: 9998,
   },
+
+  // ✅ upgraded dropdown card
   card: {
     position: "absolute",
     left: 12,
     right: 12,
     maxHeight: 420,
-    borderRadius: 18,
+    borderRadius: 20,
     overflow: "hidden",
-    backgroundColor: "rgba(255,255,255,0.98)",
+    backgroundColor: "rgba(255,255,255,0.96)",
     borderWidth: 1,
     borderColor: "rgba(15,23,42,0.10)",
     shadowColor: "#000",
-    shadowOpacity: 0.18,
+    shadowOpacity: 0.16,
     shadowRadius: 22,
     shadowOffset: { width: 0, height: 18 },
     elevation: 20,
     zIndex: 9999,
   },
+
   row: {
     paddingHorizontal: 14,
-    paddingVertical: 14,
+    paddingVertical: 12,
     flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 10,
+    alignItems: "center",
+    gap: 12,
     borderTopWidth: 1,
     borderTopColor: "rgba(15,23,42,0.06)",
   },
-  rowText: { flex: 1, color: "#111827", fontSize: 14, fontWeight: "700" },
+
+  rowIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(15,23,42,0.04)",
+    borderWidth: 1,
+    borderColor: "rgba(15,23,42,0.06)",
+  },
+
+  rowTextWrap: { flex: 1 },
+  rowMain: { color: "#0F172A", fontSize: 14.5, fontWeight: "900" },
+  rowSecondary: { marginTop: 2, color: "#64748B", fontSize: 12.5, fontWeight: "700" },
+
   empty: { padding: 16 },
-  emptyText: { color: "#6B7280", fontWeight: "700" },
+  emptyTitle: { color: "#334155", fontWeight: "900" },
+  emptySub: { marginTop: 6, color: "#64748B", fontWeight: "700" },
 });

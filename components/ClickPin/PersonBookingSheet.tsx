@@ -22,6 +22,7 @@ type Props = {
   visible: boolean;
   onClose: () => void;
   person?: EventPin | null;
+  onEditDetails?: (ev: EventPin) => void;
 };
 
 function pickFirst(...vals: Array<any>) {
@@ -39,9 +40,11 @@ function titleCase(s: string) {
   return (s || "").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-export default function PersonBookingSheet({ visible, onClose, person }: Props) {
+export default function PersonBookingSheet({ visible, onClose, person, onEditDetails }: Props) {
   const router = useRouter();
   const { userId } = useAuth();
+  const [editOpen, setEditOpen] = useState(false);
+  const [editEvent, setEditEvent] = useState<EventPin | null>(null);
 
   const API_BASE = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
   const EVENT_API_KEY = (Constants.expoConfig?.extra as any)?.eventApiKey as string | undefined;
@@ -137,10 +140,10 @@ export default function PersonBookingSheet({ visible, onClose, person }: Props) 
     if (!person) return;
 
     if (isCreator) {
-      router.push({ pathname: "/newtab/edit-event", params: { id: String((person as any)?._id || "") } } as any);
+      close(() => onEditDetails?.(person)); // ✅ open edit modal after sheet closes
       return;
     }
-
+    
     if (kind === "free") {
       // join flow here
       return;
@@ -178,7 +181,7 @@ export default function PersonBookingSheet({ visible, onClose, person }: Props) 
     ]).start();
   }, [visible, a, cardY]);
 
-  const close = () => {
+  const close = (after?: () => void) => {
     Animated.parallel([
       Animated.timing(a, {
         toValue: 0,
@@ -193,9 +196,13 @@ export default function PersonBookingSheet({ visible, onClose, person }: Props) 
         useNativeDriver: true,
       }),
     ]).start(({ finished }) => {
-      if (finished) onClose();
+      if (finished) {
+        onClose();
+        after?.(); // ✅ ADD
+      }
     });
   };
+  
 
   const statusTone =
     status.toLowerCase() === "active"
@@ -207,9 +214,9 @@ export default function PersonBookingSheet({ visible, onClose, person }: Props) 
   const kindTone = kind === "service" ? styles.toneService : styles.toneFree;
 
   return (
-    <Modal transparent visible={visible} animationType="none" onRequestClose={close}>
+    <Modal transparent visible={visible} animationType="none" onRequestClose={() => close()}>
       {/* Dim background */}
-      <Pressable style={StyleSheet.absoluteFill} onPress={close}>
+      <Pressable style={StyleSheet.absoluteFill} onPress={() => close()}>
         <Animated.View style={[styles.dim, { opacity: a }]} />
       </Pressable>
 
@@ -218,7 +225,7 @@ export default function PersonBookingSheet({ visible, onClose, person }: Props) 
         {!person ? (
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>No event selected</Text>
-            <Pressable onPress={close} style={styles.closePill}>
+            <Pressable onPress={() => close()} style={styles.closePill}>
               <Text style={styles.closePillText}>Close</Text>
             </Pressable>
           </View>
@@ -231,7 +238,7 @@ export default function PersonBookingSheet({ visible, onClose, person }: Props) 
               <View style={styles.blob2} />
 
               <View style={styles.heroTop}>
-                <Pressable onPress={close} hitSlop={12} style={styles.iconBtn}>
+                <Pressable onPress={() => close()} hitSlop={12} style={styles.iconBtn}>
                   <Ionicons name="chevron-down" size={18} color="#E2E8F0" />
                 </Pressable>
 
@@ -351,7 +358,7 @@ export default function PersonBookingSheet({ visible, onClose, person }: Props) 
                 <Text style={styles.ctaText}>{actionLabel}</Text>
               </Pressable>
 
-              <Pressable onPress={close} style={({ pressed }) => [styles.ctaGhost, pressed && styles.ctaGhostPressed]}>
+              <Pressable onPress={() => close()} style={({ pressed }) => [styles.ctaGhost, pressed && styles.ctaGhostPressed]}>
                 <Text style={styles.ctaGhostText}>Dismiss</Text>
               </Pressable>
             </View>

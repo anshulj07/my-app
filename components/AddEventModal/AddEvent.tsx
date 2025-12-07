@@ -18,6 +18,8 @@ import { Modalize } from "react-native-modalize";
 import Constants from "expo-constants";
 import { WebView } from "react-native-webview";
 import { useAuth } from "@clerk/clerk-expo";
+import DateTimePicker from "@react-native-community/datetimepicker";
+
 
 import type { CreateEvent, Suggestion, Option, LocationPayload, EventKind } from "./types";
 import { textToEmoji } from "./utils/emoji";
@@ -52,6 +54,7 @@ export default function AddEventModal({
 
   // Form
   const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
   const emoji = textToEmoji(title);
 
   const [kind, setKind] = useState<EventKind>("free");
@@ -64,6 +67,9 @@ export default function AddEventModal({
 
   const [dateISO, setDateISO] = useState("");
   const [time24, setTime24] = useState("");
+
+  const [dateOpen, setDateOpen] = useState(false);
+  const [timeOpen, setTimeOpen] = useState(false);
 
   // Places autocomplete
   const [query, setQuery] = useState("");
@@ -96,6 +102,7 @@ export default function AddEventModal({
 
   const hardReset = () => {
     setTitle("");
+    setDescription("");
     setKind("free");
     setPriceText("");
     setDateISO("");
@@ -144,8 +151,18 @@ export default function AddEventModal({
     return out;
   }, []);
 
-  const dateLabel = dateOptions.find((o) => o.value === dateISO)?.label ?? "No date";
-  const timeLabel = timeOptions.find((o) => o.value === time24)?.label ?? "No time";
+  const dateLabel = useMemo(() => {
+    if (!dateISO) return "Select date";
+    return isoToSafeDate(dateISO).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+  }, [dateISO]);
+
+  const timeLabel = useMemo(() => {
+    if (!time24) return "Select time";
+    const [hh, mm] = time24.split(":").map((x) => parseInt(x, 10));
+    if (!Number.isFinite(hh) || !Number.isFinite(mm)) return "Select time";
+    return formatTime12h(hh, mm);
+  }, [time24]);
+
 
   // debounce suggestions
   useEffect(() => {
@@ -192,6 +209,7 @@ export default function AddEventModal({
     apiBase: string;
     apiKey?: string;
     title: string;
+    description: string;
     emoji: string;
     date?: string;
     time?: string;
@@ -209,6 +227,7 @@ export default function AddEventModal({
       },
       body: JSON.stringify({
         title: args.title,
+        description: args.description,
         emoji: args.emoji,
         date: args.date ?? "",
         time: args.time ?? "",
@@ -228,6 +247,22 @@ export default function AddEventModal({
     const json = await res.json();
     if (!res.ok) throw new Error(json?.error || "Failed to create event");
     return json;
+  }
+
+  function isoToSafeDate(iso: string) {
+    if (!iso) return new Date();
+    return new Date(`${iso}T12:00:00`);
+  }
+
+  function timeToDate(time24: string) {
+    const d = new Date();
+    if (!time24) return d;
+    const [hh, mm] = time24.split(":").map((x) => parseInt(x, 10));
+    if (Number.isFinite(hh)) d.setHours(hh);
+    if (Number.isFinite(mm)) d.setMinutes(mm);
+    d.setSeconds(0);
+    d.setMilliseconds(0);
+    return d;
   }
 
   const handlePickSuggestion = async (s: Suggestion) => {
@@ -302,6 +337,7 @@ export default function AddEventModal({
         apiBase: API_BASE,
         apiKey: EVENT_API_KEY,
         title: title.trim(),
+        description: description.trim(),
         emoji,
         date: dateISO.trim(),
         time: time24.trim(),
@@ -367,6 +403,23 @@ export default function AddEventModal({
         </Card>
 
         <Card>
+          <CardTitle title="Description" subtitle="Add details people should know." />
+          <View style={styles.descShell}>
+            <TextInput
+              value={description}
+              onChangeText={setDescription}
+              placeholder="Meetup point, what to bring, rules, etc."
+              placeholderTextColor="#94A3B8"
+              multiline
+              textAlignVertical="top"
+              style={styles.descInput}
+              returnKeyType="default"
+            />
+          </View>
+        </Card>
+
+
+        <Card>
           <CardTitle title="Event type" subtitle="Free events are joinable. Service events are bookable." />
 
           <Segmented
@@ -407,12 +460,117 @@ export default function AddEventModal({
         </Card>
 
         <Card>
-          <CardTitle title="When" subtitle="Optional — you can add date/time later too." />
-          <View style={styles.twoCol}>
-            <Dropdown label="Date" valueLabel={dateLabel} options={dateOptions} onSelect={setDateISO} />
-            <Dropdown label="Time" valueLabel={timeLabel} options={timeOptions} onSelect={setTime24} />
+          <View style={styles.whenHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.cardTitle}>When</Text>
+              <Text style={styles.cardSub}>tap to pick</Text>
+            </View>
+
+            {(dateISO || time24) ? (
+              <Pressable
+                hitSlop={10}
+                onPress={() => {
+                  setDateISO("");
+                  setTime24("");
+                }}
+                style={styles.clearPill}
+              >
+                <Text style={styles.clearPillText}>Clear</Text>
+              </Pressable>
+            ) : null}
+          </View>
+
+          <View style={styles.whenGrid}>
+            {/* Date */}
+            <Pressable onPress={() => setDateOpen(true)} style={styles.whenTile} android_ripple={{ color: "#E2E8F0" }}>
+              <View style={styles.whenTileTop}>
+                <View style={[styles.whenBadge, styles.whenBadgeBlue]}>
+                  <Text style={styles.whenBadgeText}>📅</Text>
+                </View>
+                <Text style={styles.whenTileLabel}>Date</Text>
+              </View>
+
+              <Text numberOfLines={1} style={[styles.whenTileValue, !dateISO && styles.whenTileValueMuted]}>
+                {dateISO ? dateLabel : "Select date"}
+              </Text>
+
+              <Text style={styles.whenTileHint}>
+                Tap to choose
+              </Text>
+            </Pressable>
+
+            {/* Time */}
+            <Pressable onPress={() => setTimeOpen(true)} style={styles.whenTile} android_ripple={{ color: "#E2E8F0" }}>
+              <View style={styles.whenTileTop}>
+                <View style={[styles.whenBadge, styles.whenBadgePurple]}>
+                  <Text style={styles.whenBadgeText}>⏰</Text>
+                </View>
+                <Text style={styles.whenTileLabel}>Time</Text>
+              </View>
+
+              <Text numberOfLines={1} style={[styles.whenTileValue, !time24 && styles.whenTileValueMuted]}>
+                {time24 ? timeLabel : "Select time"}
+              </Text>
+
+              <Text style={styles.whenTileHint}>
+                Tap to choose
+              </Text>
+            </Pressable>
           </View>
         </Card>
+
+        {/* Date picker modal */}
+        <Modal transparent visible={dateOpen} animationType="fade" onRequestClose={() => setDateOpen(false)}>
+          <Pressable style={styles.pickerOverlay} onPress={() => setDateOpen(false)}>
+            <Pressable style={styles.pickerCard} onPress={() => { }}>
+              <Text style={styles.pickerTitle}>Pick a date</Text>
+              <DateTimePicker
+                value={isoToSafeDate(dateISO)}
+                mode="date"
+                display={Platform.OS === "ios" ? "inline" : "default"}
+                themeVariant="light"            // ✅ forces black text UI on iOS
+                textColor="#0F172A"             // ✅ helps esp. spinner
+                accentColor="#0A84FF"           // optional but nice
+                onChange={(_, d) => {
+                  if (!d) return;
+                  const iso = d.toISOString().slice(0, 10);
+                  setDateISO(iso);
+                  if (Platform.OS !== "ios") setDateOpen(false);
+                }}
+              />
+              <TouchableOpacity style={styles.pickerDone} onPress={() => setDateOpen(false)} activeOpacity={0.9}>
+                <Text style={styles.pickerDoneText}>Done</Text>
+              </TouchableOpacity>
+            </Pressable>
+          </Pressable>
+        </Modal>
+
+        {/* Time picker modal */}
+        <Modal transparent visible={timeOpen} animationType="fade" onRequestClose={() => setTimeOpen(false)}>
+          <Pressable style={styles.pickerOverlay} onPress={() => setTimeOpen(false)}>
+            <Pressable style={styles.pickerCard} onPress={() => { }}>
+              <Text style={styles.pickerTitle}>Pick a time</Text>
+              <DateTimePicker
+                value={timeToDate(time24)}
+                mode="time"
+                display={Platform.OS === "ios" ? "spinner" : "default"}
+                themeVariant="light"
+                textColor="#0F172A"
+                accentColor="#0A84FF"
+                onChange={(_, d) => {
+                  if (!d) return;
+                  const hh = d.getHours();
+                  const mm = d.getMinutes();
+                  setTime24(`${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`);
+                  if (Platform.OS !== "ios") setTimeOpen(false);
+                }}
+              />
+              <TouchableOpacity style={styles.pickerDone} onPress={() => setTimeOpen(false)} activeOpacity={0.9}>
+                <Text style={styles.pickerDoneText}>Done</Text>
+              </TouchableOpacity>
+            </Pressable>
+          </Pressable>
+        </Modal>
 
         <Card>
           <CardTitle title="Where" subtitle="Search a place or drop a pin on the map." />
@@ -489,9 +647,8 @@ export default function AddEventModal({
           {!!locationPayload && (
             <Pill
               tone="info"
-              text={`${locationPayload.city}${
-                locationPayload.admin1Code ? `, ${locationPayload.admin1Code}` : locationPayload.admin1 ? `, ${locationPayload.admin1}` : ""
-              }${locationPayload.countryCode ? ` • ${locationPayload.countryCode}` : ""}`}
+              text={`${locationPayload.city}${locationPayload.admin1Code ? `, ${locationPayload.admin1Code}` : locationPayload.admin1 ? `, ${locationPayload.admin1}` : ""
+                }${locationPayload.countryCode ? ` • ${locationPayload.countryCode}` : ""}`}
             />
           )}
 
@@ -758,7 +915,7 @@ function Dropdown({
 
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setOpen(false)}>
-          <Pressable style={styles.optionSheet} onPress={() => {}}>
+          <Pressable style={styles.optionSheet} onPress={() => { }}>
             <Text style={styles.optionTitle}>{label}</Text>
             <ScrollView showsVerticalScrollIndicator={false}>
               {options.map((o) => (
@@ -900,6 +1057,17 @@ const styles = StyleSheet.create({
 
   helper: { marginTop: 8, color: "#64748B", fontSize: 12, fontWeight: "800" },
 
+  descShell: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    backgroundColor: "#F8FAFC",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  descInput: { minHeight: 110, color: "#0F172A", fontSize: 15, fontWeight: "700" },
+
+
   segmented: {
     flexDirection: "row",
     gap: 10,
@@ -1012,6 +1180,98 @@ const styles = StyleSheet.create({
 
   inlineLoading: { marginTop: 12, flexDirection: "row", alignItems: "center", gap: 10 },
   inlineLoadingText: { color: "#64748B", fontWeight: "900" },
+
+  // ✅ when row
+  whenHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+
+  clearPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "rgba(148,163,184,0.14)",
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.22)",
+  },
+  clearPillText: { color: "#0F172A", fontWeight: "950" as any, fontSize: 12 },
+
+  whenGrid: {
+    flexDirection: "row",
+    gap: 10,
+  },
+
+  whenTile: {
+    flex: 1,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    backgroundColor: "#FFFFFF",
+    padding: 14,
+    shadowColor: "#0B1220",
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 10 },
+  },
+
+  whenTileTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 10,
+  },
+
+  whenBadge: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+  },
+  whenBadgeBlue: {
+    backgroundColor: "rgba(10,132,255,0.12)",
+    borderColor: "rgba(10,132,255,0.22)",
+  },
+  whenBadgePurple: {
+    backgroundColor: "rgba(139,92,246,0.12)",
+    borderColor: "rgba(139,92,246,0.22)",
+  },
+  whenBadgeText: { fontSize: 14 },
+
+  whenTileLabel: { color: "#64748B", fontWeight: "900", fontSize: 12 },
+
+  whenTileValue: {
+    color: "#0F172A",
+    fontWeight: "950" as any,
+    fontSize: 16,
+    letterSpacing: -0.2,
+  },
+  whenTileValueMuted: { color: "#94A3B8" },
+
+  whenTileHint: {
+    marginTop: 6,
+    color: "#64748B",
+    fontWeight: "800",
+    fontSize: 12,
+  },
+
+  pickerOverlay: { flex: 1, backgroundColor: "rgba(2,6,23,0.45)", padding: 16, justifyContent: "flex-end" },
+  pickerCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    overflow: "hidden",
+    paddingBottom: 10,
+  },
+  pickerTitle: { padding: 14, fontWeight: "950" as any, color: "#0F172A", borderBottomWidth: 1, borderBottomColor: "#E2E8F0" },
+  pickerDone: { marginTop: 8, marginHorizontal: 12, borderRadius: 14, paddingVertical: 12, backgroundColor: "#0A84FF", alignItems: "center" },
+  pickerDoneText: { color: "#fff", fontWeight: "950" as any },
+
 
   mapWrap: {
     marginTop: 12,

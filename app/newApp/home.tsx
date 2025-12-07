@@ -1,3 +1,4 @@
+// app/newtab/home.tsx
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { TouchableOpacity, Text, StyleSheet, Platform } from "react-native";
 import * as Location from "expo-location";
@@ -12,6 +13,7 @@ import MapSearchHeader from "../../components/SearchHeaderHomeScreen/MapSearchHe
 import ModalizeEventSheet from "../../components/AddEventModal/AddEvent";
 import EventsListModal from "../../components/List/EventsListModal";
 import PersonBookingSheet from "../../components/ClickPin/PersonBookingSheet";
+import EditEventModal from "../../components/EditEventModal/EditEvent";
 
 function toNumber(v: any): number | null {
   const n = typeof v === "string" ? Number(v) : v;
@@ -24,11 +26,7 @@ function normalizeEvent(e: any): EventPin | null {
   if (lat == null || lng == null) return null;
 
   const when = [e?.date, e?.time].filter(Boolean).join(" · ");
-  const address =
-    e?.location?.formattedAddress ??
-    e?.location?.address ??
-    e?.address ??
-    "";
+  const address = e?.location?.formattedAddress ?? e?.location?.address ?? e?.address ?? "";
 
   return {
     ...e,
@@ -39,6 +37,34 @@ function normalizeEvent(e: any): EventPin | null {
     when,
     address,
   };
+}
+
+// ✅ infer the exact "event" prop type from EditEventModal (no manual EditableEvent import)
+type EditEventValue = React.ComponentProps<typeof EditEventModal>["event"];
+
+function toEditableEvent(pin: EventPin): NonNullable<EditEventValue> {
+  const loc = ((pin as any)?.location || {}) as any;
+
+  return {
+    ...(pin as any),
+    // make sure location matches what your EditEventModal expects
+    location: {
+      ...loc,
+      lat: loc?.lat ?? pin.lat,
+      lng: loc?.lng ?? pin.lng,
+
+      formattedAddress: loc?.formattedAddress ?? loc?.address ?? (pin as any)?.address ?? "",
+      address: loc?.address ?? (pin as any)?.address ?? "",
+      placeId: loc?.placeId ?? "",
+
+      // normalize common variants so the edit modal has what it needs
+      city: loc?.city ?? (pin as any)?.city ?? "",
+      admin1Code: loc?.admin1Code ?? loc?.stateCode ?? loc?.state ?? "",
+      admin1: loc?.admin1 ?? loc?.region ?? loc?.state ?? "",
+      countryCode: loc?.countryCode ?? loc?.country ?? "",
+      country: loc?.country ?? "",
+    },
+  } as NonNullable<EditEventValue>;
 }
 
 export default function Home() {
@@ -53,6 +79,9 @@ export default function Home() {
 
   const [selectedPin, setSelectedPin] = useState<EventPin | null>(null);
   const [showPersonSheet, setShowPersonSheet] = useState(false);
+
+  const [editOpen, setEditOpen] = useState(false);
+  const [editEvent, setEditEvent] = useState<EditEventValue>(null);
 
   const fabSize = useMemo(() => (Platform.OS === "ios" ? 60 : 64), []);
   const API_BASE = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
@@ -113,7 +142,6 @@ export default function Home() {
     loadEvents();
   }, [loadEvents, loadMyLocation]);
 
-  // ✅ forces recenter if your MapView only uses initialCenter once
   const mapKey = myLoc ? `${myLoc.lat.toFixed(6)}:${myLoc.lng.toFixed(6)}` : "init";
 
   return (
@@ -129,16 +157,36 @@ export default function Home() {
         }}
       />
 
-      {/* ✅ Google-maps style bar above the map */}
-      <MapSearchHeader
-        top={insets.top + 10}
-        onPick={(lat, lng) => setMyLoc({ lat, lng })}
-      />
+      <MapSearchHeader top={insets.top + 10} onPick={(lat, lng) => setMyLoc({ lat, lng })} />
 
       <PersonBookingSheet
         visible={showPersonSheet}
         person={selectedPin}
         onClose={() => setShowPersonSheet(false)}
+        onEditDetails={(ev) => {
+          setShowPersonSheet(false); // ✅ close pin sheet first
+          setEditEvent(toEditableEvent(ev));
+          setEditOpen(true);
+        }}
+      />
+
+      <EditEventModal
+        visible={editOpen}
+        event={editEvent}
+        onClose={() => {
+          setEditOpen(false);
+          setEditEvent(null);
+        }}
+        onUpdated={() => {
+          setEditOpen(false);
+          setEditEvent(null);
+          loadEvents(); // refresh pins
+        }}
+        onDeleted={() => {
+          setEditOpen(false);
+          setEditEvent(null);
+          loadEvents(); // refresh pins
+        }}
       />
 
       <TouchableOpacity
@@ -154,12 +202,7 @@ export default function Home() {
         <Text style={styles.listPillText}>Nearby</Text>
       </TouchableOpacity>
 
-      <EventsListModal
-        visible={showList}
-        onClose={() => setShowList(false)}
-        events={events as any}
-        myCity={myCity}
-      />
+      <EventsListModal visible={showList} onClose={() => setShowList(false)} events={events as any} myCity={myCity} />
 
       <ModalizeEventSheet
         visible={open}

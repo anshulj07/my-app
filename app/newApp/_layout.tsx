@@ -1,20 +1,11 @@
 import { Tabs } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { View } from "react-native";
-import ProfileHeaderButton from "../../components/ProfileHeaderButton";
 
 export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerShown: true,
-        headerTitle: "myApp",
-        headerTitleAlign: "center",
-        headerStyle: { backgroundColor: "#d45353" },
-        headerShadowVisible: false,
-        headerLeft: () => <ProfileHeaderButton />,
-        headerRight: () => <View style={{ width: 44 }} />, // keeps title visually centered
-
+        headerShown: false, // ✅ IMPORTANT: keep native header off (map overlays + touch issues)
         tabBarShowLabel: false,
         tabBarActiveTintColor: "#e34343ff",
         tabBarInactiveTintColor: "#e34343ff",

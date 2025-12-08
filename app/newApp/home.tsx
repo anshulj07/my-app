@@ -70,6 +70,7 @@ function toEditableEvent(pin: EventPin): NonNullable<EditEventValue> {
 export default function Home() {
   const insets = useSafeAreaInsets();
 
+
   const [open, setOpen] = useState(false);
   const [showList, setShowList] = useState(false);
   const [events, setEvents] = useState<EventPin[]>([]);
@@ -82,6 +83,21 @@ export default function Home() {
 
   const [editOpen, setEditOpen] = useState(false);
   const [editEvent, setEditEvent] = useState<EditEventValue>(null);
+  const [activeFilter, setActiveFilter] = useState<string | null>(null);
+
+    const eventMatchesFilter = useCallback((ev: any, filterKey: string) => {
+    const key = filterKey.toLowerCase();
+    const kind = String(ev?.kind ?? "").toLowerCase(); // your API uses "kind"
+    const tags = Array.isArray(ev?.tags) ? ev.tags.map(String).join(" ").toLowerCase() : "";
+    const title = String(ev?.title ?? "").toLowerCase();
+    return kind.includes(key) || tags.includes(key) || title.includes(key);
+  }, []);
+
+  const filteredEvents = useMemo(() => {
+    if (!activeFilter) return events;
+    return events.filter((ev: any) => eventMatchesFilter(ev, activeFilter));
+  }, [events, activeFilter, eventMatchesFilter]);
+
 
   const fabSize = useMemo(() => (Platform.OS === "ios" ? 60 : 64), []);
   const API_BASE = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
@@ -142,13 +158,16 @@ export default function Home() {
     loadEvents();
   }, [loadEvents, loadMyLocation]);
 
-  const mapKey = myLoc ? `${myLoc.lat.toFixed(6)}:${myLoc.lng.toFixed(6)}` : "init";
+    const mapKey = myLoc
+    ? `${myLoc.lat.toFixed(6)}:${myLoc.lng.toFixed(6)}:${activeFilter ?? "all"}`
+    : `init:${activeFilter ?? "all"}`;
+
 
   return (
     <>
       <MapView
         key={mapKey}
-        events={events}
+        events={filteredEvents}
         initialCenter={myLoc}
         locationStatus={locStatus}
         onPinPress={(pin) => {
@@ -157,7 +176,13 @@ export default function Home() {
         }}
       />
 
-      <MapSearchHeader top={insets.top + 10} onPick={(lat, lng) => setMyLoc({ lat, lng })} />
+      <MapSearchHeader
+  top={insets.top + 10}
+  onPick={(lat, lng) => setMyLoc({ lat, lng })}
+  activeFilter={activeFilter}
+  onFilterChange={setActiveFilter}
+/>
+
 
       <PersonBookingSheet
         visible={showPersonSheet}
@@ -202,7 +227,7 @@ export default function Home() {
         <Text style={styles.listPillText}>Nearby</Text>
       </TouchableOpacity>
 
-      <EventsListModal visible={showList} onClose={() => setShowList(false)} events={events as any} myCity={myCity} />
+      <EventsListModal visible={showList} onClose={() => setShowList(false)} events={filteredEvents as any} myCity={myCity} />
 
       <ModalizeEventSheet
         visible={open}

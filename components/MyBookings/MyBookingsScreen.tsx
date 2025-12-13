@@ -393,14 +393,14 @@ function EventCard({ e, index }: { e: EventDoc; index: number }) {
           </View>
         </View>
 
-        {!!e.description?.trim() && (
+        {/* {!!e.description?.trim() && (
           <View style={styles.descWrap}>
             <Text style={styles.descLabel}>About</Text>
             <Text style={styles.descTxt} numberOfLines={3}>
               {e.description.trim()}
             </Text>
           </View>
-        )}
+        )} */}
 
         {/* <View style={styles.footerRow}>
           <View style={styles.dot} />

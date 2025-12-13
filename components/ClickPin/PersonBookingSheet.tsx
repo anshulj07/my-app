@@ -17,6 +17,8 @@ import { useAuth } from "@clerk/clerk-expo";
 import { useRouter } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { EventPin } from "../Map/MapView";
+import JoinEventButton from "./JoinEventButton";
+
 
 type Props = {
   visible: boolean;
@@ -45,6 +47,7 @@ export default function PersonBookingSheet({ visible, onClose, person, onEditDet
   const { userId } = useAuth();
   const [editOpen, setEditOpen] = useState(false);
   const [editEvent, setEditEvent] = useState<EventPin | null>(null);
+  const eventId = String((person as any)?._id || (person as any)?.id || (person as any)?.eventId || "");
 
   const API_BASE = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
   const EVENT_API_KEY = (Constants.expoConfig?.extra as any)?.eventApiKey as string | undefined;
@@ -143,7 +146,7 @@ export default function PersonBookingSheet({ visible, onClose, person, onEditDet
       close(() => onEditDetails?.(person)); // ✅ open edit modal after sheet closes
       return;
     }
-    
+
     if (kind === "free") {
       // join flow here
       return;
@@ -202,7 +205,7 @@ export default function PersonBookingSheet({ visible, onClose, person, onEditDet
       }
     });
   };
-  
+
 
   const statusTone =
     status.toLowerCase() === "active"
@@ -348,15 +351,24 @@ export default function PersonBookingSheet({ visible, onClose, person, onEditDet
 
             {/* STICKY CTA (new) */}
             <View style={styles.ctaBar}>
-              <Pressable onPress={onPrimary} style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}>
-                <View style={styles.ctaGlow} />
-                <Ionicons
-                  name={isCreator ? "create-outline" : kind === "free" ? "people-outline" : "card-outline"}
-                  size={18}
-                  color="#fff"
+              {isCreator ? (
+                <Pressable onPress={onPrimary} style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}>
+                  <View style={styles.ctaGlow} />
+                  <Ionicons name="create-outline" size={18} color="#fff" />
+                  <Text style={styles.ctaText}>{actionLabel}</Text>
+                </Pressable>
+              ) : kind === "free" ? (
+                <JoinEventButton
+                  eventId={String((person as any)?._id || (person as any)?.id || "")}
+                  onJoined={() => close()}
                 />
-                <Text style={styles.ctaText}>{actionLabel}</Text>
-              </Pressable>
+              ) : (
+                <Pressable onPress={onPrimary} style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}>
+                  <View style={styles.ctaGlow} />
+                  <Ionicons name="card-outline" size={18} color="#fff" />
+                  <Text style={styles.ctaText}>{actionLabel}</Text>
+                </Pressable>
+              )}
 
               <Pressable onPress={() => close()} style={({ pressed }) => [styles.ctaGhost, pressed && styles.ctaGhostPressed]}>
                 <Text style={styles.ctaGhostText}>Dismiss</Text>

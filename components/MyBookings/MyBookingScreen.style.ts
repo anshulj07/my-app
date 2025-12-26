@@ -46,9 +46,10 @@ export const styles = StyleSheet.create({
   subTitle: {
     marginTop: 6,
     fontSize: 13,
-    color: "rgba(100,116,139,0.92)", // slate-500
-    fontFamily: FONT.medium,
+    color: "#334155",          // was rgba(100,116,139,0.92)
+    fontFamily: FONT.demi,     // was medium
   },
+
 
   title: {
     fontSize: 30,
@@ -157,17 +158,18 @@ export const styles = StyleSheet.create({
     gap: 3,
   },
   tabText: {
-    color: "#475569",
-    fontFamily: FONT.demi,
+    color: "#334155",          // was #475569
+    fontFamily: FONT.bold,     // was demi
     fontSize: 12,
     letterSpacing: 0.2,
   },
-  tabTextActive: { color: "#0F172A" },
   tabCount: {
-    color: "#94A3B8",
+    color: "#475569",          // was #94A3B8
     fontFamily: FONT.bold,
     fontSize: 11,
   },
+
+  tabTextActive: { color: "#0F172A" },
   tabCountActive: { color: "#0F172A" },
 
   // ----- list -----
@@ -192,10 +194,11 @@ export const styles = StyleSheet.create({
   },
   sectionHint: {
     marginTop: 3,
-    color: "#64748B",
-    fontFamily: FONT.regular,
+    color: "#475569",          // was #64748B
+    fontFamily: FONT.medium,   // was regular
     fontSize: 12,
   },
+
   sectionDivider: {
     height: 1,
     backgroundColor: "rgba(148,163,184,0.18)",
@@ -208,13 +211,14 @@ export const styles = StyleSheet.create({
     padding: 14,
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#E6EAF2",
+    borderColor: "#D6DEEA",      // was #E6EAF2 (too light)
     shadowColor: "#0B1220",
-    shadowOpacity: 0.06,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 1,
+    shadowOpacity: 0.10,         // was 0.06
+    shadowRadius: 18,            // was 16
+    shadowOffset: { width: 0, height: 14 }, // was 12
+    elevation: 2,                // was 1
   },
+
 
   cardTop: {
     flexDirection: "row",
@@ -266,10 +270,11 @@ export const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: FONT.bold,
   },
-  badgeService: { backgroundColor: "rgba(59,130,246,0.75)" }, // blue
-  badgeFree: { backgroundColor: "rgba(34,197,94,0.62)" }, // green
-  badgeActive: { backgroundColor: "rgba(34,197,94,0.78)" },
-  badgePaused: { backgroundColor: "rgba(148,163,184,0.85)" },
+  badgeService: { backgroundColor: "#2563EB" }, // was rgba(...)
+  badgeFree: { backgroundColor: "#16A34A" },
+  badgeActive: { backgroundColor: "#16A34A" },
+  badgePaused: { backgroundColor: "#64748B" },
+
 
   // right column in card (toggle + price)
   rightCol: {
@@ -321,18 +326,19 @@ export const styles = StyleSheet.create({
     borderColor: "#E6EAF2",
   },
   metaLabel: {
-    color: "#94A3B8",
-    fontFamily: FONT.medium,
+    color: "#475569",          // was #94A3B8
+    fontFamily: FONT.demi,     // was medium
     fontSize: 11,
-    letterSpacing: 0.3,
+    letterSpacing: 0.4,
     textTransform: "uppercase",
   },
   metaValue: {
     marginTop: 6,
     color: "#0F172A",
-    fontFamily: FONT.demi,
-    fontSize: 12,
+    fontFamily: FONT.bold,     // was demi
+    fontSize: 13,              // was 12
   },
+
 
   // ----- empty / errors -----
   empty: {
@@ -368,7 +374,11 @@ export const styles = StyleSheet.create({
     gap: 10,
     paddingHorizontal: 16,
   },
-  muted: { color: "#64748B", fontFamily: FONT.medium },
+  muted: {
+    color: "#334155",          // was #64748B
+    fontFamily: FONT.demi      // was medium
+  },
+
   err: { color: "#DC2626", fontFamily: FONT.bold, textAlign: "center" },
   retryBtn: {
     marginTop: 8,

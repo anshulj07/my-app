@@ -1,3 +1,4 @@
+// MyBookingsScreen.tsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
@@ -13,26 +14,34 @@ import {
   SectionList,
   SectionListData,
   Switch,
-  StyleSheet,
 } from "react-native";
 import Constants from "expo-constants";
 import { useAuth } from "@clerk/clerk-expo";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import { useRouter } from "expo-router";
 import { styles } from "./MyBookingScreen.style";
 
-type EventKind = "free" | "service";
+type EventKind = "free" | "paid" | "service";
+
 type EventDoc = {
   _id: string;
   title: string;
   emoji?: string;
   description?: string;
+
   creatorClerkId: string;
+
   kind: EventKind;
   priceCents: number | null;
+
   startsAt?: string | null;
   date?: string;
   time?: string;
-  status?: string; 
+  status?: string;
+
+  // optional fields if you already store them
+  attendance?: number | null; // max people
+  attendees?: string[];       // array of clerk userIds
 
   location?: { city?: string; admin1Code?: string; countryCode?: string };
 };
@@ -87,12 +96,14 @@ function fmtWhere(ev: EventDoc) {
 }
 
 function priceLabel(ev: EventDoc) {
-  if (ev.kind === "service") return `$${((ev.priceCents ?? 0) / 100).toFixed(2)}`;
-  return "FREE";
+  if (ev.kind === "free") return "FREE";
+  return `$${((ev.priceCents ?? 0) / 100).toFixed(2)}`;
 }
 
 function kindLabel(ev: EventDoc) {
-  return ev.kind === "service" ? "Service" : "Free event";
+  if (ev.kind === "service") return "Service";
+  if (ev.kind === "paid") return "Paid event";
+  return "Free event";
 }
 
 function statusLabel(ev: EventDoc) {
@@ -105,20 +116,21 @@ function isEnabled(ev: EventDoc) {
 }
 
 export default function MyBookingsScreen() {
+  const router = useRouter();
   const { userId } = useAuth();
+
   const API_BASE = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
   const EVENT_API_KEY = (Constants.expoConfig?.extra as any)?.eventApiKey as string | undefined;
 
   const [tab, setTab] = useState<TabKey>("created");
   const [created, setCreated] = useState<EventDoc[]>([]);
-  const [goingUpcoming, setGoingUpcoming] = useState<EventDoc[]>([]); // placeholder
-  const [past, setPast] = useState<EventDoc[]>([]); // placeholder
+  const [goingUpcoming, setGoingUpcoming] = useState<EventDoc[]>([]);
+  const [past, setPast] = useState<EventDoc[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // per-event toggle loading
   const [toggleBusy, setToggleBusy] = useState<Record<string, boolean>>({});
 
   const headerFade = useRef(new Animated.Value(0)).current;
@@ -195,7 +207,6 @@ export default function MyBookingsScreen() {
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       setCreated(sorted);
 
-      // placeholders until you implement bookings
       setGoingUpcoming([]);
       setPast([]);
     } catch (e: any) {
@@ -239,27 +250,17 @@ export default function MyBookingsScreen() {
     return [{ title: tab === "going" ? "Going" : "Past", hint: "", data: list }];
   }, [tab, created, goingUpcoming, past, nowMs]);
 
-  const counts = useMemo(() => {
-    const createdTotal = created.length;
-    const upcoming = created.filter((e) => eventStartMs(e) >= nowMs).length;
-    const pastCreated = created.filter((e) => eventStartMs(e) < nowMs).length;
-    return { createdTotal, upcoming, pastCreated };
-  }, [created, nowMs]);
-
   // ✅ Toggle API (Created -> Service only)
   const patchServiceEnabled = useCallback(
     async (ev: EventDoc, next: boolean) => {
       if (!API_BASE || !userId) return;
       if (!ev?._id) return;
 
-      // optimistic update
       const prevStatus = String(ev.status || "active").toLowerCase();
       const optimisticStatus = next ? "active" : "paused";
 
       setToggleBusy((m) => ({ ...m, [ev._id]: true }));
-      setCreated((prev) =>
-        prev.map((x) => (x._id === ev._id ? { ...x, status: optimisticStatus } : x))
-      );
+      setCreated((prev) => prev.map((x) => (x._id === ev._id ? { ...x, status: optimisticStatus } : x)));
 
       try {
         const res = await fetch(`${API_BASE}/api/events/toggle-service`, {
@@ -275,21 +276,12 @@ export default function MyBookingsScreen() {
         const txt = await res.text().catch(() => "");
         const json = safeJson(txt);
 
-        if (!res.ok) {
-          throw new Error(json?.error || json?.detail || txt || "Failed to toggle service");
-        }
+        if (!res.ok) throw new Error(json?.error || json?.detail || txt || "Failed to toggle service");
 
-        const serverStatus =
-          String(json?.status || json?.event?.status || optimisticStatus).toLowerCase();
-
-        setCreated((prev) =>
-          prev.map((x) => (x._id === ev._id ? { ...x, status: serverStatus } : x))
-        );
+        const serverStatus = String(json?.status || json?.event?.status || optimisticStatus).toLowerCase();
+        setCreated((prev) => prev.map((x) => (x._id === ev._id ? { ...x, status: serverStatus } : x)));
       } catch {
-        // rollback
-        setCreated((prev) =>
-          prev.map((x) => (x._id === ev._id ? { ...x, status: prevStatus } : x))
-        );
+        setCreated((prev) => prev.map((x) => (x._id === ev._id ? { ...x, status: prevStatus } : x)));
       } finally {
         setToggleBusy((m) => ({ ...m, [ev._id]: false }));
       }
@@ -307,22 +299,11 @@ export default function MyBookingsScreen() {
             <Text style={styles.title}>My Bookings</Text>
             <Text style={styles.subTitle}>Manage your created events & services</Text>
           </View>
-          {/* <View style={styles.pillsRow}>
-            <Pill icon="sparkles" label="Created" value={counts.createdTotal} />
-            <Pill icon="time" label="Upcoming" value={counts.upcoming} />
-            <Pill icon="checkmark-circle" label="Past" value={counts.pastCreated} />
-          </View> */}
         </View>
 
-        {/* existing tab UI (kept) */}
         <View style={styles.tabsWrap} onLayout={(e) => setTabsW(e.nativeEvent.layout.width)}>
           {tabsW > 0 && (
-            <Animated.View
-              style={[
-                styles.tabIndicator,
-                { width: tabsW / 3, transform: [{ translateX: indicatorX }] },
-              ]}
-            />
+            <Animated.View style={[styles.tabIndicator, { width: tabsW / 3, transform: [{ translateX: indicatorX }] }]} />
           )}
           <Tab label="Created" count={created.length} active={tab === "created"} onPress={() => setTab("created")} />
           <Tab label="Going" count={0} active={tab === "going"} onPress={() => setTab("going")} />
@@ -358,8 +339,8 @@ export default function MyBookingsScreen() {
           renderSectionHeader={({ section }: any) => (
             <View style={styles.sectionHeaderWrap}>
               <View style={styles.sectionHeaderTop}>
-                <Text style={[styles.sectionTitle, styles.sectionTitle]}>{section.title}</Text>
-                {!!section.hint && <Text style={[styles.sectionHint, styles.sectionHint]}>{section.hint}</Text>}
+                <Text style={styles.sectionTitle}>{section.title}</Text>
+                {!!section.hint && <Text style={styles.sectionHint}>{section.hint}</Text>}
               </View>
               <View style={styles.sectionDivider} />
             </View>
@@ -371,6 +352,17 @@ export default function MyBookingsScreen() {
               showToggle={tab === "created" && item.kind === "service"}
               toggleBusy={!!toggleBusy[item._id]}
               onToggle={(next) => patchServiceEnabled(item, next)}
+              onPress={() => {
+                router.push({
+                  pathname: "/event-interest/[eventId]",
+                  params: {
+                    eventId: item._id,
+                    kind: item.kind,
+                    title: item.title,
+                    emoji: item.emoji || "📍",
+                  },
+                });
+              }}
             />
           )}
           ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
@@ -381,27 +373,9 @@ export default function MyBookingsScreen() {
   );
 }
 
-function Pill({ icon, label, value }: { icon: any; label: string; value: number }) {
-  return (
-    <View style={styles.pill}>
-      <Ionicons name={icon} size={14} color="rgba(226,232,240,0.92)" />
-      <Text style={styles.pillText}>
-        {label}{" "}
-        <Text style={styles.pillValue}>
-          {value}
-        </Text>
-      </Text>
-    </View>
-  );
-}
-
 function Tab({ label, count, active, onPress }: { label: string; count: number; active: boolean; onPress: () => void }) {
   return (
-    <Pressable
-      onPress={onPress}
-      style={styles.tabBtn}
-      android_ripple={{ color: "rgba(255,255,255,0.08)" }}
-    >
+    <Pressable onPress={onPress} style={styles.tabBtn} android_ripple={{ color: "rgba(255,255,255,0.08)" }}>
       <Text style={[styles.tabText, active && styles.tabTextActive]} numberOfLines={1}>
         {label}
       </Text>
@@ -416,12 +390,14 @@ function EventCard({
   showToggle,
   toggleBusy,
   onToggle,
+  onPress,
 }: {
   e: EventDoc;
   index: number;
   showToggle: boolean;
   toggleBusy: boolean;
   onToggle: (next: boolean) => void;
+  onPress: () => void;
 }) {
   const a = useRef(new Animated.Value(0)).current;
   const y = useRef(new Animated.Value(10)).current;
@@ -436,22 +412,53 @@ function EventCard({
   const enabled = isEnabled(e);
   const statusTxt = statusLabel(e);
 
+  const actionLabel = e.kind === "service" ? "View bookings" : "View interested people";
+  const actionIcon = e.kind === "service" ? "calendar" : "people";
+
   return (
     <Animated.View style={{ opacity: a, transform: [{ translateY: y }] }}>
-      <Pressable style={[styles.card, styles.card]} android_ripple={{ color: "rgba(255,255,255,0.06)" }}>
+      <Pressable
+        onPress={onPress}
+        android_ripple={{ color: "rgba(255,255,255,0.08)" }}
+        style={({ pressed }) => [
+          styles.card,
+          {
+            borderWidth: 1,
+            borderColor: pressed ? "rgba(10,132,255,0.65)" : "rgba(255,255,255,0.10)",
+            transform: [{ scale: pressed ? 0.99 : 1 }],
+          },
+        ]}
+      >
+        {/* TOP ROW */}
         <View style={styles.cardTop}>
-          <View style={[styles.emojiPill, styles.emojiPill]}>
+          <View style={styles.emojiPill}>
             <Text style={styles.emojiTxt}>{e.emoji || "📍"}</Text>
           </View>
 
           <View style={{ flex: 1 }}>
-            <Text style={[styles.cardTitle, styles.cardTitle]} numberOfLines={1}>
-              {e.title}
-            </Text>
+            {/* Title row + chevron */}
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Text style={styles.cardTitle} numberOfLines={1}>
+                {e.title}
+              </Text>
 
+              {/* ✅ Click affordance */}
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color="rgba(226,232,240,0.80)"
+                style={{ marginLeft: "auto" }}
+              />
+            </View>
+
+            {/* Badges */}
             <View style={styles.badgesRow}>
               <View style={[styles.badge, e.kind === "service" ? styles.badgeService : styles.badgeFree]}>
-                <Ionicons name={e.kind === "service" ? "sparkles" : "leaf"} size={12} color="#fff" />
+                <Ionicons
+                  name={e.kind === "service" ? "sparkles" : e.kind === "paid" ? "card" : "leaf"}
+                  size={12}
+                  color="#fff"
+                />
                 <Text style={styles.badgeText}>{kindLabel(e)}</Text>
               </View>
 
@@ -462,8 +469,9 @@ function EventCard({
             </View>
           </View>
 
+          {/* Right column: price + toggle */}
           <View style={styles.rightCol}>
-            <View style={[styles.pricePill, styles.pricePill]}>
+            <View style={styles.pricePill}>
               <Text style={styles.priceTxt}>{priceLabel(e)}</Text>
             </View>
 
@@ -476,8 +484,8 @@ function EventCard({
                     value={enabled}
                     onValueChange={onToggle}
                     trackColor={{
-                      false: "rgba(148,163,184,0.22)",  // soft slate
-                      true: "rgba(10,132,255,0.55)",   // premium blue glow (same as above)
+                      false: "rgba(148,163,184,0.22)",
+                      true: "rgba(10,132,255,0.55)",
                     }}
                     thumbColor="#FFFFFF"
                     ios_backgroundColor="rgba(148,163,184,0.22)"
@@ -488,7 +496,8 @@ function EventCard({
           </View>
         </View>
 
-        <View style={[styles.metaGrid, styles.metaGrid]}>
+        {/* META GRID */}
+        <View style={styles.metaGrid}>
           <View style={styles.metaCell}>
             <Text style={styles.metaLabel}>When</Text>
             <Text style={styles.metaValue} numberOfLines={1}>
@@ -502,6 +511,34 @@ function EventCard({
               {fmtWhere(e)}
             </Text>
           </View>
+        </View>
+
+        {/* ✅ Bottom action bar (looks like a button) */}
+        <View
+          style={{
+            marginTop: 12,
+            paddingVertical: 10,
+            paddingHorizontal: 12,
+            borderRadius: 14,
+            backgroundColor: "rgba(255,255,255,0.06)",
+            borderWidth: 1,
+            borderColor: "rgba(255,255,255,0.10)",
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 10,
+          }}
+        >
+
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: "rgba(0, 0, 0, 0.95)", fontWeight: "900", fontSize: 13 }}>
+              {actionLabel}
+            </Text>
+            <Text style={{ color: "rgba(0, 0, 0, 0.95)", fontSize: 12, marginTop: 2 }}>
+              Opens details & list
+            </Text>
+          </View>
+
+          <Ionicons name="arrow-forward" size={16} color="rgba(0, 0, 0, 0.85)" />
         </View>
       </Pressable>
     </Animated.View>

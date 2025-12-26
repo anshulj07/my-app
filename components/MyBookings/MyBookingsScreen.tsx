@@ -32,7 +32,7 @@ type EventDoc = {
   startsAt?: string | null;
   date?: string;
   time?: string;
-  status?: string; // ✅ needed for toggle display ("active" / "paused")
+  status?: string; 
 
   location?: { city?: string; admin1Code?: string; countryCode?: string };
 };

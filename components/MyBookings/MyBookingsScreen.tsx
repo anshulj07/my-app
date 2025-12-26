@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   View,
   Text,
-  StyleSheet,
   ActivityIndicator,
   Pressable,
   RefreshControl,
@@ -13,9 +12,13 @@ import {
   Animated,
   SectionList,
   SectionListData,
+  Switch,
+  StyleSheet,
 } from "react-native";
 import Constants from "expo-constants";
 import { useAuth } from "@clerk/clerk-expo";
+import Ionicons from "@expo/vector-icons/Ionicons";
+import { styles } from "./MyBookingScreen.style";
 
 type EventKind = "free" | "service";
 type EventDoc = {
@@ -29,34 +32,12 @@ type EventDoc = {
   startsAt?: string | null;
   date?: string;
   time?: string;
+  status?: string; // ✅ needed for toggle display ("active" / "paused")
+
   location?: { city?: string; admin1Code?: string; countryCode?: string };
 };
 
 type TabKey = "created" | "going" | "past";
-
-const FONT = Platform.select({
-  ios: {
-    regular: "AvenirNext-Regular",
-    medium: "AvenirNext-Medium",
-    demi: "AvenirNext-DemiBold",
-    bold: "AvenirNext-Bold",
-    heavy: "AvenirNext-Heavy",
-  },
-  android: {
-    regular: "sans-serif",
-    medium: "sans-serif-medium",
-    demi: "sans-serif-medium",
-    bold: "sans-serif-bold",
-    heavy: "sans-serif-black",
-  },
-  default: {
-    regular: "System",
-    medium: "System",
-    demi: "System",
-    bold: "System",
-    heavy: "System",
-  },
-});
 
 function safeJson(txt: string) {
   try {
@@ -114,6 +95,15 @@ function kindLabel(ev: EventDoc) {
   return ev.kind === "service" ? "Service" : "Free event";
 }
 
+function statusLabel(ev: EventDoc) {
+  const s = String(ev.status || "active").toLowerCase();
+  return s === "paused" ? "Paused" : "Active";
+}
+
+function isEnabled(ev: EventDoc) {
+  return String(ev.status || "active").toLowerCase() !== "paused";
+}
+
 export default function MyBookingsScreen() {
   const { userId } = useAuth();
   const API_BASE = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
@@ -127,6 +117,9 @@ export default function MyBookingsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  // per-event toggle loading
+  const [toggleBusy, setToggleBusy] = useState<Record<string, boolean>>({});
 
   const headerFade = useRef(new Animated.Value(0)).current;
   const headerLift = useRef(new Animated.Value(10)).current;
@@ -197,7 +190,6 @@ export default function MyBookingsScreen() {
 
     try {
       const { createdEvents } = await fetchMyEvents();
-
       const sorted = createdEvents.slice().sort((a, b) => eventStartMs(a) - eventStartMs(b));
 
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -227,12 +219,18 @@ export default function MyBookingsScreen() {
 
   const sections = useMemo(() => {
     if (tab === "created") {
-      const upcoming = created.filter((e) => eventStartMs(e) >= nowMs).sort((a, b) => eventStartMs(a) - eventStartMs(b));
-      const pastCreated = created.filter((e) => eventStartMs(e) < nowMs).sort((a, b) => eventStartMs(b) - eventStartMs(a));
+      const upcoming = created
+        .filter((e) => eventStartMs(e) >= nowMs)
+        .sort((a, b) => eventStartMs(a) - eventStartMs(b));
+
+      const pastCreated = created
+        .filter((e) => eventStartMs(e) < nowMs)
+        .sort((a, b) => eventStartMs(b) - eventStartMs(a));
 
       const out: Array<{ title: string; hint: string; data: EventDoc[] }> = [];
       out.push({ title: "Upcoming", hint: "Events you created that haven’t started", data: upcoming });
       out.push({ title: "Past", hint: "Events you created earlier", data: pastCreated });
+
       return out.filter((s) => s.data.length > 0);
     }
 
@@ -242,29 +240,81 @@ export default function MyBookingsScreen() {
   }, [tab, created, goingUpcoming, past, nowMs]);
 
   const counts = useMemo(() => {
-    if (tab === "created") {
-      const upcoming = created.filter((e) => eventStartMs(e) >= nowMs).length;
-      const pastCreated = created.filter((e) => eventStartMs(e) < nowMs).length;
-      return { createdTotal: created.length, upcoming, pastCreated };
-    }
-    return { createdTotal: created.length, upcoming: 0, pastCreated: 0 };
-  }, [tab, created, nowMs]);
+    const createdTotal = created.length;
+    const upcoming = created.filter((e) => eventStartMs(e) >= nowMs).length;
+    const pastCreated = created.filter((e) => eventStartMs(e) < nowMs).length;
+    return { createdTotal, upcoming, pastCreated };
+  }, [created, nowMs]);
+
+  // ✅ Toggle API (Created -> Service only)
+  const patchServiceEnabled = useCallback(
+    async (ev: EventDoc, next: boolean) => {
+      if (!API_BASE || !userId) return;
+      if (!ev?._id) return;
+
+      // optimistic update
+      const prevStatus = String(ev.status || "active").toLowerCase();
+      const optimisticStatus = next ? "active" : "paused";
+
+      setToggleBusy((m) => ({ ...m, [ev._id]: true }));
+      setCreated((prev) =>
+        prev.map((x) => (x._id === ev._id ? { ...x, status: optimisticStatus } : x))
+      );
+
+      try {
+        const res = await fetch(`${API_BASE}/api/events/toggle-service`, {
+          method: "PATCH",
+          headers,
+          body: JSON.stringify({
+            _id: ev._id,
+            creatorClerkId: userId,
+            enabled: next,
+          }),
+        });
+
+        const txt = await res.text().catch(() => "");
+        const json = safeJson(txt);
+
+        if (!res.ok) {
+          throw new Error(json?.error || json?.detail || txt || "Failed to toggle service");
+        }
+
+        const serverStatus =
+          String(json?.status || json?.event?.status || optimisticStatus).toLowerCase();
+
+        setCreated((prev) =>
+          prev.map((x) => (x._id === ev._id ? { ...x, status: serverStatus } : x))
+        );
+      } catch {
+        // rollback
+        setCreated((prev) =>
+          prev.map((x) => (x._id === ev._id ? { ...x, status: prevStatus } : x))
+        );
+      } finally {
+        setToggleBusy((m) => ({ ...m, [ev._id]: false }));
+      }
+    },
+    [API_BASE, headers, userId]
+  );
 
   const TOP_PAD = (Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0) + 40;
 
   return (
     <View style={[styles.screen, { paddingTop: TOP_PAD }]}>
-      {/* background blobs */}
-
       <Animated.View style={[styles.header, { opacity: headerFade, transform: [{ translateY: headerLift }] }]}>
-        <Text style={styles.title}>My Bookings</Text>
+        <View style={styles.headerTopRow}>
+          <View>
+            <Text style={styles.title}>My Bookings</Text>
+            <Text style={styles.subTitle}>Manage your created events & services</Text>
+          </View>
+          {/* <View style={styles.pillsRow}>
+            <Pill icon="sparkles" label="Created" value={counts.createdTotal} />
+            <Pill icon="time" label="Upcoming" value={counts.upcoming} />
+            <Pill icon="checkmark-circle" label="Past" value={counts.pastCreated} />
+          </View> */}
+        </View>
 
-        {/* <View style={styles.statsRow}>
-          <Stat label="Created" value={counts.createdTotal} />
-          <Stat label="Upcoming" value={counts.upcoming} />
-          <Stat label="Past" value={counts.pastCreated} />
-        </View> */}
-
+        {/* existing tab UI (kept) */}
         <View style={styles.tabsWrap} onLayout={(e) => setTabsW(e.nativeEvent.layout.width)}>
           {tabsW > 0 && (
             <Animated.View
@@ -306,12 +356,23 @@ export default function MyBookingsScreen() {
             </View>
           }
           renderSectionHeader={({ section }: any) => (
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>{section.title}</Text>
-              {!!section.hint && <Text style={styles.sectionHint}>{section.hint}</Text>}
+            <View style={styles.sectionHeaderWrap}>
+              <View style={styles.sectionHeaderTop}>
+                <Text style={[styles.sectionTitle, styles.sectionTitle]}>{section.title}</Text>
+                {!!section.hint && <Text style={[styles.sectionHint, styles.sectionHint]}>{section.hint}</Text>}
+              </View>
+              <View style={styles.sectionDivider} />
             </View>
           )}
-          renderItem={({ item, index }) => <EventCard e={item} index={index} />}
+          renderItem={({ item, index }) => (
+            <EventCard
+              e={item}
+              index={index}
+              showToggle={tab === "created" && item.kind === "service"}
+              toggleBusy={!!toggleBusy[item._id]}
+              onToggle={(next) => patchServiceEnabled(item, next)}
+            />
+          )}
           ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
           showsVerticalScrollIndicator={false}
         />
@@ -320,11 +381,16 @@ export default function MyBookingsScreen() {
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
+function Pill({ icon, label, value }: { icon: any; label: string; value: number }) {
   return (
-    <View style={styles.stat}>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
+    <View style={styles.pill}>
+      <Ionicons name={icon} size={14} color="rgba(226,232,240,0.92)" />
+      <Text style={styles.pillText}>
+        {label}{" "}
+        <Text style={styles.pillValue}>
+          {value}
+        </Text>
+      </Text>
     </View>
   );
 }
@@ -344,7 +410,19 @@ function Tab({ label, count, active, onPress }: { label: string; count: number; 
   );
 }
 
-function EventCard({ e, index }: { e: EventDoc; index: number }) {
+function EventCard({
+  e,
+  index,
+  showToggle,
+  toggleBusy,
+  onToggle,
+}: {
+  e: EventDoc;
+  index: number;
+  showToggle: boolean;
+  toggleBusy: boolean;
+  onToggle: (next: boolean) => void;
+}) {
   const a = useRef(new Animated.Value(0)).current;
   const y = useRef(new Animated.Value(10)).current;
 
@@ -355,29 +433,62 @@ function EventCard({ e, index }: { e: EventDoc; index: number }) {
     ]).start();
   }, [a, y, index]);
 
+  const enabled = isEnabled(e);
+  const statusTxt = statusLabel(e);
+
   return (
     <Animated.View style={{ opacity: a, transform: [{ translateY: y }] }}>
-      <Pressable style={styles.card} android_ripple={{ color: "rgba(255,255,255,0.06)" }}>
+      <Pressable style={[styles.card, styles.card]} android_ripple={{ color: "rgba(255,255,255,0.06)" }}>
         <View style={styles.cardTop}>
-          <View style={styles.emojiPill}>
+          <View style={[styles.emojiPill, styles.emojiPill]}>
             <Text style={styles.emojiTxt}>{e.emoji || "📍"}</Text>
           </View>
 
           <View style={{ flex: 1 }}>
-            <Text style={styles.cardTitle} numberOfLines={1}>
+            <Text style={[styles.cardTitle, styles.cardTitle]} numberOfLines={1}>
               {e.title}
             </Text>
-            <Text style={styles.cardSubtitle} numberOfLines={1}>
-              {kindLabel(e)}
-            </Text>
+
+            <View style={styles.badgesRow}>
+              <View style={[styles.badge, e.kind === "service" ? styles.badgeService : styles.badgeFree]}>
+                <Ionicons name={e.kind === "service" ? "sparkles" : "leaf"} size={12} color="#fff" />
+                <Text style={styles.badgeText}>{kindLabel(e)}</Text>
+              </View>
+
+              <View style={[styles.badge, enabled ? styles.badgeActive : styles.badgePaused]}>
+                <Ionicons name={enabled ? "checkmark" : "pause"} size={12} color="#fff" />
+                <Text style={styles.badgeText}>{statusTxt}</Text>
+              </View>
+            </View>
           </View>
 
-          <View style={styles.pricePill}>
-            <Text style={styles.priceTxt}>{priceLabel(e)}</Text>
+          <View style={styles.rightCol}>
+            <View style={[styles.pricePill, styles.pricePill]}>
+              <Text style={styles.priceTxt}>{priceLabel(e)}</Text>
+            </View>
+
+            {showToggle ? (
+              <View style={styles.toggleWrap}>
+                {toggleBusy ? (
+                  <ActivityIndicator size="small" />
+                ) : (
+                  <Switch
+                    value={enabled}
+                    onValueChange={onToggle}
+                    trackColor={{
+                      false: "rgba(148,163,184,0.22)",  // soft slate
+                      true: "rgba(10,132,255,0.55)",   // premium blue glow (same as above)
+                    }}
+                    thumbColor="#FFFFFF"
+                    ios_backgroundColor="rgba(148,163,184,0.22)"
+                  />
+                )}
+              </View>
+            ) : null}
           </View>
         </View>
 
-        <View style={styles.metaGrid}>
+        <View style={[styles.metaGrid, styles.metaGrid]}>
           <View style={styles.metaCell}>
             <Text style={styles.metaLabel}>When</Text>
             <Text style={styles.metaValue} numberOfLines={1}>
@@ -392,319 +503,7 @@ function EventCard({ e, index }: { e: EventDoc; index: number }) {
             </Text>
           </View>
         </View>
-
-        {/* {!!e.description?.trim() && (
-          <View style={styles.descWrap}>
-            <Text style={styles.descLabel}>About</Text>
-            <Text style={styles.descTxt} numberOfLines={3}>
-              {e.description.trim()}
-            </Text>
-          </View>
-        )} */}
-
-        {/* <View style={styles.footerRow}>
-          <View style={styles.dot} />
-          <Text style={styles.footerHint} numberOfLines={1}>
-            Tap for details (coming next)
-          </Text>
-        </View> */}
       </Pressable>
     </Animated.View>
   );
 }
-
-const styles = StyleSheet.create({
-    screen: {
-      flex: 1,
-      backgroundColor: "#F7F8FC",
-    },
-  
-    header: {
-      paddingHorizontal: 18,
-      paddingTop: 10,
-      paddingBottom: 14,
-    },
-    title: {
-      fontSize: 30,
-      color: "#0F172A",
-      fontFamily: FONT.heavy,
-      letterSpacing: -0.4,
-    },
-  
-    statsRow: {
-      marginTop: 12,
-      flexDirection: "row",
-      gap: 10,
-    },
-    stat: {
-      flex: 1,
-      paddingVertical: 10,
-      paddingHorizontal: 12,
-      borderRadius: 16,
-      backgroundColor: "#FFFFFF",
-      borderWidth: 1,
-      borderColor: "#E6EAF2",
-      shadowColor: "#0B1220",
-      shadowOpacity: 0.04,
-      shadowRadius: 14,
-      shadowOffset: { width: 0, height: 10 },
-      elevation: 1,
-    },
-    statValue: {
-      color: "#0F172A",
-      fontSize: 18,
-      fontFamily: FONT.bold,
-      letterSpacing: -0.2,
-    },
-    statLabel: {
-      marginTop: 4,
-      color: "#64748B",
-      fontFamily: FONT.medium,
-      fontSize: 12,
-    },
-  
-    tabsWrap: {
-      marginTop: 12,
-      flexDirection: "row",
-      borderRadius: 18,
-      padding: 6,
-      backgroundColor: "#FFFFFF",
-      borderWidth: 1,
-      borderColor: "#E6EAF2",
-      overflow: "hidden",
-      shadowColor: "#0B1220",
-      shadowOpacity: 0.03,
-      shadowRadius: 12,
-      shadowOffset: { width: 0, height: 8 },
-      elevation: 1,
-    },
-    tabIndicator: {
-      position: "absolute",
-      left: 6,
-      top: 6,
-      bottom: 6,
-      borderRadius: 14,
-      backgroundColor: "#F1F5FF",
-      borderWidth: 1,
-      borderColor: "#D9E2FF",
-    },
-    tabBtn: {
-      flex: 1,
-      alignItems: "center",
-      justifyContent: "center",
-      paddingVertical: 10,
-      gap: 3,
-    },
-    tabText: {
-      color: "#475569",
-      fontFamily: FONT.demi,
-      fontSize: 12,
-      letterSpacing: 0.2,
-    },
-    tabTextActive: {
-      color: "#0F172A",
-    },
-    tabCount: {
-      color: "#94A3B8",
-      fontFamily: FONT.bold,
-      fontSize: 11,
-    },
-    tabCountActive: {
-      color: "#0F172A",
-    },
-  
-    list: {
-      paddingHorizontal: 18,
-      paddingBottom: 18,
-    },
-  
-    sectionHeader: {
-      marginTop: 10,
-      marginBottom: 8,
-    },
-    sectionTitle: {
-      color: "#0F172A",
-      fontSize: 16,
-      fontFamily: FONT.bold,
-      letterSpacing: -0.2,
-    },
-    sectionHint: {
-      marginTop: 3,
-      color: "#64748B",
-      fontFamily: FONT.regular,
-      fontSize: 12,
-    },
-  
-    card: {
-      borderRadius: 20,
-      padding: 14,
-      backgroundColor: "#FFFFFF",
-      borderWidth: 1,
-      borderColor: "#E6EAF2",
-      shadowColor: "#0B1220",
-      shadowOpacity: 0.05,
-      shadowRadius: 16,
-      shadowOffset: { width: 0, height: 12 },
-      elevation: 1,
-    },
-  
-    cardTop: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 12,
-    },
-    emojiPill: {
-      width: 44,
-      height: 44,
-      borderRadius: 14,
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: "#F1F5FF",
-      borderWidth: 1,
-      borderColor: "#D9E2FF",
-    },
-    emojiTxt: {
-      fontSize: 20,
-    },
-    cardTitle: {
-      color: "#0F172A",
-      fontFamily: FONT.bold,
-      fontSize: 15,
-      letterSpacing: -0.15,
-    },
-    cardSubtitle: {
-      marginTop: 2,
-      color: "#64748B",
-      fontFamily: FONT.medium,
-      fontSize: 12,
-    },
-    pricePill: {
-      paddingHorizontal: 10,
-      paddingVertical: 8,
-      borderRadius: 999,
-      backgroundColor: "#0F172A",
-      borderWidth: 1,
-      borderColor: "#0F172A",
-    },
-    priceTxt: {
-      color: "#FFFFFF",
-      fontFamily: FONT.bold,
-      fontSize: 12,
-      letterSpacing: 0.2,
-    },
-  
-    metaGrid: {
-      marginTop: 12,
-      flexDirection: "row",
-      gap: 10,
-    },
-    metaCell: {
-      flex: 1,
-      padding: 10,
-      borderRadius: 14,
-      backgroundColor: "#F8FAFC",
-      borderWidth: 1,
-      borderColor: "#E6EAF2",
-    },
-    metaLabel: {
-      color: "#94A3B8",
-      fontFamily: FONT.medium,
-      fontSize: 11,
-      letterSpacing: 0.3,
-      textTransform: "uppercase",
-    },
-    metaValue: {
-      marginTop: 6,
-      color: "#0F172A",
-      fontFamily: FONT.demi,
-      fontSize: 12,
-    },
-  
-    descWrap: {
-      marginTop: 12,
-      padding: 10,
-      borderRadius: 14,
-      backgroundColor: "#F8FAFC",
-      borderWidth: 1,
-      borderColor: "#E6EAF2",
-    },
-    descLabel: {
-      color: "#94A3B8",
-      fontFamily: FONT.medium,
-      fontSize: 11,
-      letterSpacing: 0.3,
-      textTransform: "uppercase",
-    },
-    descTxt: {
-      marginTop: 6,
-      color: "#334155",
-      fontFamily: FONT.regular,
-      fontSize: 13,
-      lineHeight: 18,
-    },
-  
-    footerRow: {
-      marginTop: 12,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-    },
-    dot: {
-      width: 6,
-      height: 6,
-      borderRadius: 999,
-      backgroundColor: "#CBD5E1",
-    },
-    footerHint: {
-      color: "#94A3B8",
-      fontFamily: FONT.medium,
-      fontSize: 12,
-    },
-  
-    empty: {
-      marginTop: 10,
-      padding: 16,
-      borderRadius: 18,
-      backgroundColor: "#FFFFFF",
-      borderWidth: 1,
-      borderColor: "#E6EAF2",
-      shadowColor: "#0B1220",
-      shadowOpacity: 0.04,
-      shadowRadius: 14,
-      shadowOffset: { width: 0, height: 10 },
-      elevation: 1,
-    },
-    emptyTitle: {
-      color: "#0F172A",
-      fontFamily: FONT.bold,
-      fontSize: 16,
-    },
-    emptySub: {
-      marginTop: 6,
-      color: "#64748B",
-      fontFamily: FONT.regular,
-      fontSize: 13,
-      lineHeight: 18,
-    },
-  
-    center: {
-      flex: 1,
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 10,
-      paddingHorizontal: 16,
-    },
-    muted: { color: "#64748B", fontFamily: FONT.medium },
-    err: { color: "#DC2626", fontFamily: FONT.bold, textAlign: "center" },
-    retryBtn: {
-      marginTop: 8,
-      paddingHorizontal: 14,
-      paddingVertical: 10,
-      borderRadius: 14,
-      backgroundColor: "#0F172A",
-      borderWidth: 1,
-      borderColor: "#0F172A",
-    },
-    retryTxt: { color: "#FFFFFF", fontFamily: FONT.bold },
-  });
-  

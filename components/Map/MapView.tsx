@@ -17,7 +17,7 @@ export type EventPin = {
   lng: number;
   emoji: string;
 
-  creatorClerkId?: string; 
+  creatorClerkId?: string;
 
   kind?: "free" | "service";
   priceCents?: number | string | null;
@@ -63,17 +63,22 @@ function normalizeEvent(e: any, i: number): EventPin | null {
   const title = typeof e?.title === "string" ? e.title : "";
   const emoji = typeof e?.emoji === "string" && e.emoji.trim() ? e.emoji : "📍";
 
+  const rawId = e?._id ?? e?.id ?? e?.eventId ?? "";
+
   const _id =
-    (typeof e?._id === "string" && e._id) ||
-    (typeof e?.id === "string" && e.id) ||
-    `${i}-${lat}-${lng}-${title}`;
+    typeof rawId === "string" && rawId.trim()
+      ? rawId.trim()
+      : rawId && typeof rawId === "object" && (rawId.$oid || rawId.oid)
+        ? String(rawId.$oid || rawId.oid)
+        : `${i}-${lat}-${lng}-${title}`;
+
 
   const creatorClerkId = String(
     e?.creatorClerkId ??
-      e?.creatorClerkID ??
-      e?.creator?.clerkUserId ??
-      e?.creatorId ??
-      ""
+    e?.creatorClerkID ??
+    e?.creator?.clerkUserId ??
+    e?.creatorId ??
+    ""
   ).trim();
 
   return {
@@ -132,11 +137,15 @@ export default function MapView({
     const list = Array.isArray(events) ? events : [];
     const out: EventPin[] = [];
     for (let i = 0; i < list.length; i++) {
+      // filter here
+      if (String(list[i]?.status || "active").toLowerCase() !== "active") continue;
+
       const n = normalizeEvent(list[i], i);
       if (n) out.push(n);
     }
     return out;
   }, [events]);
+
 
   if (!GOOGLE_KEY) {
     return (
@@ -192,7 +201,7 @@ export default function MapView({
               const n = normalizeEvent(msg.event, 0);
               if (n) onPinPress?.(n);
             }
-          } catch {}
+          } catch { }
         }}
       />
     </View>

@@ -1,5 +1,5 @@
 // app/newtab/home.tsx
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { TouchableOpacity, Text, StyleSheet, Platform } from "react-native";
 import * as Location from "expo-location";
 import Constants from "expo-constants";
@@ -20,16 +20,27 @@ function toNumber(v: any): number | null {
   return typeof n === "number" && Number.isFinite(n) ? n : null;
 }
 
+/** Ensure we ALWAYS have string _id, lat/lng numbers, and keep status */
 function normalizeEvent(e: any): EventPin | null {
   const lat = toNumber(e?.location?.lat ?? e?.lat);
   const lng = toNumber(e?.location?.lng ?? e?.lng);
   if (lat == null || lng == null) return null;
 
+  // ✅ normalize _id into a real string always (works for ObjectId-like payloads too)
+  const rawId = e?._id ?? e?.id ?? e?.eventId ?? "";
+  const _id =
+    typeof rawId === "string" && rawId.trim()
+      ? rawId.trim()
+      : rawId && typeof rawId === "object" && (rawId.$oid || rawId.oid)
+        ? String(rawId.$oid || rawId.oid)
+        : `${lat}:${lng}:${String(e?.title ?? "")}`;
+
   const when = [e?.date, e?.time].filter(Boolean).join(" · ");
   const address = e?.location?.formattedAddress ?? e?.location?.address ?? e?.address ?? "";
 
   return {
-    ...e,
+    ...(e || {}),
+    _id,
     title: e?.title ?? "",
     description: e?.description ?? "",
     lat,
@@ -37,10 +48,11 @@ function normalizeEvent(e: any): EventPin | null {
     emoji: e?.emoji ?? "📍",
     when,
     address,
+    status: e?.status ?? "active",
   };
 }
 
-// ✅ infer the exact "event" prop type from EditEventModal (no manual EditableEvent import)
+// ✅ infer the exact "event" prop type from EditEventModal (no manual types needed)
 type EditEventValue = React.ComponentProps<typeof EditEventModal>["event"];
 
 function toEditableEvent(pin: EventPin): NonNullable<EditEventValue> {
@@ -48,7 +60,6 @@ function toEditableEvent(pin: EventPin): NonNullable<EditEventValue> {
 
   return {
     ...(pin as any),
-    // make sure location matches what your EditEventModal expects
     location: {
       ...loc,
       lat: loc?.lat ?? pin.lat,
@@ -58,7 +69,6 @@ function toEditableEvent(pin: EventPin): NonNullable<EditEventValue> {
       address: loc?.address ?? (pin as any)?.address ?? "",
       placeId: loc?.placeId ?? "",
 
-      // normalize common variants so the edit modal has what it needs
       city: loc?.city ?? (pin as any)?.city ?? "",
       admin1Code: loc?.admin1Code ?? loc?.stateCode ?? loc?.state ?? "",
       admin1: loc?.admin1 ?? loc?.region ?? loc?.state ?? "",
@@ -71,9 +81,9 @@ function toEditableEvent(pin: EventPin): NonNullable<EditEventValue> {
 export default function Home() {
   const insets = useSafeAreaInsets();
 
-
   const [open, setOpen] = useState(false);
   const [showList, setShowList] = useState(false);
+
   const [events, setEvents] = useState<EventPin[]>([]);
   const [myLoc, setMyLoc] = useState<{ lat: number; lng: number } | null>(null);
   const [myCity, setMyCity] = useState("");
@@ -84,23 +94,11 @@ export default function Home() {
 
   const [editOpen, setEditOpen] = useState(false);
   const [editEvent, setEditEvent] = useState<EditEventValue>(null);
+
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
 
-  const eventMatchesFilter = useCallback((ev: any, filterKey: string) => {
-    const key = filterKey.toLowerCase();
-    const kind = String(ev?.kind ?? "").toLowerCase(); // your API uses "kind"
-    const tags = Array.isArray(ev?.tags) ? ev.tags.map(String).join(" ").toLowerCase() : "";
-    const title = String(ev?.title ?? "").toLowerCase();
-    return kind.includes(key) || tags.includes(key) || title.includes(key);
-  }, []);
-
-  const filteredEvents = useMemo(() => {
-    if (!activeFilter) return events;
-    return events.filter((ev: any) => eventMatchesFilter(ev, activeFilter));
-  }, [events, activeFilter, eventMatchesFilter]);
-
-
   const fabSize = useMemo(() => (Platform.OS === "ios" ? 60 : 64), []);
+
   const API_BASE = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
   const EVENT_API_KEY = (Constants.expoConfig?.extra as any)?.eventApiKey as string | undefined;
 
@@ -141,7 +139,10 @@ export default function Home() {
       }
       setLocStatus("granted");
 
-      const cur = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const cur = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+
       const lat = cur.coords.latitude;
       const lng = cur.coords.longitude;
       setMyLoc({ lat, lng });
@@ -159,25 +160,58 @@ export default function Home() {
     loadEvents();
   }, [loadEvents, loadMyLocation]);
 
-  const mapKey = myLoc
-    ? `${myLoc.lat.toFixed(6)}:${myLoc.lng.toFixed(6)}:${activeFilter ?? "all"}`
-    : `init:${activeFilter ?? "all"}`;
+  // Keep only active events for map + list
+  const activeEvents = useMemo(() => {
+    return events.filter((e) => String(e.status ?? "active").toLowerCase() === "active");
+  }, [events]);
 
+  const [pinsVersion, setPinsVersion] = useState(0);
+
+  const mapKey = myLoc
+    ? `${myLoc.lat.toFixed(6)}:${myLoc.lng.toFixed(6)}:${activeFilter ?? "all"}:${pinsVersion}`
+    : `init:${activeFilter ?? "all"}:${pinsVersion}`;
+
+  // When a pin is clicked, ensure we open the "full" event from `events` (has freshest status/fields)
+  const onPinPress = useCallback(
+    (pin: EventPin) => {
+      const raw = (pin as any)?._id ?? (pin as any)?.id ?? (pin as any)?.eventId ?? "";
+      const id =
+        typeof raw === "string" ? raw.trim()
+          : raw && typeof raw === "object" && (raw.$oid || raw.oid) ? String(raw.$oid || raw.oid)
+            : "";
+      const full = events.find((e) => String(e._id) === id) || pin;
+
+      setSelectedPin(full as any);
+      setShowPersonSheet(true);
+    },
+    [events]
+  );
+
+  // Status changed callback from PersonBookingSheet (toggle)
+  const onStatusChanged = useCallback((id: string, nextStatus: string) => {
+    const idStr = String(id).trim();
+    const ns = String(nextStatus || "").trim() || "active";
+
+    setEvents((prev) =>
+      prev.map((e) => (String(e._id) === idStr ? ({ ...e, status: ns } as any) : e))
+    );
+
+    // keep open sheet in sync too
+    setSelectedPin((prev) =>
+      prev && String(prev._id) === idStr ? ({ ...prev, status: ns } as any) : prev
+    );
+
+    setPinsVersion((v) => v + 1);
+  }, []);
 
   return (
     <>
       <MapView
         key={mapKey}
-        events={filteredEvents}
+        events={activeEvents}
         initialCenter={myLoc}
         locationStatus={locStatus}
-        onPinPress={(pin) => {
-          const id = String((pin as any)?._id || (pin as any)?.id || "");
-          const full = events.find((e: any) => String(e?._id) === id) || pin;
-          setSelectedPin(full as any);
-          setShowPersonSheet(true);
-          console.log("Selected desc:", (full as any)?.description);
-        }}
+        onPinPress={onPinPress}
       />
 
       <MapSearchHeader
@@ -187,16 +221,16 @@ export default function Home() {
         onFilterChange={setActiveFilter}
       />
 
-
       <PersonBookingSheet
         visible={showPersonSheet}
         person={selectedPin}
         onClose={() => setShowPersonSheet(false)}
         onEditDetails={(ev) => {
-          setShowPersonSheet(false); // ✅ close pin sheet first
+          setShowPersonSheet(false);
           setEditEvent(toEditableEvent(ev));
           setEditOpen(true);
         }}
+        onStatusChanged={onStatusChanged}
       />
 
       <EditEventModal
@@ -209,12 +243,12 @@ export default function Home() {
         onUpdated={() => {
           setEditOpen(false);
           setEditEvent(null);
-          loadEvents(); // refresh pins
+          loadEvents();
         }}
         onDeleted={() => {
           setEditOpen(false);
           setEditEvent(null);
-          loadEvents(); // refresh pins
+          loadEvents();
         }}
       />
 
@@ -226,17 +260,25 @@ export default function Home() {
         <Text style={styles.fabText}>+</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.listPill} activeOpacity={0.92} onPress={() => setShowList(true)}>
+      <TouchableOpacity
+        style={styles.listPill}
+        activeOpacity={0.92}
+        onPress={() => setShowList(true)}
+      >
         <Ionicons name="list" size={18} color="#fff" />
         <Text style={styles.listPillText}>Nearby</Text>
       </TouchableOpacity>
 
-      <EventsListModal visible={showList} onClose={() => setShowList(false)} events={filteredEvents as any} myCity={myCity} />
+      <EventsListModal
+        visible={showList}
+        onClose={() => setShowList(false)}
+        events={activeEvents as any}
+        myCity={myCity}
+      />
 
       <ModalizeEventSheet
         visible={open}
         onClose={() => setOpen(false)}
-        presentationStyle="overFullScreen"
         onCreate={(e: any) => {
           const n = normalizeEvent(e) ?? (e as EventPin);
           setEvents((prev) => [n, ...prev]);

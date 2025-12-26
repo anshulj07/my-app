@@ -26,6 +26,7 @@ type Props = {
   onClose: () => void;
   person?: EventPin | null;
   onEditDetails?: (ev: EventPin) => void;
+  onStatusChanged?: (eventId: string, nextStatus: string) => void;
 };
 
 function formatDateLong(ev: any) {
@@ -70,11 +71,18 @@ function titleCase(s: string) {
   return (s || "").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-export default function PersonBookingSheet({ visible, onClose, person, onEditDetails }: Props) {
+export default function PersonBookingSheet({ visible, onClose, person, onEditDetails, onStatusChanged }: Props) {
   const router = useRouter();
   const { userId } = useAuth();
 
-  const eventId = String((person as any)?._id || (person as any)?.id || (person as any)?.eventId || "");
+  const eventId = String(
+    (person as any)?._id?.$oid ||
+    (person as any)?._id?.oid ||
+    (person as any)?._id ||
+    (person as any)?.id ||
+    (person as any)?.eventId ||
+    ""
+  );
 
   const API_BASE = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
   const EVENT_API_KEY = (Constants.expoConfig?.extra as any)?.eventApiKey as string | undefined;
@@ -208,12 +216,15 @@ export default function PersonBookingSheet({ visible, onClose, person, onEditDet
   const patchServiceEnabled = async (next: boolean) => {
     if (!API_BASE || !eventId || !creatorClerkId) return;
 
-    // optimistic UI (optional but feels instant)
     const prevEnabled = serviceEnabled;
     const prevStatus = statusLocal;
 
+    const optimisticStatus = next ? "active" : "paused";
+
+    // ✅ optimistic UI
     setServiceEnabled(next);
-    setStatusLocal(next ? "active" : "paused");
+    setStatusLocal(optimisticStatus);
+    onStatusChanged?.(eventId, optimisticStatus); // ✅ tell Home immediately
 
     try {
       setTogglingService(true);
@@ -225,7 +236,7 @@ export default function PersonBookingSheet({ visible, onClose, person, onEditDet
           ...(EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {}),
         },
         body: JSON.stringify({
-          _id: eventId,            // or eventId: eventId (depends on your backend)
+          _id: eventId,
           creatorClerkId,
           enabled: next,
         }),
@@ -234,19 +245,22 @@ export default function PersonBookingSheet({ visible, onClose, person, onEditDet
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.error || "Failed to toggle service");
 
-      // if backend returns updated status, trust it
-      const newStatus = String(json?.status || json?.event?.status || (next ? "active" : "paused"));
+      const newStatus = String(
+        json?.status || json?.event?.status || optimisticStatus
+      );
+
       setStatusLocal(newStatus);
       setServiceEnabled(newStatus.toLowerCase() !== "paused");
+      onStatusChanged?.(eventId, newStatus); // ✅ confirm final status
     } catch (e) {
-      // revert if failed
+      // ✅ revert UI + revert parent
       setServiceEnabled(prevEnabled);
       setStatusLocal(prevStatus);
+      onStatusChanged?.(eventId, prevStatus); // ✅ revert parent too
     } finally {
       setTogglingService(false);
     }
   };
-
   // ------- Animations -------
   const a = useRef(new Animated.Value(0)).current;
   const cardY = useRef(new Animated.Value(18)).current;

@@ -122,6 +122,7 @@ export default function PersonBookingSheet({ visible, onClose, person, onEditDet
 
     const tags = Array.isArray((person as any)?.tags) ? ((person as any).tags as string[]) : [];
 
+
     return {
       address,
       locationLine: [city, region, country].filter(Boolean).join(", "),
@@ -207,37 +208,40 @@ export default function PersonBookingSheet({ visible, onClose, person, onEditDet
   const patchServiceEnabled = async (next: boolean) => {
     if (!API_BASE || !eventId || !creatorClerkId) return;
 
-    // NOTE: this assumes your backend accepts status="paused".
-    // If your endpoint only allows "active/cancelled", change "paused" -> "cancelled" here (and in UI labels).
-    const nextStatus = next ? "active" : "paused";
+    // optimistic UI (optional but feels instant)
+    const prevEnabled = serviceEnabled;
+    const prevStatus = statusLocal;
+
+    setServiceEnabled(next);
+    setStatusLocal(next ? "active" : "paused");
 
     try {
       setTogglingService(true);
 
-      const res = await fetch(`${API_BASE}/api/events/update-event`, {
+      const res = await fetch(`${API_BASE}/api/events/toggle-service`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
           ...(EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {}),
         },
         body: JSON.stringify({
-          _id: eventId,
-          eventId,
+          _id: eventId,            // or eventId: eventId (depends on your backend)
           creatorClerkId,
-          updates: { status: nextStatus },
+          enabled: next,
         }),
       });
 
-      if (!res.ok) {
-        const text = await res.text().catch(() => "");
-        throw new Error(text || "Failed to update status");
-      }
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error || "Failed to toggle service");
 
-      setStatusLocal(nextStatus);
-      setServiceEnabled(next);
-    } catch {
-      // revert UI if patch fails
-      setServiceEnabled((prev) => prev);
+      // if backend returns updated status, trust it
+      const newStatus = String(json?.status || json?.event?.status || (next ? "active" : "paused"));
+      setStatusLocal(newStatus);
+      setServiceEnabled(newStatus.toLowerCase() !== "paused");
+    } catch (e) {
+      // revert if failed
+      setServiceEnabled(prevEnabled);
+      setStatusLocal(prevStatus);
     } finally {
       setTogglingService(false);
     }

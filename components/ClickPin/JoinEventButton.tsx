@@ -5,14 +5,25 @@ import { useRouter } from "expo-router";
 import Constants from "expo-constants";
 import Ionicons from "@expo/vector-icons/Ionicons";
 
+type EventKind = "free" | "paid" | "service";
+
 type Props = {
-  eventId: string;                 // required
-  label?: string;                  // default: "Join event"
-  onJoined?: (payload: any) => void; // optional callback after success
-  disabled?: boolean;              // optional external disable
+  eventId: string;                   // required
+  kind: EventKind;                   // required (so we know what flow to run)
+  priceCents?: number | null;        // optional (useful for payment UI)
+  label?: string;                    // default: "Join event"
+  onJoined?: (payload: any) => void; // callback after free join success
+  disabled?: boolean;                // external disable
 };
 
-export default function JoinEventButton({ eventId, label = "Join event", onJoined, disabled }: Props) {
+export default function JoinEventButton({
+  eventId,
+  kind,
+  priceCents = null,
+  label = "Join event",
+  onJoined,
+  disabled,
+}: Props) {
   const router = useRouter();
   const { userId } = useAuth();
 
@@ -28,73 +39,112 @@ export default function JoinEventButton({ eventId, label = "Join event", onJoine
   const [loading, setLoading] = useState(false);
   const [joined, setJoined] = useState(false);
 
-  // Optional: check if already joined (prevents duplicate joins + nicer UX)
+  // check joined ONLY matters for free events (for paid/service you might have a different "purchased" check)
   useEffect(() => {
     let cancelled = false;
+
     (async () => {
       try {
+        if (kind !== "free") return;
         if (!API_BASE || !userId || !eventId) return;
 
         const url =
           `${API_BASE}/api/events/is-joined?eventId=${encodeURIComponent(eventId)}` +
           `&clerkUserId=${encodeURIComponent(userId)}`;
 
-        const res = await fetch(url, { headers: EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : undefined });
+        const res = await fetch(url, {
+          headers: EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : undefined,
+        });
         const json = await res.json().catch(() => null);
 
         if (!cancelled && res.ok) setJoined(!!json?.joined);
       } catch {
-        // ignore (don’t block UI)
+        // ignore
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [API_BASE, EVENT_API_KEY, userId, eventId]);
+  }, [API_BASE, EVENT_API_KEY, userId, eventId, kind]);
 
-  const join = async () => {
-    if (disabled || loading) return;
+  const startPaymentFlow = async () => {
+    // ✅ Placeholder payment flow
+    // Replace this with your Stripe/PayU/etc checkout screen or a WebView URL.
+    // Example:
+    // router.push({ pathname: "/checkout", params: { eventId, kind, priceCents: String(priceCents ?? 0) } } as any);
 
-    if (!userId) {
-      Alert.alert("Sign in required", "Please sign in to join this event");
-      router.push("/sign-in" as any);
-      return;
-    }
+    const dollars = priceCents != null ? (priceCents / 100).toFixed(2) : "0.00";
+    Alert.alert(
+      "Payment required",
+      `${kind === "service" ? "Service" : "Paid"} event • $${dollars}\n\n(Placeholder) Redirect to payment gateway here.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Continue",
+          onPress: () => {
+            // placeholder navigation
+            router.push(
+              ({
+                pathname: "/payment/checkout",
+                params: { eventId, kind, amount: String(priceCents ?? 0) },
+              } as any)
+            );
+          },
+        },
+      ]
+    );
+  };
 
+  const joinFreeEvent = async () => {
     if (!API_BASE) {
       Alert.alert("Config error", "API base URL is missing (apiBaseUrl)");
       return;
     }
-
     if (!eventId) {
       Alert.alert("Missing event", "Event ID not found");
+      return;
+    }
+
+    // Backend should push userId into attendees[] (and prevent duplicates)
+    const res = await fetch(`${API_BASE}/api/events/join-event`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        eventId,
+        clerkUserId: userId,
+      }),
+    });
+
+    const json = await res.json().catch(() => null);
+
+    if (!res.ok) {
+      Alert.alert("Couldn’t join", json?.message || json?.error || "Please try again");
+      return;
+    }
+
+    setJoined(true);
+    onJoined?.(json);
+    Alert.alert("Joined!", "You’re registered for this event");
+  };
+
+  const onPress = async () => {
+    if (disabled || loading || joined) return;
+
+    if (!userId) {
+      Alert.alert("Sign in required", "Please sign in to continue");
+      router.push("/sign-in" as any);
       return;
     }
 
     try {
       setLoading(true);
 
-      // Backend should upsert / prevent duplicates (unique index on eventId+clerkUserId)
-      const res = await fetch(`${API_BASE}/api/events/join`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          eventId,
-          clerkUserId: userId,
-        }),
-      });
-
-      const json = await res.json().catch(() => null);
-
-      if (!res.ok) {
-        Alert.alert("Couldn’t join", json?.message || "Please try again");
-        return;
+      if (kind === "free") {
+        await joinFreeEvent();
+      } else {
+        await startPaymentFlow();
       }
-
-      setJoined(true);
-      onJoined?.(json);
-      Alert.alert("Joined!", "You’re registered for this event");
     } catch {
       Alert.alert("Network error", "Please try again");
     } finally {
@@ -102,25 +152,31 @@ export default function JoinEventButton({ eventId, label = "Join event", onJoine
     }
   };
 
-  const text = joined ? "Joined" : label;
+  const buttonText =
+    joined && kind === "free" ? "Joined" : kind === "service" || kind === "paid" ? "Continue to payment" : label;
+
+  const iconName =
+    loading ? null : joined && kind === "free" ? "checkmark-circle-outline" : kind === "free" ? "people-outline" : "card-outline";
 
   return (
     <Pressable
-      onPress={join}
-      disabled={disabled || loading || joined}
+      onPress={onPress}
+      disabled={disabled || loading || (joined && kind === "free")}
       style={({ pressed }) => [
         styles.cta,
-        (disabled || loading || joined) && styles.ctaDisabled,
-        pressed && !(disabled || loading || joined) && styles.ctaPressed,
+        (disabled || loading || (joined && kind === "free")) && styles.ctaDisabled,
+        pressed && !(disabled || loading || (joined && kind === "free")) && styles.ctaPressed,
       ]}
     >
       <View style={styles.ctaGlow} />
+
       {loading ? (
-        <ActivityIndicator />
+        <ActivityIndicator color="#fff" />
       ) : (
-        <Ionicons name={joined ? "checkmark-circle-outline" : "people-outline"} size={18} color="#fff" />
+        <Ionicons name={iconName as any} size={18} color="#fff" />
       )}
-      <Text style={styles.ctaText}>{text}</Text>
+
+      <Text style={styles.ctaText}>{buttonText}</Text>
     </Pressable>
   );
 }

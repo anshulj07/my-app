@@ -530,7 +530,12 @@ export default function PersonBookingSheet({ visible, onClose, person, onEditDet
                   <Text style={styles.ctaText}>{actionLabel}</Text>
                 </Pressable>
               ) : kind === "free" ? (
-                <JoinEventButton eventId={String((person as any)?._id || (person as any)?.id || "")} onJoined={() => close()} />
+                <JoinEventButton
+                  eventId={String((person as any)?._id || (person as any)?.id || "")}
+                  kind={((person as any)?.kind || "free") as any}
+                  priceCents={(person as any)?.priceCents ?? null}
+                  onJoined={() => close()}
+                />
               ) : (
                 <Pressable
                   onPress={ctaDisabled ? undefined : onPrimary}

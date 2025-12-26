@@ -79,7 +79,7 @@ export default function SignUpScreen() {
 
       if (attempt.status === "complete") {
         await setActive({ session: attempt.createdSessionId });
-        router.replace("/");
+        router.replace("/(onboarding)/name");
         return;
       }
 

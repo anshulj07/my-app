@@ -16,12 +16,11 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import { Modalize } from "react-native-modalize";
 import { WebView } from "react-native-webview";
 
-import type { Suggestion, LocationPayload, EventKind } from "../AddEventModal/types";
+import type { Suggestion, LocationPayload, ListingKind } from "../AddEventModal/types";
 import { formatTime12h, parsePriceToCents } from "../AddEventModal/utils/time";
 import { reverseGeocode } from "../AddEventModal/google/geocode";
 import { buildLocationFromAddressComponents } from "../AddEventModal/location/buildLocation";
 import { textToEmoji } from "../AddEventModal/utils/emoji";
-
 
 function makeCityKey(city: string) {
     return city
@@ -65,11 +64,11 @@ export default function EditEventModalView(props: {
     title: string;
     setTitle: (v: string) => void;
 
-    description: string; // ✅ NEW
+    description: string;
     setDescription: (v: string) => void;
 
-    kind: EventKind;
-    setKind: (v: EventKind) => void;
+    kind: ListingKind;
+    setKind: (v: ListingKind) => void;
 
     priceText: string;
     setPriceText: (v: string) => void;
@@ -115,10 +114,12 @@ export default function EditEventModalView(props: {
     onSave: () => void;
     onDelete: () => void;
 }) {
+    const priceRequired = props.kind === "service" || props.kind === ("event_paid" as ListingKind);
+
     const priceCents = useMemo(() => {
-        if (props.kind !== "service") return null;
+        if (!priceRequired) return null;
         return parsePriceToCents(props.priceText);
-    }, [props.kind, props.priceText]);
+    }, [priceRequired, props.priceText]);
 
     const dateLabel = useMemo(() => {
         if (!props.dateISO) return "No date";
@@ -136,10 +137,16 @@ export default function EditEventModalView(props: {
         return formatTime12h(hh, mm);
     }, [props.time24]);
 
-    // ✅ Apple-style pickers
     const [dateOpen, setDateOpen] = useState(false);
     const [timeOpen, setTimeOpen] = useState(false);
     const emoji = useMemo(() => textToEmoji(props.title || ""), [props.title]);
+
+    const typeSubtitle =
+        props.kind === "event_free"
+            ? "Free • joinable"
+            : props.kind === ("event_paid" as ListingKind)
+                ? "Paid • ticketed"
+                : "Service • bookable";
 
     return (
         <Modalize
@@ -151,6 +158,12 @@ export default function EditEventModalView(props: {
             overlayStyle={styles.overlay}
             keyboardAvoidingBehavior={Platform.select({ ios: "padding", android: "height" })}
             scrollViewProps={{ keyboardShouldPersistTaps: "handled", showsVerticalScrollIndicator: false }}
+            withReactModal
+            reactModalProps={{
+                presentationStyle: "overFullScreen", // iOS: ensures it overlays everything
+                transparent: true,
+                statusBarTranslucent: true,          // Android: prevents status bar layering weirdness
+            }}
         >
             <Header
                 title={props.title}
@@ -176,7 +189,7 @@ export default function EditEventModalView(props: {
                     </InputShell>
                 </Card>
 
-                {/* ✅ Description (wide) */}
+                {/* Description */}
                 <Card>
                     <CardTitle title="Description" subtitle="Add details people should know." />
                     <View style={styles.descShell}>
@@ -194,23 +207,35 @@ export default function EditEventModalView(props: {
 
                 {/* Type + price */}
                 <Card>
-                    <CardTitle title="Type" subtitle="Free events are joinable. Service events are bookable." />
-                    <Segmented
-                        left={{
-                            label: "Free",
-                            hint: "Join",
-                            active: props.kind === "free",
-                            onPress: () => props.setKind("free"),
-                        }}
-                        right={{
-                            label: "Service",
-                            hint: "Book",
-                            active: props.kind === "service",
-                            onPress: () => props.setKind("service"),
-                        }}
+                    <CardTitle title="Type" subtitle={typeSubtitle} />
+
+                    <Segmented3
+                        items={[
+                            {
+                                key: "event_free",
+                                label: "Free",
+                                hint: "Join",
+                                active: props.kind === "event_free",
+                                onPress: () => props.setKind("event_free"),
+                            },
+                            {
+                                key: "event_paid",
+                                label: "Paid",
+                                hint: "Ticket",
+                                active: props.kind === ("event_paid" as ListingKind),
+                                onPress: () => props.setKind("event_paid" as ListingKind),
+                            },
+                            {
+                                key: "service",
+                                label: "Service",
+                                hint: "Book",
+                                active: props.kind === "service",
+                                onPress: () => props.setKind("service"),
+                            },
+                        ]}
                     />
 
-                    {props.kind === "service" && (
+                    {priceRequired && (
                         <View style={{ marginTop: 14 }}>
                             <FieldLabel>Price (USD)</FieldLabel>
                             <InputShell>
@@ -218,7 +243,7 @@ export default function EditEventModalView(props: {
                                 <TextInput
                                     value={props.priceText}
                                     onChangeText={props.setPriceText}
-                                    placeholder="25"
+                                    placeholder={props.kind === "service" ? "25" : "10"}
                                     placeholderTextColor="#94A3B8"
                                     keyboardType={Platform.select({ ios: "decimal-pad", android: "numeric" })}
                                     style={styles.priceInput}
@@ -239,8 +264,7 @@ export default function EditEventModalView(props: {
                     )}
                 </Card>
 
-                {/* ✅ Apple calendar-style date/time (no dropdowns) */}
-                {/* ✅ Apple-ish date/time */}
+                {/* When */}
                 <Card>
                     <View style={styles.whenHeaderRow}>
                         <View style={{ flex: 1 }}>
@@ -276,9 +300,7 @@ export default function EditEventModalView(props: {
                                 {props.dateISO ? dateLabel : "Select date"}
                             </Text>
 
-                            <Text style={styles.whenTileHint}>
-                                Tap to choose
-                            </Text>
+                            <Text style={styles.whenTileHint}>Tap to choose</Text>
                         </Pressable>
 
                         {/* Time */}
@@ -294,9 +316,7 @@ export default function EditEventModalView(props: {
                                 {props.time24 ? timeLabel : "Select time"}
                             </Text>
 
-                            <Text style={styles.whenTileHint}>
-                                Tap to choose
-                            </Text>
+                            <Text style={styles.whenTileHint}>Tap to choose</Text>
                         </Pressable>
                     </View>
                 </Card>
@@ -310,9 +330,9 @@ export default function EditEventModalView(props: {
                                 value={isoToSafeDate(props.dateISO)}
                                 mode="date"
                                 display={Platform.OS === "ios" ? "inline" : "default"}
-                                themeVariant="light"            // ✅ forces black text UI on iOS
-                                textColor="#0F172A"             // ✅ helps esp. spinner
-                                accentColor="#0A84FF"           // optional but nice
+                                themeVariant="light"
+                                textColor="#0F172A"
+                                accentColor="#0A84FF"
                                 onChange={(_, d) => {
                                     if (!d) return;
                                     const iso = d.toISOString().slice(0, 10);
@@ -354,7 +374,7 @@ export default function EditEventModalView(props: {
                     </Pressable>
                 </Modal>
 
-                {/* Where (same as before, unchanged UI block) */}
+                {/* Where */}
                 <Card>
                     <CardTitle title="Where" subtitle="Search a place or drop a pin." />
 
@@ -512,28 +532,28 @@ export default function EditEventModalView(props: {
                     {!!props.err && <Text style={styles.err}>{props.err}</Text>}
                 </Card>
 
-                {/* ✅ Beautified buttons */}
+                {/* Actions */}
                 <View style={styles.actionsRow}>
-                    <TouchableOpacity style={styles.ghostBtn} onPress={props.onClosePress} activeOpacity={0.9}>
-                        <Text style={styles.ghostText}>Close</Text>
+                    <TouchableOpacity style={styles.closePillBtn} onPress={props.onClosePress} activeOpacity={0.92}>
+                        <Text style={styles.closePillText}>✕ Close</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                        style={[styles.dangerOutline, (props.deleting || props.submitting || !props.isCreator) && { opacity: 0.5 }]}
+                        style={[styles.deletePillBtn, (props.deleting || props.submitting || !props.isCreator) && { opacity: 0.45 }]}
                         activeOpacity={0.92}
                         disabled={props.deleting || props.submitting || !props.isCreator}
                         onPress={props.onDelete}
                     >
-                        {props.deleting ? <ActivityIndicator /> : <Text style={styles.dangerOutlineText}>Delete</Text>}
+                        {props.deleting ? <ActivityIndicator /> : <Text style={styles.deletePillText}>🗑 Delete</Text>}
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                        style={[styles.primaryBtn, !props.canSave && { opacity: 0.45 }]}
+                        style={[styles.savePillBtn, !props.canSave && { opacity: 0.45 }]}
                         onPress={props.onSave}
                         activeOpacity={0.92}
                         disabled={!props.canSave}
                     >
-                        {props.submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Save</Text>}
+                        {props.submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.savePillText}>✓ Save</Text>}
                     </TouchableOpacity>
                 </View>
 
@@ -558,6 +578,7 @@ function Header({ title, subtitle, onClose }: { title: string; subtitle: string;
                         {title.trim() ? title.trim() : subtitle}
                     </Text>
                 </View>
+
                 <Pressable onPress={onClose} hitSlop={16} style={styles.closeBtn}>
                     <Text style={styles.closeText}>×</Text>
                 </Pressable>
@@ -603,17 +624,16 @@ function SegmentButton({
     );
 }
 
-function Segmented({
-    left,
-    right,
+function Segmented3({
+    items,
 }: {
-    left: { label: string; hint?: string; active: boolean; onPress: () => void };
-    right: { label: string; hint?: string; active: boolean; onPress: () => void };
+    items: Array<{ key: string; label: string; hint?: string; active: boolean; onPress: () => void }>;
 }) {
     return (
         <View style={styles.segmented}>
-            <SegmentButton {...left} />
-            <SegmentButton {...right} />
+            {items.map((it) => (
+                <SegmentButton key={it.key} label={it.label} hint={it.hint} active={it.active} onPress={it.onPress} />
+            ))}
         </View>
     );
 }
@@ -629,78 +649,108 @@ function Pill({ text, tone }: { text: string; tone: "success" | "info" }) {
     );
 }
 
-/* ---------------- styles (based on yours + updates) ---------------- */
+/* ---------------- styles ---------------- */
 
 const styles = StyleSheet.create({
-    overlay: { backgroundColor: "rgba(2,6,23,0.40)" },
+    // Backdrop (keep it on top of everything)
+    overlay: {
+        backgroundColor: "rgba(2,6,23,0.55)",
+        zIndex: 99999,
+        elevation: 99999,
+    },
 
-    modal: { borderTopLeftRadius: 30, borderTopRightRadius: 30, backgroundColor: "#0B1220", overflow: "hidden" },
+    // Sheet (keep it on top of everything)
+    modal: {
+        borderTopLeftRadius: 34,
+        borderTopRightRadius: 34,
+        backgroundColor: "#0B1220",
+        overflow: "hidden",
+        zIndex: 100000,
+        elevation: 100000,
+    },
+
     handle: {
-        width: 60,
+        width: 56,
         height: 5,
-        backgroundColor: "rgba(148,163,184,0.35)",
         borderRadius: 999,
         alignSelf: "center",
         marginTop: 10,
-        marginBottom: 4,
+        marginBottom: 6,
+        backgroundColor: "rgba(226,232,240,0.22)",
     },
 
+    // Header
     headerWrap: { backgroundColor: "#0B1220" },
     headerGlow: {
         position: "absolute",
-        top: -120,
-        left: -40,
-        right: -40,
-        height: 220,
-        borderRadius: 220,
+        top: -140,
+        left: -60,
+        right: -60,
+        height: 260,
+        borderRadius: 260,
         backgroundColor: "rgba(10,132,255,0.18)",
-        transform: [{ scaleX: 1.2 }],
+        transform: [{ scaleX: 1.15 }],
     },
-    header: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 14, flexDirection: "row", alignItems: "center" },
+    header: {
+        paddingHorizontal: 16,
+        paddingTop: 12,
+        paddingBottom: 14,
+        flexDirection: "row",
+        alignItems: "center",
+    },
     headerTitle: { color: "#E2E8F0", fontWeight: "900", fontSize: 18 },
-    headerSub: { color: "rgba(226,232,240,0.75)", marginTop: 2, fontSize: 12 },
+    headerSub: { color: "rgba(226,232,240,0.72)", marginTop: 3, fontSize: 12 },
     closeBtn: {
-        width: 38,
-        height: 38,
-        borderRadius: 14,
-        backgroundColor: "rgba(148,163,184,0.12)",
+        width: 40,
+        height: 40,
+        borderRadius: 16,
+        backgroundColor: "rgba(148,163,184,0.10)",
         borderWidth: 1,
         borderColor: "rgba(148,163,184,0.18)",
         alignItems: "center",
         justifyContent: "center",
+        shadowColor: "#000",
+        shadowOpacity: 0.18,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 10 },
+        elevation: 8,
     },
     closeText: { color: "#E2E8F0", fontSize: 22, lineHeight: 22, fontWeight: "900" },
 
+    // Body surface
     body: {
-        backgroundColor: "#F6F7FB",
-        borderTopLeftRadius: 30,
-        borderTopRightRadius: 30,
+        backgroundColor: "#F5F7FB",
+        borderTopLeftRadius: 34,
+        borderTopRightRadius: 34,
         paddingHorizontal: 14,
         paddingTop: 14,
         paddingBottom: 18,
     },
 
+    // Cards
     card: {
         backgroundColor: "#FFFFFF",
-        borderRadius: 20,
+        borderRadius: 22,
         padding: 14,
-        borderWidth: 1,
-        borderColor: "rgba(226,232,240,0.95)",
         marginBottom: 12,
+        borderWidth: 1,
+        borderColor: "rgba(226,232,240,0.92)",
         shadowColor: "#0B1220",
-        shadowOpacity: 0.08,
-        shadowRadius: 18,
-        shadowOffset: { width: 0, height: 14 },
+        shadowOpacity: 0.06,
+        shadowRadius: 22,
+        shadowOffset: { width: 0, height: 16 },
+        elevation: 4,
     },
     cardTitle: { fontWeight: "950" as any, color: "#0F172A", fontSize: 15 },
     cardSub: { marginTop: 6, color: "#64748B", fontSize: 12.5, fontWeight: "700" },
 
     smallLabel: { fontWeight: "900", color: "#0F172A", marginBottom: 8, fontSize: 12 },
 
+    // Inputs
     inputShell: {
         flexDirection: "row",
         alignItems: "center",
-        borderRadius: 16,
+        borderRadius: 18,
         borderWidth: 1,
         borderColor: "#E2E8F0",
         backgroundColor: "#F8FAFC",
@@ -711,171 +761,205 @@ const styles = StyleSheet.create({
     inlineEmoji: { fontSize: 18 },
     textInput: { flex: 1, color: "#0F172A", fontSize: 15.5, paddingVertical: 0, fontWeight: "700" },
 
-    // ✅ description wide
+    // Description
     descShell: {
-        borderRadius: 16,
+        borderRadius: 18,
         borderWidth: 1,
         borderColor: "#E2E8F0",
         backgroundColor: "#F8FAFC",
         paddingHorizontal: 12,
         paddingVertical: 10,
     },
-    descInput: { minHeight: 110, color: "#0F172A", fontSize: 15, fontWeight: "700" },
+    descInput: { minHeight: 116, color: "#0F172A", fontSize: 15, fontWeight: "700" },
 
     helper: { marginTop: 8, color: "#64748B", fontSize: 12, fontWeight: "800" },
 
+    // Segmented (3 buttons)
     segmented: {
         flexDirection: "row",
         gap: 10,
         padding: 6,
-        borderRadius: 18,
+        borderRadius: 20,
         backgroundColor: "#F1F5F9",
         borderWidth: 1,
         borderColor: "#E2E8F0",
     },
-    segmentBtn: { flex: 1, paddingVertical: 12, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+    segmentBtn: {
+        flex: 1,
+        paddingVertical: 12,
+        borderRadius: 16,
+        alignItems: "center",
+        justifyContent: "center",
+    },
     segmentBtnActive: {
         backgroundColor: "#FFFFFF",
         borderWidth: 1,
         borderColor: "rgba(15,23,42,0.10)",
         shadowColor: "#0B1220",
-        shadowOpacity: 0.08,
-        shadowRadius: 12,
-        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.07,
+        shadowRadius: 14,
+        shadowOffset: { width: 0, height: 10 },
+        elevation: 3,
     },
     segmentLabel: { color: "#0F172A", fontWeight: "950" as any, fontSize: 14 },
     segmentLabelActive: { color: "#0A84FF" },
     segmentHint: { marginTop: 2, color: "#64748B", fontWeight: "800", fontSize: 11 },
-    segmentHintActive: { color: "rgba(10,132,255,0.85)" },
+    segmentHintActive: { color: "rgba(10,132,255,0.88)" },
 
+    // Price
     pricePrefix: { color: "#0F172A", fontWeight: "950" as any, fontSize: 16 },
     priceInput: { flex: 1, color: "#0F172A", fontSize: 15.5, paddingVertical: 0, fontWeight: "800" },
     goodPill: {
         paddingHorizontal: 10,
         paddingVertical: 6,
         borderRadius: 999,
-        backgroundColor: "rgba(34,197,94,0.12)",
+        backgroundColor: "rgba(34,197,94,0.10)",
         borderWidth: 1,
-        borderColor: "rgba(34,197,94,0.25)",
+        borderColor: "rgba(34,197,94,0.22)",
     },
     goodPillText: { color: "#166534", fontWeight: "900", fontSize: 12 },
 
-    // ✅ when row
+    // When
     whenHeaderRow: {
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",
         marginBottom: 12,
     },
-
     clearPill: {
         paddingHorizontal: 12,
         paddingVertical: 8,
         borderRadius: 999,
-        backgroundColor: "rgba(148,163,184,0.14)",
+        backgroundColor: "rgba(148,163,184,0.12)",
         borderWidth: 1,
-        borderColor: "rgba(148,163,184,0.22)",
+        borderColor: "rgba(148,163,184,0.20)",
     },
     clearPillText: { color: "#0F172A", fontWeight: "950" as any, fontSize: 12 },
 
-    whenGrid: {
-        flexDirection: "row",
-        gap: 10,
-    },
-
+    whenGrid: { flexDirection: "row", gap: 10 },
     whenTile: {
         flex: 1,
-        borderRadius: 18,
+        borderRadius: 20,
         borderWidth: 1,
         borderColor: "#E2E8F0",
         backgroundColor: "#FFFFFF",
         padding: 14,
         shadowColor: "#0B1220",
-        shadowOpacity: 0.06,
-        shadowRadius: 12,
-        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.05,
+        shadowRadius: 14,
+        shadowOffset: { width: 0, height: 12 },
+        elevation: 3,
     },
-
-    whenTileTop: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 10,
-        marginBottom: 10,
-    },
-
+    whenTileTop: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 },
     whenBadge: {
-        width: 30,
-        height: 30,
-        borderRadius: 10,
+        width: 32,
+        height: 32,
+        borderRadius: 12,
         alignItems: "center",
         justifyContent: "center",
         borderWidth: 1,
     },
-    whenBadgeBlue: {
-        backgroundColor: "rgba(10,132,255,0.12)",
-        borderColor: "rgba(10,132,255,0.22)",
-    },
-    whenBadgePurple: {
-        backgroundColor: "rgba(139,92,246,0.12)",
-        borderColor: "rgba(139,92,246,0.22)",
-    },
+    whenBadgeBlue: { backgroundColor: "rgba(10,132,255,0.11)", borderColor: "rgba(10,132,255,0.20)" },
+    whenBadgePurple: { backgroundColor: "rgba(139,92,246,0.11)", borderColor: "rgba(139,92,246,0.20)" },
     whenBadgeText: { fontSize: 14 },
 
     whenTileLabel: { color: "#64748B", fontWeight: "900", fontSize: 12 },
-
-    whenTileValue: {
-        color: "#0F172A",
-        fontWeight: "950" as any,
-        fontSize: 16,
-        letterSpacing: -0.2,
-    },
+    whenTileValue: { color: "#0F172A", fontWeight: "950" as any, fontSize: 16, letterSpacing: -0.2 },
     whenTileValueMuted: { color: "#94A3B8" },
+    whenTileHint: { marginTop: 6, color: "#64748B", fontWeight: "800", fontSize: 12 },
 
-    whenTileHint: {
-        marginTop: 6,
-        color: "#64748B",
-        fontWeight: "800",
-        fontSize: 12,
+    // Picker modal (also keep above)
+    pickerOverlay: {
+        flex: 1,
+        backgroundColor: "rgba(2,6,23,0.55)",
+        padding: 16,
+        justifyContent: "flex-end",
+        zIndex: 100001,
+        elevation: 100001,
     },
-
-
-    // picker modal
-    pickerOverlay: { flex: 1, backgroundColor: "rgba(2,6,23,0.45)", padding: 16, justifyContent: "flex-end" },
     pickerCard: {
         backgroundColor: "#FFFFFF",
-        borderRadius: 18,
+        borderRadius: 20,
         borderWidth: 1,
         borderColor: "#E2E8F0",
         overflow: "hidden",
         paddingBottom: 10,
+        shadowColor: "#0B1220",
+        shadowOpacity: 0.10,
+        shadowRadius: 24,
+        shadowOffset: { width: 0, height: 16 },
+        elevation: 10,
     },
-    pickerTitle: { padding: 14, fontWeight: "950" as any, color: "#0F172A", borderBottomWidth: 1, borderBottomColor: "#E2E8F0" },
-    pickerDone: { marginTop: 8, marginHorizontal: 12, borderRadius: 14, paddingVertical: 12, backgroundColor: "#0A84FF", alignItems: "center" },
+    pickerTitle: {
+        padding: 14,
+        fontWeight: "950" as any,
+        color: "#0F172A",
+        borderBottomWidth: 1,
+        borderBottomColor: "#E2E8F0",
+    },
+    pickerDone: {
+        marginTop: 10,
+        marginHorizontal: 12,
+        borderRadius: 16,
+        paddingVertical: 12,
+        backgroundColor: "#0A84FF",
+        alignItems: "center",
+        shadowColor: "#0A84FF",
+        shadowOpacity: 0.22,
+        shadowRadius: 18,
+        shadowOffset: { width: 0, height: 12 },
+        elevation: 8,
+    },
     pickerDoneText: { color: "#fff", fontWeight: "950" as any },
 
+    // Location
     locationIcon: { fontSize: 16 },
     locationInput: { flex: 1, color: "#0F172A", fontSize: 15.5, paddingVertical: 0, fontWeight: "700" },
     iconBtn: {
         width: 30,
         height: 30,
         borderRadius: 12,
-        backgroundColor: "rgba(100,116,139,0.12)",
+        backgroundColor: "rgba(100,116,139,0.10)",
         alignItems: "center",
         justifyContent: "center",
     },
     iconBtnText: { color: "#334155", fontSize: 18, fontWeight: "900", lineHeight: 18 },
 
-    dropdown: { marginTop: 10, borderRadius: 16, borderWidth: 1, borderColor: "#E2E8F0", backgroundColor: "#FFFFFF", overflow: "hidden" },
+    // Dropdown
+    dropdown: {
+        marginTop: 10,
+        borderRadius: 18,
+        borderWidth: 1,
+        borderColor: "#E2E8F0",
+        backgroundColor: "#FFFFFF",
+        overflow: "hidden",
+    },
     dropdownLoading: { flexDirection: "row", alignItems: "center", gap: 10, padding: 12 },
     dropdownLoadingText: { color: "#64748B", fontWeight: "800" },
-    dropdownRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "#E2E8F0" },
+    dropdownRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        paddingHorizontal: 12,
+        paddingVertical: 12,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: "#E2E8F0",
+    },
     dropdownMain: { color: "#0F172A", fontWeight: "950" as any, fontSize: 14 },
     dropdownSecondary: { color: "#64748B", marginTop: 3, fontSize: 12, fontWeight: "700" },
     dropdownArrow: { color: "#94A3B8", fontSize: 18, fontWeight: "900", marginLeft: 10 },
 
-    pill: { marginTop: 10, alignSelf: "flex-start", paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, borderWidth: 1, maxWidth: "100%" },
-    pillSuccess: { backgroundColor: "rgba(34,197,94,0.12)", borderColor: "rgba(34,197,94,0.25)" },
-    pillInfo: { backgroundColor: "rgba(14,165,233,0.10)", borderColor: "rgba(14,165,233,0.22)" },
+    // Pills
+    pill: {
+        marginTop: 10,
+        alignSelf: "flex-start",
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 999,
+        borderWidth: 1,
+        maxWidth: "100%",
+    },
+    pillSuccess: { backgroundColor: "rgba(34,197,94,0.10)", borderColor: "rgba(34,197,94,0.22)" },
+    pillInfo: { backgroundColor: "rgba(14,165,233,0.08)", borderColor: "rgba(14,165,233,0.18)" },
     pillText: { fontWeight: "900", fontSize: 12 },
     pillTextSuccess: { color: "#166534" },
     pillTextInfo: { color: "#075985" },
@@ -883,51 +967,73 @@ const styles = StyleSheet.create({
     inlineLoading: { marginTop: 12, flexDirection: "row", alignItems: "center", gap: 10 },
     inlineLoadingText: { color: "#64748B", fontWeight: "900" },
 
-    mapWrap: { marginTop: 12, height: 210, borderRadius: 18, overflow: "hidden", borderWidth: 1, borderColor: "#E2E8F0", backgroundColor: "#0B1220" },
+    // Map
+    mapWrap: {
+        marginTop: 12,
+        height: 214,
+        borderRadius: 20,
+        overflow: "hidden",
+        borderWidth: 1,
+        borderColor: "#E2E8F0",
+        backgroundColor: "#0B1220",
+    },
     map: { flex: 1, backgroundColor: "#0B1220" },
     mapFallback: { flex: 1, padding: 16, justifyContent: "center" },
     mapFallbackTitle: { color: "#E2E8F0", fontWeight: "900", fontSize: 14 },
     mapFallbackBody: { color: "rgba(226,232,240,0.78)", marginTop: 8, lineHeight: 18 },
 
+    // Errors
     err: { marginTop: 12, color: "#DC2626", fontWeight: "900" },
 
-    // ✅ beautified action buttons
-    actionsRow: { flexDirection: "row", gap: 10, marginTop: 4, alignItems: "center" },
-    ghostBtn: {
+    // Actions (fancier pills)
+    actionsRow: { flexDirection: "row", gap: 10, marginTop: 6, alignItems: "center" },
+
+    closePillBtn: {
         flex: 1,
         borderRadius: 999,
         paddingVertical: 14,
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: "rgba(148,163,184,0.14)",
+        backgroundColor: "rgba(15,23,42,0.06)",
         borderWidth: 1,
-        borderColor: "rgba(148,163,184,0.22)",
+        borderColor: "rgba(15,23,42,0.10)",
+        shadowColor: "#0B1220",
+        shadowOpacity: 0.08,
+        shadowRadius: 16,
+        shadowOffset: { width: 0, height: 12 },
+        elevation: 3,
     },
-    ghostText: { color: "#0F172A", fontWeight: "950" as any },
+    closePillText: { color: "#0F172A", fontWeight: "950" as any },
 
-    dangerOutline: {
+    deletePillBtn: {
         borderRadius: 999,
         paddingVertical: 14,
         paddingHorizontal: 16,
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: "#fff",
-        borderWidth: 1.5,
-        borderColor: "rgba(239,68,68,0.55)",
+        backgroundColor: "rgba(239,68,68,0.10)",
+        borderWidth: 1,
+        borderColor: "rgba(239,68,68,0.28)",
+        shadowColor: "#EF4444",
+        shadowOpacity: 0.14,
+        shadowRadius: 18,
+        shadowOffset: { width: 0, height: 14 },
+        elevation: 4,
     },
-    dangerOutlineText: { color: "#EF4444", fontWeight: "950" as any },
+    deletePillText: { color: "#B91C1C", fontWeight: "950" as any },
 
-    primaryBtn: {
-        flex: 1.2,
+    savePillBtn: {
+        flex: 1.15,
         borderRadius: 999,
         paddingVertical: 14,
         alignItems: "center",
         justifyContent: "center",
         backgroundColor: "#0A84FF",
         shadowColor: "#0A84FF",
-        shadowOpacity: 0.22,
-        shadowRadius: 18,
-        shadowOffset: { width: 0, height: 14 },
+        shadowOpacity: 0.28,
+        shadowRadius: 22,
+        shadowOffset: { width: 0, height: 16 },
+        elevation: 6,
     },
-    primaryText: { color: "#FFFFFF", fontWeight: "950" as any },
+    savePillText: { color: "#FFFFFF", fontWeight: "950" as any },
 });

@@ -11,6 +11,7 @@ import {
   Animated,
   Easing,
   Platform,
+  Switch,
 } from "react-native";
 import Constants from "expo-constants";
 import { useAuth } from "@clerk/clerk-expo";
@@ -19,13 +20,39 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import type { EventPin } from "../Map/MapView";
 import JoinEventButton from "./JoinEventButton";
 
-
 type Props = {
   visible: boolean;
   onClose: () => void;
   person?: EventPin | null;
   onEditDetails?: (ev: EventPin) => void;
 };
+
+function formatDateLong(ev: any) {
+  // Prefer startsAt if present, else fallback to YYYY-MM-DD in ev.date
+  let d: Date | null = null;
+
+  if (ev?.startsAt) {
+    const t = new Date(ev.startsAt);
+    if (Number.isFinite(t.getTime())) d = t;
+  }
+
+  if (!d && typeof ev?.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(ev.date)) {
+    const [y, m, day] = ev.date.split("-").map(Number);
+    d = new Date(Date.UTC(y, m - 1, day));
+  }
+
+  if (!d) return "";
+
+  // Force a stable date-only output (no time)
+  return d.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "2-digit",
+    timeZone: "UTC",
+  });
+}
+// Example output: "25 December 25"
+
 
 function pickFirst(...vals: Array<any>) {
   for (const v of vals) if (typeof v === "string" && v.trim()) return v.trim();
@@ -45,8 +72,7 @@ function titleCase(s: string) {
 export default function PersonBookingSheet({ visible, onClose, person, onEditDetails }: Props) {
   const router = useRouter();
   const { userId } = useAuth();
-  const [editOpen, setEditOpen] = useState(false);
-  const [editEvent, setEditEvent] = useState<EventPin | null>(null);
+
   const eventId = String((person as any)?._id || (person as any)?.id || (person as any)?.eventId || "");
 
   const API_BASE = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
@@ -60,9 +86,29 @@ export default function PersonBookingSheet({ visible, onClose, person, onEditDet
 
   const kind: "free" | "service" = ((person as any)?.kind || "free") as any;
   const priceLabel = moneyFromCents((person as any)?.priceCents);
-  const status = String((person as any)?.status || "active");
 
   const isCreator = !!userId && !!creatorClerkId && String(userId) === String(creatorClerkId);
+
+  // ---- local status (so creator toggle can update immediately) ----
+  const [statusLocal, setStatusLocal] = useState<string>("active");
+  const status = statusLocal;
+
+  // service-only creator toggle (quick enable/disable service listing)
+  const [serviceEnabled, setServiceEnabled] = useState(true);
+  const [togglingService, setTogglingService] = useState(false);
+
+  // description
+  const [descExpanded, setDescExpanded] = useState(false);
+  const descriptionText = pickFirst((person as any)?.description, (person as any)?.desc, "");
+
+  // hydrate local status/toggle each open
+  useEffect(() => {
+    if (!visible || !person) return;
+    const s = String((person as any)?.status || "active");
+    setStatusLocal(s);
+    setServiceEnabled(s.toLowerCase() !== "paused"); // if you store "paused"
+    setDescExpanded(false);
+  }, [visible, eventId, person]);
 
   const details = useMemo(() => {
     if (!person) return null;
@@ -73,22 +119,16 @@ export default function PersonBookingSheet({ visible, onClose, person, onEditDet
     const region = pickFirst(loc.admin1Code, loc.admin1, (person as any)?.region, (person as any)?.state);
     const country = pickFirst(loc.countryCode, loc.country, (person as any)?.country);
 
-    const when =
-      pickFirst(
-        (person as any)?.when,
-        (person as any)?.date && (person as any)?.time ? `${(person as any).date} · ${(person as any).time}` : "",
-        (person as any)?.date
-      ) || "";
-
     const tags = Array.isArray((person as any)?.tags) ? ((person as any).tags as string[]) : [];
 
     return {
       address,
       locationLine: [city, region, country].filter(Boolean).join(", "),
-      when,
+      dateLabel: formatDateLong(person),
       tags,
     };
   }, [person]);
+
 
   // ---- fetch creator from assist_users.users ----
   const [creator, setCreator] = useState<any | null>(null);
@@ -135,15 +175,17 @@ export default function PersonBookingSheet({ visible, onClose, person, onEditDet
     ? "Edit details"
     : kind === "free"
       ? "Join event"
-      : priceLabel
-        ? `Book • ${priceLabel}`
-        : "Book service";
+      : status.toLowerCase() === "paused"
+        ? "Service paused"
+        : priceLabel
+          ? `Book • ${priceLabel}`
+          : "Book service";
 
   const onPrimary = () => {
     if (!person) return;
 
     if (isCreator) {
-      close(() => onEditDetails?.(person)); // ✅ open edit modal after sheet closes
+      close(() => onEditDetails?.(person));
       return;
     }
 
@@ -151,6 +193,7 @@ export default function PersonBookingSheet({ visible, onClose, person, onEditDet
       // join flow here
       return;
     }
+
     // booking flow here
   };
 
@@ -159,7 +202,47 @@ export default function PersonBookingSheet({ visible, onClose, person, onEditDet
     router.push({ pathname: "/newtab/profile", params: { clerkUserId: creatorClerkId } } as any);
   };
 
-  // ------- Animations (completely new) -------
+  // ---- creator toggle: patch status quickly (service only, creator only) ----
+  const patchServiceEnabled = async (next: boolean) => {
+    if (!API_BASE || !eventId || !creatorClerkId) return;
+
+    // NOTE: this assumes your backend accepts status="paused".
+    // If your endpoint only allows "active/cancelled", change "paused" -> "cancelled" here (and in UI labels).
+    const nextStatus = next ? "active" : "paused";
+
+    try {
+      setTogglingService(true);
+
+      const res = await fetch(`${API_BASE}/api/events/update-event`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {}),
+        },
+        body: JSON.stringify({
+          _id: eventId,
+          eventId,
+          creatorClerkId,
+          updates: { status: nextStatus },
+        }),
+      });
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new Error(text || "Failed to update status");
+      }
+
+      setStatusLocal(nextStatus);
+      setServiceEnabled(next);
+    } catch {
+      // revert UI if patch fails
+      setServiceEnabled((prev) => prev);
+    } finally {
+      setTogglingService(false);
+    }
+  };
+
+  // ------- Animations -------
   const a = useRef(new Animated.Value(0)).current;
   const cardY = useRef(new Animated.Value(18)).current;
 
@@ -201,11 +284,10 @@ export default function PersonBookingSheet({ visible, onClose, person, onEditDet
     ]).start(({ finished }) => {
       if (finished) {
         onClose();
-        after?.(); // ✅ ADD
+        after?.();
       }
     });
   };
-
 
   const statusTone =
     status.toLowerCase() === "active"
@@ -216,8 +298,18 @@ export default function PersonBookingSheet({ visible, onClose, person, onEditDet
 
   const kindTone = kind === "service" ? styles.toneService : styles.toneFree;
 
+  const ctaDisabled = !isCreator && kind === "service" && status.toLowerCase() === "paused";
+
   return (
-    <Modal transparent visible={visible} animationType="none" onRequestClose={() => close()}>
+    <Modal
+      transparent
+      visible={visible}
+      animationType="none"
+      onRequestClose={() => close()}
+      presentationStyle="overFullScreen"
+      statusBarTranslucent
+      hardwareAccelerated
+    >
       {/* Dim background */}
       <Pressable style={StyleSheet.absoluteFill} onPress={() => close()}>
         <Animated.View style={[styles.dim, { opacity: a }]} />
@@ -236,26 +328,24 @@ export default function PersonBookingSheet({ visible, onClose, person, onEditDet
           <>
             {/* HERO */}
             <View style={styles.hero}>
-              {/* neon gradient-ish blobs (no libs) */}
-              <View style={styles.blob1} />
-              <View style={styles.blob2} />
-
               <View style={styles.heroTop}>
                 <Pressable onPress={() => close()} hitSlop={12} style={styles.iconBtn}>
                   <Ionicons name="chevron-down" size={18} color="#E2E8F0" />
                 </Pressable>
 
-                <View style={{ flexDirection: "row", gap: 8 }}>
+                <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
                   {isCreator ? (
                     <View style={[styles.miniBadge, styles.miniBadgeYou]}>
                       <Ionicons name="shield-checkmark" size={14} color="#fff" />
                       <Text style={styles.miniBadgeText}>You</Text>
                     </View>
                   ) : null}
+
                   <View style={[styles.miniBadge, kindTone]}>
                     <Ionicons name={kind === "service" ? "sparkles" : "leaf"} size={14} color="#fff" />
                     <Text style={styles.miniBadgeText}>{kind === "service" ? "Service" : "Free"}</Text>
                   </View>
+
                   <View style={[styles.miniBadge, statusTone]}>
                     <Ionicons name={status.toLowerCase() === "active" ? "checkmark" : "time"} size={14} color="#fff" />
                     <Text style={styles.miniBadgeText}>{titleCase(status)}</Text>
@@ -269,7 +359,7 @@ export default function PersonBookingSheet({ visible, onClose, person, onEditDet
                 </View>
 
                 <Text style={styles.heroTitle} numberOfLines={2}>
-                  {person.title}
+                  {(person as any)?.title || "Untitled"}
                 </Text>
 
                 <Text style={styles.heroSub} numberOfLines={2}>
@@ -278,8 +368,8 @@ export default function PersonBookingSheet({ visible, onClose, person, onEditDet
 
                 <View style={styles.heroChips}>
                   <View style={styles.bigChip}>
-                    <Ionicons name="time-outline" size={16} color="rgba(226,232,240,0.92)" />
-                    <Text style={styles.bigChipText}>{details?.when || "Time not set"}</Text>
+                    <Ionicons name="calendar-outline" size={16} color="rgba(226,232,240,0.92)" />
+                    <Text style={styles.bigChipText}>{details?.dateLabel || "Date not set"}</Text>
                   </View>
 
                   {kind === "service" && priceLabel ? (
@@ -293,9 +383,16 @@ export default function PersonBookingSheet({ visible, onClose, person, onEditDet
             </View>
 
             {/* BODY */}
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.body}>
-              {/* Creator horizontal card (new look) */}
-              <Pressable onPress={goToCreatorProfile} style={({ pressed }) => [styles.creatorRow, pressed && styles.creatorRowPressed]}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.body}
+              keyboardShouldPersistTaps="handled"
+            >
+              {/* Creator */}
+              <Pressable
+                onPress={goToCreatorProfile}
+                style={({ pressed }) => [styles.creatorRow, pressed && styles.creatorRowPressed]}
+              >
                 <View style={styles.creatorAvatarWrap}>
                   {creatorPhoto ? (
                     <Image source={{ uri: creatorPhoto }} style={styles.creatorAvatar} />
@@ -311,7 +408,11 @@ export default function PersonBookingSheet({ visible, onClose, person, onEditDet
                     <Text style={styles.creatorRowName} numberOfLines={1}>
                       {creatorName}
                     </Text>
-                    {loadingCreator ? <ActivityIndicator size="small" /> : <Ionicons name="open-outline" size={16} color="rgba(148,163,184,0.8)" />}
+                    {loadingCreator ? (
+                      <ActivityIndicator size="small" />
+                    ) : (
+                      <Ionicons name="open-outline" size={16} color="rgba(148,163,184,0.8)" />
+                    )}
                   </View>
                   <Text style={styles.creatorRowAbout} numberOfLines={2}>
                     {creatorAbout || "View creator profile"}
@@ -319,17 +420,64 @@ export default function PersonBookingSheet({ visible, onClose, person, onEditDet
                 </View>
               </Pressable>
 
-              {/* Info grid (new) */}
-              <View style={styles.grid}>
-                <View style={styles.gridCard}>
-                  <Text style={styles.gridLabel}>Type</Text>
-                  <Text style={styles.gridValue}>{kind === "service" ? "Service" : "Free event"}</Text>
+              {/* ✅ Creator-only toggle (service only) */}
+              {isCreator && kind === "service" ? (
+                <View style={styles.sectionCard}>
+                  <View style={styles.sectionHeader}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
+                      <Ionicons name="radio-outline" size={16} color="rgba(226,232,240,0.92)" />
+                      <Text style={styles.sectionTitle}>Service availability</Text>
+                    </View>
+
+                    {togglingService ? (
+                      <ActivityIndicator size="small" />
+                    ) : (
+                      <Switch
+                        value={serviceEnabled}
+                        onValueChange={(v) => patchServiceEnabled(v)}
+                        trackColor={{ false: "rgba(148,163,184,0.28)", true: "rgba(34,197,94,0.55)" }}
+                        thumbColor={serviceEnabled ? "#22C55E" : "#94A3B8"}
+                      />
+                    )}
+                  </View>
+
+                  <Text style={styles.sectionHint}>
+                    Turn off to pause bookings for this service.
+                  </Text>
+                </View>
+              ) : null}
+
+              {/* ✅ Description */}
+              <View style={styles.sectionCard}>
+                <View style={styles.sectionHeader}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
+                    <Ionicons name="document-text-outline" size={16} color="rgba(226,232,240,0.92)" />
+                    <Text style={styles.sectionTitle}>Description</Text>
+                  </View>
+
+                  {!!descriptionText ? (
+                    <Pressable onPress={() => setDescExpanded((v) => !v)} hitSlop={10}>
+                      <Text style={styles.linkText}>{descExpanded ? "Less" : "More"}</Text>
+                    </Pressable>
+                  ) : null}
                 </View>
 
-                <View style={styles.gridCard}>
+                <Text style={styles.descText} numberOfLines={descExpanded ? 0 : 3}>
+                  {descriptionText || "No description provided."}
+                </Text>
+              </View>
+
+              {/* Info grid */}
+              <View style={styles.grid}>
+                {/* <View style={styles.gridCard}>
+                  <Text style={styles.gridLabel}>Type</Text>
+                  <Text style={styles.gridValue}>{kind === "service" ? "Service" : "Free event"}</Text>
+                </View> */}
+
+                {/* <View style={styles.gridCard}>
                   <Text style={styles.gridLabel}>Status</Text>
                   <Text style={styles.gridValue}>{titleCase(status)}</Text>
-                </View>
+                </View> */}
 
                 <View style={[styles.gridCard, { width: "100%" }]}>
                   <Text style={styles.gridLabel}>Address</Text>
@@ -346,10 +494,10 @@ export default function PersonBookingSheet({ visible, onClose, person, onEditDet
                 ) : null}
               </View>
 
-              <View style={{ height: 120 }} />
+              <View style={{ height: 140 }} />
             </ScrollView>
 
-            {/* STICKY CTA (new) */}
+            {/* STICKY CTA */}
             <View style={styles.ctaBar}>
               {isCreator ? (
                 <Pressable onPress={onPrimary} style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}>
@@ -358,14 +506,18 @@ export default function PersonBookingSheet({ visible, onClose, person, onEditDet
                   <Text style={styles.ctaText}>{actionLabel}</Text>
                 </Pressable>
               ) : kind === "free" ? (
-                <JoinEventButton
-                  eventId={String((person as any)?._id || (person as any)?.id || "")}
-                  onJoined={() => close()}
-                />
+                <JoinEventButton eventId={String((person as any)?._id || (person as any)?.id || "")} onJoined={() => close()} />
               ) : (
-                <Pressable onPress={onPrimary} style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}>
+                <Pressable
+                  onPress={ctaDisabled ? undefined : onPrimary}
+                  style={({ pressed }) => [
+                    styles.cta,
+                    pressed && !ctaDisabled && styles.ctaPressed,
+                    ctaDisabled && styles.ctaDisabled,
+                  ]}
+                >
                   <View style={styles.ctaGlow} />
-                  <Ionicons name="card-outline" size={18} color="#fff" />
+                  <Ionicons name={ctaDisabled ? "pause-circle-outline" : "card-outline"} size={18} color="#fff" />
                   <Text style={styles.ctaText}>{actionLabel}</Text>
                 </Pressable>
               )}
@@ -382,10 +534,7 @@ export default function PersonBookingSheet({ visible, onClose, person, onEditDet
 }
 
 const styles = StyleSheet.create({
-  dim: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.72)",
-  },
+  dim: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.72)" },
 
   shell: {
     position: "absolute",
@@ -414,7 +563,6 @@ const styles = StyleSheet.create({
   },
   closePillText: { color: "rgba(226,232,240,0.9)", fontWeight: "900" },
 
-  // HERO
   hero: {
     paddingTop: 14,
     paddingHorizontal: 14,
@@ -423,30 +571,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "rgba(148,163,184,0.10)",
   },
-  blob1: {
-    position: "absolute",
-    width: 360,
-    height: 360,
-    borderRadius: 360,
-    left: -200,
-    top: -220,
-    backgroundColor: "rgba(34,211,238,0.18)",
-  },
-  blob2: {
-    position: "absolute",
-    width: 340,
-    height: 340,
-    borderRadius: 340,
-    right: -190,
-    top: -250,
-    backgroundColor: "rgba(168,85,247,0.18)",
-  },
 
-  heroTop: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
+  heroTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   iconBtn: {
     width: 38,
     height: 38,
@@ -468,6 +594,20 @@ const styles = StyleSheet.create({
   },
   miniBadgeText: { color: "#fff", fontWeight: "900", fontSize: 12 },
   miniBadgeYou: { backgroundColor: "rgba(236,72,153,0.75)" },
+
+  editPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.14)",
+  },
+  editPillPressed: { opacity: 0.9, transform: [{ scale: 0.99 }] },
+  editPillText: { color: "rgba(226,232,240,0.95)", fontWeight: "900", fontSize: 12 },
 
   toneFree: { backgroundColor: "rgba(34,197,94,0.78)" },
   toneService: { backgroundColor: "rgba(139,92,246,0.78)" },
@@ -509,7 +649,6 @@ const styles = StyleSheet.create({
   },
   bigChipText: { color: "rgba(226,232,240,0.92)", fontWeight: "900", fontSize: 13 },
 
-  // BODY
   body: { padding: 14 },
 
   creatorRow: {
@@ -538,6 +677,22 @@ const styles = StyleSheet.create({
   creatorRowName: { color: "#E2E8F0", fontWeight: "900", fontSize: 14 },
   creatorRowAbout: { marginTop: 4, color: "rgba(226,232,240,0.68)", fontWeight: "700", fontSize: 12, lineHeight: 16 },
 
+  sectionCard: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.035)",
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.10)",
+  },
+  sectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  sectionTitle: { color: "#E2E8F0", fontWeight: "950" as any, fontSize: 13 },
+  sectionHint: { marginTop: 8, color: "rgba(226,232,240,0.64)", fontWeight: "700", fontSize: 12, lineHeight: 16 },
+
+  linkText: { color: "rgba(10,132,255,0.95)", fontWeight: "900", fontSize: 12 },
+
+  descText: { marginTop: 10, color: "rgba(226,232,240,0.82)", fontWeight: "700", fontSize: 13, lineHeight: 18 },
+
   grid: { marginTop: 12, flexDirection: "row", flexWrap: "wrap", gap: 10 },
   gridCard: {
     width: "48%",
@@ -550,14 +705,7 @@ const styles = StyleSheet.create({
   gridLabel: { color: "rgba(226,232,240,0.58)", fontWeight: "900", fontSize: 12 },
   gridValue: { marginTop: 6, color: "#E2E8F0", fontWeight: "900", fontSize: 13, lineHeight: 18 },
 
-  // CTA
-  ctaBar: {
-    position: "absolute",
-    left: 14,
-    right: 14,
-    bottom: 14,
-    gap: 10,
-  },
+  ctaBar: { position: "absolute", left: 14, right: 14, bottom: 14, gap: 10 },
   cta: {
     height: 56,
     borderRadius: 18,
@@ -570,6 +718,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
   },
+  ctaDisabled: { opacity: 0.55 },
   ctaPressed: { transform: [{ scale: 0.992 }], opacity: 0.96 },
   ctaGlow: {
     position: "absolute",

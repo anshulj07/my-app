@@ -6,7 +6,7 @@ import Constants from "expo-constants";
 import { WebView } from "react-native-webview";
 import { useAuth } from "@clerk/clerk-expo";
 
-import type { Suggestion, LocationPayload, EventKind } from "../AddEventModal/types";
+import type { Suggestion, LocationPayload, ListingKind } from "../AddEventModal/types";
 import { textToEmoji } from "../AddEventModal/utils/emoji";
 import { parsePriceToCents } from "../AddEventModal/utils/time";
 import { fetchAutocomplete, fetchPlaceDetails } from "../AddEventModal/google/places";
@@ -23,7 +23,7 @@ export type EditableEvent = {
   title?: string;
   description?: string; // ✅ NEW
   emoji?: string;
-  kind?: EventKind;
+  kind?: ListingKind;
   priceCents?: number | string | null;
   date?: string;
   time?: string;
@@ -82,13 +82,15 @@ export default function EditEventModal({
   const [description, setDescription] = useState(""); // ✅ NEW
   const emoji = useMemo(() => (title.trim() ? textToEmoji(title) : "📍"), [title]);
 
-  const [kind, setKind] = useState<EventKind>("free");
+  const [kind, setKind] = useState<ListingKind>("event_free");
   const [priceText, setPriceText] = useState("");
 
   const priceCents = useMemo(() => {
-    if (kind !== "service") return null;
+    const needsPrice = kind === "service" || kind === ("event_paid" as ListingKind);
+    if (!needsPrice) return null;
     return parsePriceToCents(priceText);
   }, [kind, priceText]);
+
 
   const [dateISO, setDateISO] = useState("");
   const [time24, setTime24] = useState("");
@@ -121,7 +123,7 @@ export default function EditEventModal({
 
     const eTitle = (event.title ?? "").toString();
     const eDesc = (event.description ?? "").toString(); // ✅ NEW
-    const eKind = (event.kind ?? "free") as EventKind;
+    const eKind = (event.kind ?? "free") as ListingKind;
 
     const ePrice =
       event.priceCents == null
@@ -228,7 +230,7 @@ export default function EditEventModal({
     !submitting &&
     !deleting &&
     !locLoading &&
-    (kind === "free" || priceCents !== null);
+    (kind === "event_free" || priceCents !== null);
 
   async function updateEventInDb(args: {
     apiBase: string;
@@ -241,7 +243,7 @@ export default function EditEventModal({
     time?: string;
     timezone?: string;
     location: LocationPayload;
-    kind: EventKind;
+    kind: ListingKind;
     priceCents: number | null;
     creatorClerkId: string;
   }) {
@@ -297,7 +299,7 @@ export default function EditEventModal({
     let json: any = null;
     try {
       json = JSON.parse(text);
-    } catch {}
+    } catch { }
     if (!res.ok) throw new Error(json?.error || json?.message || text || "Failed to update event");
     return json;
   }
@@ -316,7 +318,7 @@ export default function EditEventModal({
     let json: any = null;
     try {
       json = JSON.parse(text);
-    } catch {}
+    } catch { }
     if (!res.ok) throw new Error(json?.error || json?.message || text || "Failed to delete event");
     return json;
   }
@@ -371,7 +373,9 @@ export default function EditEventModal({
     if (!API_BASE) return setErr("Missing API base URL (extra.apiBaseUrl).");
     if (!userId) return setErr("You must be signed in to edit an event.");
     if (!isCreator) return setErr("Only the creator can edit this event.");
-    if (kind === "service" && priceCents === null) return setErr("Enter a valid price for a service event.");
+    if ((kind === "service" || kind === ("event_paid" as ListingKind)) && priceCents === null)
+      return setErr("Enter a valid price.");
+
 
     setSubmitting(true);
     setErr(null);
@@ -454,7 +458,14 @@ export default function EditEventModal({
       setDescription={(t) => { setDescription(t); setErr(null); }}
 
       kind={kind}
-      setKind={(k) => { setKind(k); setErr(null); if (k !== "service") setPriceText(""); }}
+      setKind={(k) => {
+        setKind(k);
+        setErr(null);
+
+        const needsPrice = k === "service" || k === ("event_paid" as ListingKind);
+        if (!needsPrice) setPriceText(""); // only clear for free
+      }}
+
 
       priceText={priceText}
       setPriceText={(t) => { setPriceText(t); setErr(null); }}

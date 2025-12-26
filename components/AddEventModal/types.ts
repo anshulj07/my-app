@@ -1,5 +1,4 @@
 export type CreateEvent = { title: string; lat: number; lng: number; emoji: string };
-export type EventKind = ListingKind;
 
 export type Suggestion = { id: string; main: string; secondary?: string };
 export type Option = { label: string; value: string };

@@ -31,6 +31,7 @@ function normalizeEvent(e: any): EventPin | null {
   return {
     ...e,
     title: e?.title ?? "",
+    description: e?.description ?? "",
     lat,
     lng,
     emoji: e?.emoji ?? "📍",
@@ -85,7 +86,7 @@ export default function Home() {
   const [editEvent, setEditEvent] = useState<EditEventValue>(null);
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
 
-    const eventMatchesFilter = useCallback((ev: any, filterKey: string) => {
+  const eventMatchesFilter = useCallback((ev: any, filterKey: string) => {
     const key = filterKey.toLowerCase();
     const kind = String(ev?.kind ?? "").toLowerCase(); // your API uses "kind"
     const tags = Array.isArray(ev?.tags) ? ev.tags.map(String).join(" ").toLowerCase() : "";
@@ -158,7 +159,7 @@ export default function Home() {
     loadEvents();
   }, [loadEvents, loadMyLocation]);
 
-    const mapKey = myLoc
+  const mapKey = myLoc
     ? `${myLoc.lat.toFixed(6)}:${myLoc.lng.toFixed(6)}:${activeFilter ?? "all"}`
     : `init:${activeFilter ?? "all"}`;
 
@@ -171,17 +172,20 @@ export default function Home() {
         initialCenter={myLoc}
         locationStatus={locStatus}
         onPinPress={(pin) => {
-          setSelectedPin(pin as any);
+          const id = String((pin as any)?._id || (pin as any)?.id || "");
+          const full = events.find((e: any) => String(e?._id) === id) || pin;
+          setSelectedPin(full as any);
           setShowPersonSheet(true);
+          console.log("Selected desc:", (full as any)?.description);
         }}
       />
 
       <MapSearchHeader
-  top={insets.top + 10}
-  onPick={(lat, lng) => setMyLoc({ lat, lng })}
-  activeFilter={activeFilter}
-  onFilterChange={setActiveFilter}
-/>
+        top={insets.top + 10}
+        onPick={(lat, lng) => setMyLoc({ lat, lng })}
+        activeFilter={activeFilter}
+        onFilterChange={setActiveFilter}
+      />
 
 
       <PersonBookingSheet

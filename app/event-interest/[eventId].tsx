@@ -1,9 +1,10 @@
 // app/event-interest/[eventId].tsx
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { View, Text, ActivityIndicator, Pressable, FlatList, SectionList, RefreshControl } from "react-native";
+import { View, Text, ActivityIndicator, Pressable, FlatList, SectionList, RefreshControl, StatusBar, Platform } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import Constants from "expo-constants";
 import { useAuth } from "@clerk/clerk-expo";
+import Ionicons from "@expo/vector-icons/Ionicons";
 
 type EventKind = "free" | "paid" | "service";
 
@@ -19,7 +20,7 @@ type BookingRow = {
   customerClerkId?: string;
   customerName?: string;
   customerEmail?: string;
-  whenISO?: string; // booking datetime
+  whenISO?: string;
   notes?: string;
 };
 
@@ -68,10 +69,7 @@ export default function EventInterestScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // for free/paid
   const [attendees, setAttendees] = useState<AttendeeRow[]>([]);
-
-  // for service
   const [bookingSections, setBookingSections] = useState<Array<{ title: string; data: BookingRow[] }>>([]);
 
   const load = useCallback(async () => {
@@ -110,16 +108,18 @@ export default function EventInterestScreen() {
 
         const list: BookingRow[] = Array.isArray(json?.bookings) ? json.bookings : [];
 
-        // group by date
         const map = new Map<string, BookingRow[]>();
         for (const b of list) {
           const k = dateKey(b.whenISO);
           map.set(k, [...(map.get(k) || []), b]);
         }
-        const sections = Array.from(map.entries()).map(([k, v]) => ({
-          title: k,
-          data: v.sort((a, b) => String(a.whenISO || "").localeCompare(String(b.whenISO || ""))),
-        }));
+
+        const sections = Array.from(map.entries())
+          .map(([k, v]) => ({
+            title: k,
+            data: v.sort((a, b) => String(a.whenISO || "").localeCompare(String(b.whenISO || ""))),
+          }))
+          .sort((a, b) => a.title.localeCompare(b.title));
 
         setBookingSections(sections);
         setAttendees([]);
@@ -157,18 +157,30 @@ export default function EventInterestScreen() {
   const headerTitle = kind === "service" ? "Bookings" : "People interested";
   const headerSub = kind === "service" ? "Grouped by date" : "Fetched from attendees[]";
 
+  const TOP_PAD = (Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0) + 50;
+
   return (
-    <View style={{ flex: 1, backgroundColor: "#0B1220", paddingTop: 52, paddingHorizontal: 16 }}>
+    <View style={{ flex: 1, backgroundColor: "#F7F8FC", paddingTop: TOP_PAD, paddingHorizontal: 16 }}>
       <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 14 }}>
-        <Pressable onPress={() => router.back()} style={{ padding: 10, marginRight: 8 }}>
-          <Text style={{ color: "rgba(226,232,240,0.95)", fontSize: 16 }}>←</Text>
+        <Pressable
+          onPress={() => router.back()}
+          style={{
+            padding: 10,
+            marginRight: 8,
+            borderRadius: 12,
+            backgroundColor: "#FFFFFF",
+            borderWidth: 1,
+            borderColor: "#E6EAF2",
+          }}
+        >
+          <Ionicons name="chevron-back" size={18} color="#0F172A" />
         </Pressable>
 
         <View style={{ flex: 1 }}>
-          <Text style={{ color: "rgba(226,232,240,0.98)", fontSize: 18, fontWeight: "900" }}>
+          <Text style={{ color: "#0F172A", fontSize: 18, fontWeight: "900" }} numberOfLines={1}>
             {emoji} {headerTitle}
           </Text>
-          <Text style={{ color: "rgba(148,163,184,0.95)", marginTop: 2 }} numberOfLines={1}>
+          <Text style={{ color: "#64748B", marginTop: 2 }} numberOfLines={1}>
             {title ? `${title} • ${headerSub}` : headerSub}
           </Text>
         </View>
@@ -177,13 +189,22 @@ export default function EventInterestScreen() {
       {loading ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
           <ActivityIndicator />
-          <Text style={{ color: "rgba(148,163,184,0.95)", marginTop: 10 }}>Loading…</Text>
+          <Text style={{ color: "#64748B", marginTop: 10 }}>Loading…</Text>
         </View>
       ) : err ? (
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-          <Text style={{ color: "#FCA5A5", textAlign: "center" }}>{err}</Text>
-          <Pressable onPress={load} style={{ marginTop: 12, paddingVertical: 10, paddingHorizontal: 14, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.08)" }}>
-            <Text style={{ color: "rgba(226,232,240,0.95)", fontWeight: "900" }}>Retry</Text>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 14 }}>
+          <Text style={{ color: "#DC2626", textAlign: "center", fontWeight: "800" }}>{err}</Text>
+          <Pressable
+            onPress={load}
+            style={{
+              marginTop: 12,
+              paddingVertical: 10,
+              paddingHorizontal: 14,
+              borderRadius: 12,
+              backgroundColor: "#0F172A",
+            }}
+          >
+            <Text style={{ color: "#FFFFFF", fontWeight: "900" }}>Retry</Text>
           </Pressable>
         </View>
       ) : kind === "service" ? (
@@ -192,35 +213,37 @@ export default function EventInterestScreen() {
           keyExtractor={(item) => item._id}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           ListEmptyComponent={
-            <View style={{ padding: 18 }}>
-              <Text style={{ color: "rgba(226,232,240,0.95)", fontWeight: "900" }}>No bookings yet</Text>
-              <Text style={{ color: "rgba(148,163,184,0.95)", marginTop: 6 }}>When users book your service, they’ll appear here.</Text>
+            <View style={{ padding: 18, backgroundColor: "#FFFFFF", borderRadius: 16, borderWidth: 1, borderColor: "#E6EAF2" }}>
+              <Text style={{ color: "#0F172A", fontWeight: "900" }}>No bookings yet</Text>
+              <Text style={{ color: "#64748B", marginTop: 6 }}>When users book your service, they’ll appear here.</Text>
             </View>
           }
           renderSectionHeader={({ section }) => (
             <View style={{ marginTop: 14, marginBottom: 10 }}>
-              <Text style={{ color: "rgba(226,232,240,0.95)", fontWeight: "900" }}>{section.title}</Text>
-              <View style={{ height: 1, backgroundColor: "rgba(255,255,255,0.08)", marginTop: 8 }} />
+              <Text style={{ color: "#0F172A", fontWeight: "900" }}>{section.title}</Text>
+              <View style={{ height: 1, backgroundColor: "rgba(148,163,184,0.22)", marginTop: 8 }} />
             </View>
           )}
           renderItem={({ item }) => (
-            <View style={{ paddingVertical: 12, paddingHorizontal: 12, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.06)", marginBottom: 10 }}>
-              <Text style={{ color: "rgba(226,232,240,0.98)", fontWeight: "900" }}>
-                {item.customerName || "Customer"}
-              </Text>
-              {!!item.customerEmail && (
-                <Text style={{ color: "rgba(148,163,184,0.95)", marginTop: 3 }}>{item.customerEmail}</Text>
-              )}
+            <View
+              style={{
+                paddingVertical: 12,
+                paddingHorizontal: 12,
+                borderRadius: 16,
+                backgroundColor: "#FFFFFF",
+                borderWidth: 1,
+                borderColor: "#E6EAF2",
+                marginBottom: 10,
+              }}
+            >
+              <Text style={{ color: "#0F172A", fontWeight: "900" }}>{item.customerName || "Customer"}</Text>
+              {!!item.customerEmail && <Text style={{ color: "#64748B", marginTop: 3 }}>{item.customerEmail}</Text>}
               {!!item.whenISO && (
-                <Text style={{ color: "rgba(148,163,184,0.95)", marginTop: 6 }}>
+                <Text style={{ color: "#64748B", marginTop: 6 }}>
                   When: {new Date(item.whenISO).toLocaleString()}
                 </Text>
               )}
-              {!!item.notes && (
-                <Text style={{ color: "rgba(148,163,184,0.95)", marginTop: 6 }}>
-                  Notes: {item.notes}
-                </Text>
-              )}
+              {!!item.notes && <Text style={{ color: "#64748B", marginTop: 6 }}>Notes: {item.notes}</Text>}
             </View>
           )}
         />
@@ -230,19 +253,25 @@ export default function EventInterestScreen() {
           keyExtractor={(x) => x.clerkId}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           ListEmptyComponent={
-            <View style={{ padding: 18 }}>
-              <Text style={{ color: "rgba(226,232,240,0.95)", fontWeight: "900" }}>No one yet</Text>
-              <Text style={{ color: "rgba(148,163,184,0.95)", marginTop: 6 }}>When users join, they’ll show up here.</Text>
+            <View style={{ padding: 18, backgroundColor: "#FFFFFF", borderRadius: 16, borderWidth: 1, borderColor: "#E6EAF2" }}>
+              <Text style={{ color: "#0F172A", fontWeight: "900" }}>No one yet</Text>
+              <Text style={{ color: "#64748B", marginTop: 6 }}>When users join, they’ll show up here.</Text>
             </View>
           }
           renderItem={({ item }) => (
-            <View style={{ paddingVertical: 12, paddingHorizontal: 12, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.06)", marginBottom: 10 }}>
-              <Text style={{ color: "rgba(226,232,240,0.98)", fontWeight: "900" }}>
-                {item.name || "User"}
-              </Text>
-              <Text style={{ color: "rgba(148,163,184,0.95)", marginTop: 3 }}>
-                {item.email || item.clerkId}
-              </Text>
+            <View
+              style={{
+                paddingVertical: 12,
+                paddingHorizontal: 12,
+                borderRadius: 16,
+                backgroundColor: "#FFFFFF",
+                borderWidth: 1,
+                borderColor: "#E6EAF2",
+                marginBottom: 10,
+              }}
+            >
+              <Text style={{ color: "#0F172A", fontWeight: "900" }}>{item.name || "User"}</Text>
+              <Text style={{ color: "#64748B", marginTop: 3 }}>{item.email || item.clerkId}</Text>
             </View>
           )}
         />

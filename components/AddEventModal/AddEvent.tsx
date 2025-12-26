@@ -13,6 +13,7 @@ import {
   Modal,
   Dimensions,
   Keyboard,
+  LayoutAnimation,
 } from "react-native";
 import { Modalize } from "react-native-modalize";
 import Constants from "expo-constants";
@@ -20,8 +21,10 @@ import { WebView } from "react-native-webview";
 import { useAuth } from "@clerk/clerk-expo";
 import DateTimePicker from "@react-native-community/datetimepicker";
 
+import { styles } from "./AddEvent.styles";
 
-import type { CreateEvent, Suggestion, Option, LocationPayload, EventKind } from "./types";
+import type { CreateEvent, Suggestion, LocationPayload, ListingKind } from "./types"; // ✅ import from types.ts
+
 import { textToEmoji } from "./utils/emoji";
 import { formatTime12h, parsePriceToCents } from "./utils/time";
 import { fetchAutocomplete, fetchPlaceDetails } from "./google/places";
@@ -48,35 +51,33 @@ export default function AddEventModal({
 
   const GOOGLE_KEY = (Constants.expoConfig?.extra as any)?.googleMapsKey as string | undefined;
   const API_BASE = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
-  const EVENT_API_KEY = (Constants.expoConfig?.extra as any)?.eventApiKey as string | undefined; // optional
+  const EVENT_API_KEY = (Constants.expoConfig?.extra as any)?.eventApiKey as string | undefined;
 
   const H = Dimensions.get("window").height;
 
-  // Form
+  // Basics
   const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const emoji = textToEmoji(title);
-
-  const [kind, setKind] = useState<EventKind>("free");
+  const [kind, setKind] = useState<ListingKind>("event_free");
   const [priceText, setPriceText] = useState("");
 
-  const priceCents = useMemo(() => {
-    if (kind !== "service") return null;
-    return parsePriceToCents(priceText);
-  }, [kind, priceText]);
+  // Optional
+  const [description, setDescription] = useState("");
+  const [dateISO, setDateISO] = useState(""); // YYYY-MM-DD
+  const [time24, setTime24] = useState(""); // HH:mm
 
-  const [dateISO, setDateISO] = useState("");
-  const [time24, setTime24] = useState("");
+  // “Show more” sections
+  const [showDetails, setShowDetails] = useState(false);
+  const [showWhen, setShowWhen] = useState(false);
 
+  // Pickers
   const [dateOpen, setDateOpen] = useState(false);
   const [timeOpen, setTimeOpen] = useState(false);
 
-  // Places autocomplete
+  // Location + Places
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [loadingSug, setLoadingSug] = useState(false);
 
-  // Location state (structured)
   const [coord, setCoord] = useState<{ lat: number; lng: number } | null>(null);
   const [selectedAddress, setSelectedAddress] = useState<string>("");
   const [locationPayload, setLocationPayload] = useState<LocationPayload | null>(null);
@@ -86,32 +87,103 @@ export default function AddEventModal({
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // open/close
+  const emoji = useMemo(() => textToEmoji(title), [title]);
+
+  const priceCents = useMemo(() => {
+    if (kind === "event_free") return null;
+    return parsePriceToCents(priceText);
+  }, [kind, priceText]);
+
+  const dateLabel = useMemo(() => {
+    if (!dateISO) return "Select date";
+    return isoToSafeDate(dateISO).toLocaleDateString(undefined, {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+    });
+  }, [dateISO]);
+
+  const timeLabel = useMemo(() => {
+    if (!time24) return "Select time";
+    const [hh, mm] = time24.split(":").map((x) => parseInt(x, 10));
+    if (!Number.isFinite(hh) || !Number.isFinite(mm)) return "Select time";
+    return formatTime12h(hh, mm);
+  }, [time24]);
+
+  const hasLocation = useMemo(() => {
+    // Keep this simple on frontend; backend will validate “schema” later
+    return !!coord && Number.isFinite(coord.lat) && Number.isFinite(coord.lng);
+  }, [coord]);
+
+  const canCreate = useMemo(() => {
+    const needsPrice = kind === "event_paid" || kind === "service";
+    const priceOk = !needsPrice || priceCents !== null;
+    return (
+      !!GOOGLE_KEY &&
+      !!API_BASE &&
+      !!userId &&
+      !!title.trim() &&
+      hasLocation &&
+      !submitting &&
+      !locLoading &&
+      priceOk
+    );
+  }, [GOOGLE_KEY, API_BASE, userId, title, hasLocation, submitting, locLoading, kind, priceCents]);
+
+  // open/close sheet
   useEffect(() => {
     if (visible) sheetRef.current?.open();
     else sheetRef.current?.close();
   }, [visible]);
 
   useEffect(() => {
-    // keep initial center stable for WebView (avoid reload flicker)
-    if (visible) {
-      initialCenterRef.current = coord ?? initialCenterRef.current ?? DEFAULT_CENTER;
-    }
+    if (visible) initialCenterRef.current = coord ?? initialCenterRef.current ?? DEFAULT_CENTER;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
+  // debounce suggestions
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (!GOOGLE_KEY) return;
+      const q = query.trim();
+      if (!q) {
+        setSuggestions([]);
+        return;
+      }
+      fetchAutocomplete({
+        key: GOOGLE_KEY,
+        q,
+        setLoading: setLoadingSug,
+        setList: setSuggestions,
+        setErr,
+      });
+    }, 250);
+
+    return () => clearTimeout(t);
+  }, [query, GOOGLE_KEY]);
+
+  // update map marker
+  useEffect(() => {
+    if (!mapReady || !coord) return;
+    mapRef.current?.postMessage(JSON.stringify({ type: "setMarker", lat: coord.lat, lng: coord.lng }));
+  }, [coord, mapReady]);
+
   const hardReset = () => {
     setTitle("");
-    setDescription("");
-    setKind("free");
+    setKind("event_free");
     setPriceText("");
+    setDescription("");
     setDateISO("");
     setTime24("");
+    setShowDetails(false);
+    setShowWhen(false);
+
     setQuery("");
     setSuggestions([]);
     setSelectedAddress("");
     setCoord(null);
     setLocationPayload(null);
+
     setErr(null);
     setSubmitting(false);
     setMapReady(false);
@@ -124,149 +196,9 @@ export default function AddEventModal({
     onClose();
   };
 
-  // dropdown options
-  const dateOptions: Option[] = useMemo(() => {
-    const out: Option[] = [{ label: "No date", value: "" }];
-    const base = new Date();
-    for (let i = 0; i < 30; i++) {
-      const d = new Date(base);
-      d.setDate(base.getDate() + i);
-      const iso = d.toISOString().slice(0, 10);
-      const label = d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
-      out.push({ label, value: iso });
-    }
-    return out;
-  }, []);
-
-  const timeOptions: Option[] = useMemo(() => {
-    const out: Option[] = [{ label: "No time", value: "" }];
-    const start = 6 * 60;
-    const end = 23 * 60;
-    for (let m = start; m <= end; m += 30) {
-      const hh = Math.floor(m / 60);
-      const mm = m % 60;
-      const value = `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
-      out.push({ label: formatTime12h(hh, mm), value });
-    }
-    return out;
-  }, []);
-
-  const dateLabel = useMemo(() => {
-    if (!dateISO) return "Select date";
-    return isoToSafeDate(dateISO).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
-  }, [dateISO]);
-
-  const timeLabel = useMemo(() => {
-    if (!time24) return "Select time";
-    const [hh, mm] = time24.split(":").map((x) => parseInt(x, 10));
-    if (!Number.isFinite(hh) || !Number.isFinite(mm)) return "Select time";
-    return formatTime12h(hh, mm);
-  }, [time24]);
-
-
-  // debounce suggestions
-  useEffect(() => {
-    const t = setTimeout(() => {
-      if (!GOOGLE_KEY) return;
-      if (!query.trim()) {
-        setSuggestions([]);
-        return;
-      }
-      fetchAutocomplete({
-        key: GOOGLE_KEY,
-        q: query,
-        setLoading: setLoadingSug,
-        setList: setSuggestions,
-        setErr,
-      });
-    }, 250);
-    return () => clearTimeout(t);
-  }, [query, GOOGLE_KEY]);
-
-  // when coord changes, update map marker
-  useEffect(() => {
-    if (!mapReady || !coord) return;
-    mapRef.current?.postMessage(JSON.stringify({ type: "setMarker", lat: coord.lat, lng: coord.lng }));
-  }, [coord, mapReady]);
-
-  const hasStructuredLocation =
-    !!locationPayload?.countryCode &&
-    !!locationPayload?.city &&
-    Number.isFinite(locationPayload.lat) &&
-    Number.isFinite(locationPayload.lng);
-
-  const canCreate =
-    !!GOOGLE_KEY &&
-    !!title.trim() &&
-    !!coord &&
-    hasStructuredLocation &&
-    !!userId &&
-    !submitting &&
-    !locLoading &&
-    (kind === "free" || priceCents !== null);
-
-  async function createEventInDb(args: {
-    apiBase: string;
-    apiKey?: string;
-    title: string;
-    description: string;
-    emoji: string;
-    date?: string;
-    time?: string;
-    timezone?: string;
-    location: LocationPayload;
-    creatorClerkId: string;
-    kind: EventKind;
-    priceCents: number | null;
-  }) {
-    const res = await fetch(`${args.apiBase}/api/events/create-event`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(args.apiKey ? { "x-api-key": args.apiKey } : {}),
-      },
-      body: JSON.stringify({
-        title: args.title,
-        description: args.description,
-        emoji: args.emoji,
-        date: args.date ?? "",
-        time: args.time ?? "",
-        timezone: args.timezone ?? "",
-        creatorClerkId: args.creatorClerkId,
-        kind: args.kind,
-        priceCents: args.priceCents,
-        location: {
-          ...args.location,
-          cityKey: args.location.cityKey || makeCityKey(args.location.city),
-          formattedAddress: args.location.formattedAddress ?? "",
-          source: args.location.source ?? "user_typed",
-        },
-      }),
-    });
-
-    const json = await res.json();
-    if (!res.ok) throw new Error(json?.error || "Failed to create event");
-    return json;
-  }
-
-  function isoToSafeDate(iso: string) {
-    if (!iso) return new Date();
-    return new Date(`${iso}T12:00:00`);
-  }
-
-  function timeToDate(time24: string) {
-    const d = new Date();
-    if (!time24) return d;
-    const [hh, mm] = time24.split(":").map((x) => parseInt(x, 10));
-    if (Number.isFinite(hh)) d.setHours(hh);
-    if (Number.isFinite(mm)) d.setMinutes(mm);
-    d.setSeconds(0);
-    d.setMilliseconds(0);
-    return d;
-  }
-
   const handlePickSuggestion = async (s: Suggestion) => {
     if (!GOOGLE_KEY) return;
+
     Keyboard.dismiss();
     setErr(null);
     setLoadingSug(true);
@@ -280,6 +212,7 @@ export default function AddEventModal({
       }
 
       const addr = details.formattedAddress || [s.main, s.secondary].filter(Boolean).join(", ");
+
       setCoord(details.latLng);
       setSelectedAddress(addr);
       setQuery(addr);
@@ -294,13 +227,21 @@ export default function AddEventModal({
         source: "places_autocomplete",
       });
 
+      // ✅ only set if required fields exist (matches LocationPayload)
       if (!loc?.countryCode || !loc?.city) {
         setLocationPayload(null);
         setErr("Couldn’t extract city/country from that place. Try a different result.");
         return;
       }
 
-      setLocationPayload(loc);
+      setLocationPayload({
+        ...loc,
+        lat: details.latLng.lat,
+        lng: details.latLng.lng,
+        formattedAddress: addr,
+        placeId: s.id,
+        source: "places_autocomplete",
+      });
     } catch {
       setErr("Something went wrong while selecting that place.");
     } finally {
@@ -309,51 +250,114 @@ export default function AddEventModal({
     }
   };
 
+async function createListing() {
+  if (!API_BASE) throw new Error("Missing API base URL (extra.apiBaseUrl).");
+  if (!userId) throw new Error("You must be signed in.");
+  if (!coord) throw new Error("Pick a location.");
+
+  // ✅ require structured location (your DB has countryCode/city etc)
+  if (!locationPayload?.countryCode || !locationPayload?.city) {
+    throw new Error("Please select a place so city/country are available.");
+  }
+
+  // ✅ backend/db expects: free | paid | service (not event_free/event_paid)
+  const backendKind = kind === "event_free" ? "free" : kind === "event_paid" ? "paid" : "service";
+
+  const needsPrice = backendKind === "paid" || backendKind === "service";
+  if (needsPrice && priceCents === null) throw new Error("Enter a valid price.");
+
+  const timezone =
+    typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "America/New_York";
+
+  // ✅ DB has startsAt (UTC). This uses device-local interpretation of date/time.
+  // If you need strict timezone conversion, do it on the backend.
+  const startsAt =
+    dateISO && time24 ? new Date(`${dateISO}T${time24}:00`).toISOString() : undefined;
+
+  const payload = {
+    title: title.trim(),
+    description: description.trim(),
+    emoji,
+
+    creatorClerkId: userId,
+    kind: backendKind,                  // ✅ "free" | "paid" | "service"
+    priceCents: needsPrice ? priceCents : null,
+
+    timezone,
+    startsAt,                           // ✅ matches DB (omit if not set)
+    date: dateISO.trim(),
+    time: time24.trim(),
+
+    tags: [],                           // ✅ matches DB
+    visibility: "public",               // ✅ matches DB
+    status: "active",                   // ✅ matches DB
+
+    location: {
+      lat: coord.lat,
+      lng: coord.lng,
+
+      // ✅ geo point matches DB (lng first)
+      geo: { type: "Point", coordinates: [coord.lng, coord.lat] },
+
+      formattedAddress: selectedAddress || locationPayload.formattedAddress || "",
+      placeId: locationPayload.placeId || "",
+
+      countryCode: locationPayload.countryCode,
+      countryName: locationPayload.countryName || "",
+
+      admin1: locationPayload.admin1 || "",
+      admin1Code: locationPayload.admin1Code || "",
+
+      city: locationPayload.city,
+      cityKey: locationPayload.cityKey || "",
+
+      postalCode: locationPayload.postalCode || "",
+      neighborhood: locationPayload.neighborhood || "",
+
+      source: locationPayload.source || "user_typed",
+    },
+  };
+
+  const res = await fetch(`${API_BASE}/api/events/create-event`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {}),
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json?.error || "Failed to create");
+  return json;
+}
+
   const handleCreate = async () => {
-    if (!coord || !locationPayload) return;
+    setErr(null);
 
+    if (!GOOGLE_KEY) {
+      setErr("Google Maps key missing (extra.googleMapsKey).");
+      return;
+    }
     if (!API_BASE) {
-      setErr("Missing API base URL (extra.apiBaseUrl).");
+      setErr("API base missing (extra.apiBaseUrl).");
       return;
     }
-
     if (!userId) {
-      setErr("You must be signed in to create an event.");
-      return;
-    }
-
-    if (kind === "service" && priceCents === null) {
-      setErr("Enter a valid price for a service event.");
+      setErr("Sign in required.");
       return;
     }
 
     setSubmitting(true);
-    setErr(null);
 
     try {
-      const timezone = typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "";
-
-      const created = await createEventInDb({
-        apiBase: API_BASE,
-        apiKey: EVENT_API_KEY,
-        title: title.trim(),
-        description: description.trim(),
-        emoji,
-        date: dateISO.trim(),
-        time: time24.trim(),
-        timezone,
-        location: locationPayload,
-        creatorClerkId: userId,
-        kind,
-        priceCents,
-      });
-
+      const created = await createListing();
       const ev = created?.event;
 
       onCreate({
         title: ev?.title ?? title.trim(),
-        lat: ev?.location?.lat ?? coord.lat,
-        lng: ev?.location?.lng ?? coord.lng,
+        lat: ev?.location?.lat ?? coord?.lat ?? DEFAULT_CENTER.lat,
+        lng: ev?.location?.lng ?? coord?.lng ?? DEFAULT_CENTER.lng,
         emoji: ev?.emoji ?? emoji,
       });
 
@@ -370,16 +374,20 @@ export default function AddEventModal({
     <Modalize
       ref={sheetRef}
       onClosed={handleFullClose}
-      modalHeight={Math.min(780, Math.max(600, H * 0.90))}
+      modalHeight={Math.min(820, Math.max(640, H * 0.92))}
       modalStyle={styles.modal}
       handleStyle={styles.handle}
       overlayStyle={styles.overlay}
       keyboardAvoidingBehavior={Platform.select({ ios: "padding", android: "height" })}
-      scrollViewProps={{ keyboardShouldPersistTaps: "handled", showsVerticalScrollIndicator: false }}
+      scrollViewProps={{
+        keyboardShouldPersistTaps: "handled",
+        showsVerticalScrollIndicator: false,
+      }}
     >
       <Header
         emoji={emoji}
         title={title}
+        kind={kind}
         onClose={() => {
           hardReset();
           sheetRef.current?.close();
@@ -387,8 +395,10 @@ export default function AddEventModal({
       />
 
       <View style={styles.body}>
+        {/* BASICS */}
         <Card>
-          <CardTitle title="What’s happening?" subtitle="Give it a clear title people will click." />
+          <CardTitle title="Basics" subtitle="Title + type. Add price only if needed." />
+
           <InputShell>
             <Text style={styles.inlineEmoji}>{emoji}</Text>
             <TextInput
@@ -400,36 +410,49 @@ export default function AddEventModal({
               returnKeyType="done"
             />
           </InputShell>
-        </Card>
 
-        <Card>
-          <CardTitle title="Description" subtitle="Add details people should know." />
-          <View style={styles.descShell}>
-            <TextInput
-              value={description}
-              onChangeText={setDescription}
-              placeholder="Meetup point, what to bring, rules, etc."
-              placeholderTextColor="#94A3B8"
-              multiline
-              textAlignVertical="top"
-              style={styles.descInput}
-              returnKeyType="default"
-            />
-          </View>
-        </Card>
+          <View style={{ height: 12 }} />
 
-
-        <Card>
-          <CardTitle title="Event type" subtitle="Free events are joinable. Service events are bookable." />
-
-          <Segmented
-            left={{ label: "Free", hint: "Join", active: kind === "free", onPress: () => { setKind("free"); setPriceText(""); } }}
-            right={{ label: "Service", hint: "Book", active: kind === "service", onPress: () => setKind("service") }}
+          <TriSegment
+            a={{
+              label: "Free",
+              hint: "Join",
+              active: kind === "event_free",
+              onPress: () => {
+                setKind("event_free");
+                setPriceText("");
+                setErr(null);
+              },
+            }}
+            b={{
+              label: "Paid",
+              hint: "Ticket",
+              active: kind === "event_paid",
+              onPress: () => {
+                setKind("event_paid");
+                setErr(null);
+              },
+            }}
+            c={{
+              label: "Service",
+              hint: "Book",
+              active: kind === "service",
+              onPress: () => {
+                setKind("service");
+                setErr(null);
+              },
+            }}
           />
 
-          {kind === "service" && (
+          {(kind === "event_paid" || kind === "service") && (
             <View style={{ marginTop: 14 }}>
-              <FieldLabel>Price (USD)</FieldLabel>
+              <FieldLabel>
+                Price (USD){" "}
+                <Text style={{ color: "#64748B", fontWeight: "800" }}>
+                  {kind === "event_paid" ? "• ticket" : "• service fee"}
+                </Text>
+              </FieldLabel>
+
               <InputShell>
                 <Text style={styles.pricePrefix}>$</Text>
                 <TextInput
@@ -438,7 +461,7 @@ export default function AddEventModal({
                     setPriceText(t);
                     setErr(null);
                   }}
-                  placeholder="25"
+                  placeholder={kind === "event_paid" ? "15" : "25"}
                   placeholderTextColor="#94A3B8"
                   keyboardType={Platform.select({ ios: "decimal-pad", android: "numeric" })}
                   style={styles.priceInput}
@@ -459,119 +482,154 @@ export default function AddEventModal({
           )}
         </Card>
 
+        {/* SHOW MORE: DETAILS */}
         <Card>
-          <View style={styles.whenHeaderRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.cardTitle}>When</Text>
-              <Text style={styles.cardSub}>tap to pick</Text>
+          <ToggleRow
+            title="Details (optional)"
+            subtitle={showDetails ? "Tap to hide" : "Tap to add description"}
+            open={showDetails}
+            onToggle={() => {
+              LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+              setShowDetails((v) => !v);
+            }}
+          />
+
+          {showDetails && (
+            <View style={{ marginTop: 12 }}>
+              <View style={styles.descShell}>
+                <TextInput
+                  value={description}
+                  onChangeText={setDescription}
+                  placeholder="Meetup point, what to bring, rules, contact info, etc."
+                  placeholderTextColor="#94A3B8"
+                  multiline
+                  textAlignVertical="top"
+                  style={styles.descInput}
+                  returnKeyType="default"
+                />
+              </View>
             </View>
-
-            {(dateISO || time24) ? (
-              <Pressable
-                hitSlop={10}
-                onPress={() => {
-                  setDateISO("");
-                  setTime24("");
-                }}
-                style={styles.clearPill}
-              >
-                <Text style={styles.clearPillText}>Clear</Text>
-              </Pressable>
-            ) : null}
-          </View>
-
-          <View style={styles.whenGrid}>
-            {/* Date */}
-            <Pressable onPress={() => setDateOpen(true)} style={styles.whenTile} android_ripple={{ color: "#E2E8F0" }}>
-              <View style={styles.whenTileTop}>
-                <View style={[styles.whenBadge, styles.whenBadgeBlue]}>
-                  <Text style={styles.whenBadgeText}>📅</Text>
-                </View>
-                <Text style={styles.whenTileLabel}>Date</Text>
-              </View>
-
-              <Text numberOfLines={1} style={[styles.whenTileValue, !dateISO && styles.whenTileValueMuted]}>
-                {dateISO ? dateLabel : "Select date"}
-              </Text>
-
-              <Text style={styles.whenTileHint}>
-                Tap to choose
-              </Text>
-            </Pressable>
-
-            {/* Time */}
-            <Pressable onPress={() => setTimeOpen(true)} style={styles.whenTile} android_ripple={{ color: "#E2E8F0" }}>
-              <View style={styles.whenTileTop}>
-                <View style={[styles.whenBadge, styles.whenBadgePurple]}>
-                  <Text style={styles.whenBadgeText}>⏰</Text>
-                </View>
-                <Text style={styles.whenTileLabel}>Time</Text>
-              </View>
-
-              <Text numberOfLines={1} style={[styles.whenTileValue, !time24 && styles.whenTileValueMuted]}>
-                {time24 ? timeLabel : "Select time"}
-              </Text>
-
-              <Text style={styles.whenTileHint}>
-                Tap to choose
-              </Text>
-            </Pressable>
-          </View>
+          )}
         </Card>
 
-        {/* Date picker modal */}
-        <Modal transparent visible={dateOpen} animationType="fade" onRequestClose={() => setDateOpen(false)}>
-          <Pressable style={styles.pickerOverlay} onPress={() => setDateOpen(false)}>
-            <Pressable style={styles.pickerCard} onPress={() => { }}>
-              <Text style={styles.pickerTitle}>Pick a date</Text>
-              <DateTimePicker
-                value={isoToSafeDate(dateISO)}
-                mode="date"
-                display={Platform.OS === "ios" ? "inline" : "default"}
-                themeVariant="light"            // ✅ forces black text UI on iOS
-                textColor="#0F172A"             // ✅ helps esp. spinner
-                accentColor="#0A84FF"           // optional but nice
-                onChange={(_, d) => {
-                  if (!d) return;
-                  const iso = d.toISOString().slice(0, 10);
-                  setDateISO(iso);
-                  if (Platform.OS !== "ios") setDateOpen(false);
-                }}
-              />
-              <TouchableOpacity style={styles.pickerDone} onPress={() => setDateOpen(false)} activeOpacity={0.9}>
-                <Text style={styles.pickerDoneText}>Done</Text>
-              </TouchableOpacity>
-            </Pressable>
-          </Pressable>
-        </Modal>
+        {/* SHOW MORE: WHEN */}
+        <Card>
+          <ToggleRow
+            title="When (optional)"
+            subtitle={showWhen ? "Tap to hide" : "Tap to add date/time"}
+            open={showWhen}
+            onToggle={() => {
+              LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+              setShowWhen((v) => !v);
+            }}
+          />
 
-        {/* Time picker modal */}
-        <Modal transparent visible={timeOpen} animationType="fade" onRequestClose={() => setTimeOpen(false)}>
-          <Pressable style={styles.pickerOverlay} onPress={() => setTimeOpen(false)}>
-            <Pressable style={styles.pickerCard} onPress={() => { }}>
-              <Text style={styles.pickerTitle}>Pick a time</Text>
-              <DateTimePicker
-                value={timeToDate(time24)}
-                mode="time"
-                display={Platform.OS === "ios" ? "spinner" : "default"}
-                themeVariant="light"
-                textColor="#0F172A"
-                accentColor="#0A84FF"
-                onChange={(_, d) => {
-                  if (!d) return;
-                  const hh = d.getHours();
-                  const mm = d.getMinutes();
-                  setTime24(`${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`);
-                  if (Platform.OS !== "ios") setTimeOpen(false);
-                }}
-              />
-              <TouchableOpacity style={styles.pickerDone} onPress={() => setTimeOpen(false)} activeOpacity={0.9}>
-                <Text style={styles.pickerDoneText}>Done</Text>
-              </TouchableOpacity>
-            </Pressable>
-          </Pressable>
-        </Modal>
+          {showWhen && (
+            <>
+              <View style={{ marginTop: 12 }}>
+                <View style={styles.whenGrid}>
+                  <Pressable onPress={() => setDateOpen(true)} style={styles.whenTile} android_ripple={{ color: "#E2E8F0" }}>
+                    <View style={styles.whenTileTop}>
+                      <View style={[styles.whenBadge, styles.whenBadgeBlue]}>
+                        <Text style={styles.whenBadgeText}>📅</Text>
+                      </View>
+                      <Text style={styles.whenTileLabel}>Date</Text>
+                    </View>
 
+                    <Text numberOfLines={1} style={[styles.whenTileValue, !dateISO && styles.whenTileValueMuted]}>
+                      {dateISO ? dateLabel : "Select date"}
+                    </Text>
+
+                    <Text style={styles.whenTileHint}>Tap to choose</Text>
+                  </Pressable>
+
+                  <Pressable onPress={() => setTimeOpen(true)} style={styles.whenTile} android_ripple={{ color: "#E2E8F0" }}>
+                    <View style={styles.whenTileTop}>
+                      <View style={[styles.whenBadge, styles.whenBadgePurple]}>
+                        <Text style={styles.whenBadgeText}>⏰</Text>
+                      </View>
+                      <Text style={styles.whenTileLabel}>Time</Text>
+                    </View>
+
+                    <Text numberOfLines={1} style={[styles.whenTileValue, !time24 && styles.whenTileValueMuted]}>
+                      {time24 ? timeLabel : "Select time"}
+                    </Text>
+
+                    <Text style={styles.whenTileHint}>Tap to choose</Text>
+                  </Pressable>
+                </View>
+
+                {(dateISO || time24) ? (
+                  <Pressable
+                    hitSlop={10}
+                    onPress={() => {
+                      setDateISO("");
+                      setTime24("");
+                    }}
+                    style={styles.clearPill}
+                  >
+                    <Text style={styles.clearPillText}>Clear date/time</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+
+              {/* Date picker */}
+              <Modal transparent visible={dateOpen} animationType="fade" onRequestClose={() => setDateOpen(false)}>
+                <Pressable style={styles.pickerOverlay} onPress={() => setDateOpen(false)}>
+                  <Pressable style={styles.pickerCard} onPress={() => { }}>
+                    <Text style={styles.pickerTitle}>Pick a date</Text>
+                    <DateTimePicker
+                      value={isoToSafeDate(dateISO)}
+                      mode="date"
+                      display={Platform.OS === "ios" ? "inline" : "default"}
+                      themeVariant="light"
+                      textColor="#0F172A"
+                      accentColor="#0A84FF"
+                      onChange={(_, d) => {
+                        if (!d) return;
+                        const iso = d.toISOString().slice(0, 10);
+                        setDateISO(iso);
+                        if (Platform.OS !== "ios") setDateOpen(false);
+                      }}
+                    />
+                    <TouchableOpacity style={styles.pickerDone} onPress={() => setDateOpen(false)} activeOpacity={0.9}>
+                      <Text style={styles.pickerDoneText}>Done</Text>
+                    </TouchableOpacity>
+                  </Pressable>
+                </Pressable>
+              </Modal>
+
+              {/* Time picker */}
+              <Modal transparent visible={timeOpen} animationType="fade" onRequestClose={() => setTimeOpen(false)}>
+                <Pressable style={styles.pickerOverlay} onPress={() => setTimeOpen(false)}>
+                  <Pressable style={styles.pickerCard} onPress={() => { }}>
+                    <Text style={styles.pickerTitle}>Pick a time</Text>
+                    <DateTimePicker
+                      value={timeToDate(time24)}
+                      mode="time"
+                      display={Platform.OS === "ios" ? "spinner" : "default"}
+                      themeVariant="light"
+                      textColor="#0F172A"
+                      accentColor="#0A84FF"
+                      onChange={(_, d) => {
+                        if (!d) return;
+                        const hh = d.getHours();
+                        const mm = d.getMinutes();
+                        setTime24(`${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`);
+                        if (Platform.OS !== "ios") setTimeOpen(false);
+                      }}
+                    />
+                    <TouchableOpacity style={styles.pickerDone} onPress={() => setTimeOpen(false)} activeOpacity={0.9}>
+                      <Text style={styles.pickerDoneText}>Done</Text>
+                    </TouchableOpacity>
+                  </Pressable>
+                </Pressable>
+              </Modal>
+            </>
+          )}
+        </Card>
+
+        {/* WHERE */}
         <Card>
           <CardTitle title="Where" subtitle="Search a place or drop a pin on the map." />
 
@@ -607,7 +665,6 @@ export default function AddEventModal({
             )}
           </InputShell>
 
-          {/* Suggestions */}
           {(loadingSug || suggestions.length > 0) && (
             <View style={styles.dropdown}>
               {loadingSug ? (
@@ -642,15 +699,7 @@ export default function AddEventModal({
             </View>
           )}
 
-          {/* Selected */}
           {!!selectedAddress && <Pill tone="success" text={selectedAddress} />}
-          {!!locationPayload && (
-            <Pill
-              tone="info"
-              text={`${locationPayload.city}${locationPayload.admin1Code ? `, ${locationPayload.admin1Code}` : locationPayload.admin1 ? `, ${locationPayload.admin1}` : ""
-                }${locationPayload.countryCode ? ` • ${locationPayload.countryCode}` : ""}`}
-            />
-          )}
 
           {locLoading && (
             <View style={styles.inlineLoading}>
@@ -659,7 +708,6 @@ export default function AddEventModal({
             </View>
           )}
 
-          {/* Map */}
           <View style={styles.mapWrap}>
             {!GOOGLE_KEY ? (
               <View style={styles.mapFallback}>
@@ -696,9 +744,7 @@ export default function AddEventModal({
 
                         const geo = await reverseGeocode(GOOGLE_KEY, picked.lat, picked.lng);
                         if (!geo?.formattedAddress || !geo?.components?.length) {
-                          setLocationPayload(null);
                           setSelectedAddress("Dropped pin (no address found)");
-                          setErr("Couldn’t resolve city/country for that pin. Try a different spot.");
                           return;
                         }
 
@@ -713,13 +759,22 @@ export default function AddEventModal({
                           source: "reverse_geocode",
                         });
 
-                        if (!loc?.countryCode || !loc?.city) {
-                          setLocationPayload(null);
-                          setErr("Couldn’t extract city/country for that pin. Try a different spot.");
-                          return;
-                        }
-
-                        setLocationPayload(loc);
+                        setLocationPayload({
+                          ...loc,
+                          lat: picked.lat,
+                          lng: picked.lng,
+                          formattedAddress: geo.formattedAddress,
+                          placeId: geo.placeId ?? "",
+                          source: "reverse_geocode",
+                          countryCode: loc?.countryCode ?? "",
+                          countryName: loc?.countryName ?? "",
+                          admin1: loc?.admin1 ?? "",
+                          admin1Code: loc?.admin1Code ?? "",
+                          city: loc?.city ?? "",
+                          cityKey: loc?.cityKey ?? "",
+                          postalCode: loc?.postalCode ?? "",
+                          neighborhood: loc?.neighborhood ?? "",
+                        });
                       }
                     } catch {
                       // ignore
@@ -742,7 +797,15 @@ export default function AddEventModal({
         </Card>
 
         <ActionsBar
-          primaryLabel={submitting ? "Creating…" : kind === "service" ? "Create service event" : "Create free event"}
+          primaryLabel={
+            submitting
+              ? "Creating…"
+              : kind === "service"
+                ? "Create service"
+                : kind === "event_paid"
+                  ? "Create paid event"
+                  : "Create free event"
+          }
           canCreate={canCreate}
           submitting={submitting}
           onCancel={() => {
@@ -756,17 +819,21 @@ export default function AddEventModal({
   );
 }
 
-/* ---------------- UI (broken into components IN SAME FILE) ---------------- */
+/* ---------------- UI components ---------------- */
 
 function Header({
   emoji,
   title,
+  kind,
   onClose,
 }: {
   emoji: string;
   title: string;
+  kind: ListingKind;
   onClose: () => void;
 }) {
+  const tag = kind === "service" ? "Service" : kind === "event_paid" ? "Paid event" : "Free event";
+
   return (
     <View style={styles.headerWrap}>
       <View style={styles.headerGlow} />
@@ -776,9 +843,9 @@ function Header({
         </View>
 
         <View style={{ flex: 1 }}>
-          <Text style={styles.headerTitle}>Create event</Text>
+          <Text style={styles.headerTitle}>Create</Text>
           <Text style={styles.headerSub} numberOfLines={1}>
-            {title.trim() ? title.trim() : "Free or service • Optional time • Pick a place"}
+            {title.trim() ? title.trim() : `${tag} • pick a location • add optional details`}
           </Text>
         </View>
 
@@ -830,18 +897,45 @@ function SegmentButton({
   );
 }
 
-function Segmented({
-  left,
-  right,
+function TriSegment({
+  a,
+  b,
+  c,
 }: {
-  left: { label: string; hint?: string; active: boolean; onPress: () => void };
-  right: { label: string; hint?: string; active: boolean; onPress: () => void };
+  a: { label: string; hint?: string; active: boolean; onPress: () => void };
+  b: { label: string; hint?: string; active: boolean; onPress: () => void };
+  c: { label: string; hint?: string; active: boolean; onPress: () => void };
 }) {
   return (
     <View style={styles.segmented}>
-      <SegmentButton {...left} />
-      <SegmentButton {...right} />
+      <SegmentButton {...a} />
+      <SegmentButton {...b} />
+      <SegmentButton {...c} />
     </View>
+  );
+}
+
+function ToggleRow({
+  title,
+  subtitle,
+  open,
+  onToggle,
+}: {
+  title: string;
+  subtitle: string;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <Pressable onPress={onToggle} style={styles.toggleRow} android_ripple={{ color: "#E2E8F0" }}>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.toggleTitle}>{title}</Text>
+        <Text style={styles.toggleSub}>{subtitle}</Text>
+      </View>
+      <View style={[styles.chevPill, open && styles.chevPillOpen]}>
+        <Text style={[styles.chevText, open && styles.chevTextOpen]}>{open ? "−" : "+"}</Text>
+      </View>
+    </Pressable>
   );
 }
 
@@ -887,479 +981,19 @@ function ActionsBar({
   );
 }
 
-/* ---------------- Dropdown (kept inline) ---------------- */
-
-function Dropdown({
-  label,
-  valueLabel,
-  options,
-  onSelect,
-}: {
-  label: string;
-  valueLabel: string;
-  options: Option[];
-  onSelect: (v: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <View style={{ flex: 1 }}>
-      <Text style={styles.smallLabel}>{label}</Text>
-
-      <Pressable onPress={() => setOpen(true)} style={styles.select}>
-        <Text numberOfLines={1} style={styles.selectText}>
-          {valueLabel}
-        </Text>
-        <Text style={styles.chev}>▾</Text>
-      </Pressable>
-
-      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <Pressable style={styles.modalOverlay} onPress={() => setOpen(false)}>
-          <Pressable style={styles.optionSheet} onPress={() => { }}>
-            <Text style={styles.optionTitle}>{label}</Text>
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {options.map((o) => (
-                <Pressable
-                  key={o.label + o.value}
-                  style={styles.optionRow}
-                  onPress={() => {
-                    onSelect(o.value);
-                    setOpen(false);
-                  }}
-                >
-                  <Text style={styles.optionText}>{o.label}</Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          </Pressable>
-        </Pressable>
-      </Modal>
-    </View>
-  );
+function isoToSafeDate(iso: string) {
+  if (!iso) return new Date();
+  return new Date(`${iso}T12:00:00`);
 }
 
-/* ---------------- helpers ---------------- */
-
-function makeCityKey(city: string) {
-  return city
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, " ")
-    .replace(/[^\p{L}\p{N}\s-]/gu, "")
-    .replace(/\s/g, "-");
+function timeToDate(time24: string) {
+  const d = new Date();
+  if (!time24) return d;
+  const [hh, mm] = time24.split(":").map((x) => parseInt(x, 10));
+  if (Number.isFinite(hh)) d.setHours(hh);
+  if (Number.isFinite(mm)) d.setMinutes(mm);
+  d.setSeconds(0);
+  d.setMilliseconds(0);
+  return d;
 }
 
-/* ---------------- styles (kept IN THIS FILE) ---------------- */
-
-const styles = StyleSheet.create({
-  overlay: { backgroundColor: "rgba(2,6,23,0.40)" },
-
-  modal: {
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-    backgroundColor: "#0B1220",
-    overflow: "hidden",
-  },
-  handle: {
-    width: 60,
-    height: 5,
-    backgroundColor: "rgba(148,163,184,0.35)",
-    borderRadius: 999,
-    alignSelf: "center",
-    marginTop: 10,
-    marginBottom: 4,
-  },
-
-  headerWrap: { backgroundColor: "#0B1220" },
-  headerGlow: {
-    position: "absolute",
-    top: -120,
-    left: -40,
-    right: -40,
-    height: 220,
-    borderRadius: 220,
-    backgroundColor: "rgba(56,189,248,0.18)",
-    transform: [{ scaleX: 1.2 }],
-  },
-  header: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  heroIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 18,
-    backgroundColor: "rgba(56,189,248,0.18)",
-    borderWidth: 1,
-    borderColor: "rgba(56,189,248,0.35)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  heroEmoji: { fontSize: 22 },
-  headerTitle: { color: "#E2E8F0", fontWeight: "900", fontSize: 18 },
-  headerSub: { color: "rgba(226,232,240,0.75)", marginTop: 2, fontSize: 12 },
-  closeBtn: {
-    marginLeft: "auto",
-    width: 38,
-    height: 38,
-    borderRadius: 14,
-    backgroundColor: "rgba(148,163,184,0.12)",
-    borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.18)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  closeText: { color: "#E2E8F0", fontSize: 22, lineHeight: 22, fontWeight: "900" },
-
-  body: {
-    backgroundColor: "#F6F7FB",
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-    paddingHorizontal: 14,
-    paddingTop: 14,
-    paddingBottom: 18,
-  },
-
-  card: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: "rgba(226,232,240,0.95)",
-    marginBottom: 12,
-    shadowColor: "#0B1220",
-    shadowOpacity: 0.08,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 14 },
-  },
-  cardTitle: { fontWeight: "950" as any, color: "#0F172A", fontSize: 15 },
-  cardSub: { marginTop: 6, color: "#64748B", fontSize: 12.5, fontWeight: "700" },
-
-  smallLabel: { fontWeight: "900", color: "#0F172A", marginBottom: 8, fontSize: 12 },
-
-  inputShell: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    gap: 10,
-  },
-  inlineEmoji: { fontSize: 18 },
-  textInput: { flex: 1, color: "#0F172A", fontSize: 15.5, paddingVertical: 0, fontWeight: "700" },
-
-  helper: { marginTop: 8, color: "#64748B", fontSize: 12, fontWeight: "800" },
-
-  descShell: {
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  descInput: { minHeight: 110, color: "#0F172A", fontSize: 15, fontWeight: "700" },
-
-
-  segmented: {
-    flexDirection: "row",
-    gap: 10,
-    padding: 6,
-    borderRadius: 18,
-    backgroundColor: "#F1F5F9",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-  },
-  segmentBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "transparent",
-  },
-  segmentBtnActive: {
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "rgba(15,23,42,0.10)",
-    shadowColor: "#0B1220",
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 8 },
-  },
-  segmentLabel: { color: "#0F172A", fontWeight: "950" as any, fontSize: 14 },
-  segmentLabelActive: { color: "#0A84FF" },
-  segmentHint: { marginTop: 2, color: "#64748B", fontWeight: "800", fontSize: 11 },
-  segmentHintActive: { color: "rgba(10,132,255,0.85)" },
-
-  pricePrefix: { color: "#0F172A", fontWeight: "950" as any, fontSize: 16 },
-  priceInput: { flex: 1, color: "#0F172A", fontSize: 15.5, paddingVertical: 0, fontWeight: "800" },
-  goodPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: "rgba(34,197,94,0.12)",
-    borderWidth: 1,
-    borderColor: "rgba(34,197,94,0.25)",
-  },
-  goodPillText: { color: "#166534", fontWeight: "900", fontSize: 12 },
-
-  twoCol: { flexDirection: "row", gap: 12 },
-
-  select: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-  },
-  selectText: { color: "#0F172A", fontWeight: "850" as any },
-  chev: { color: "#64748B", fontWeight: "900" },
-
-  locationIcon: { fontSize: 16 },
-  locationInput: { flex: 1, color: "#0F172A", fontSize: 15.5, paddingVertical: 0, fontWeight: "700" },
-
-  iconBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 12,
-    backgroundColor: "rgba(100,116,139,0.12)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  iconBtnText: { color: "#334155", fontSize: 18, fontWeight: "900", lineHeight: 18 },
-
-  dropdown: {
-    marginTop: 10,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#FFFFFF",
-    overflow: "hidden",
-  },
-  dropdownLoading: { flexDirection: "row", alignItems: "center", gap: 10, padding: 12 },
-  dropdownLoadingText: { color: "#64748B", fontWeight: "800" },
-
-  dropdownRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#E2E8F0",
-  },
-  dropdownMain: { color: "#0F172A", fontWeight: "950" as any, fontSize: 14 },
-  dropdownSecondary: { color: "#64748B", marginTop: 3, fontSize: 12, fontWeight: "700" },
-  dropdownArrow: { color: "#94A3B8", fontSize: 18, fontWeight: "900", marginLeft: 10 },
-
-  pill: {
-    marginTop: 10,
-    alignSelf: "flex-start",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-    maxWidth: "100%",
-  },
-  pillSuccess: { backgroundColor: "rgba(34,197,94,0.12)", borderColor: "rgba(34,197,94,0.25)" },
-  pillInfo: { backgroundColor: "rgba(14,165,233,0.10)", borderColor: "rgba(14,165,233,0.22)" },
-  pillText: { fontWeight: "900", fontSize: 12 },
-  pillTextSuccess: { color: "#166534" },
-  pillTextInfo: { color: "#075985" },
-
-  inlineLoading: { marginTop: 12, flexDirection: "row", alignItems: "center", gap: 10 },
-  inlineLoadingText: { color: "#64748B", fontWeight: "900" },
-
-  // ✅ when row
-  whenHeaderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 12,
-  },
-
-  clearPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: "rgba(148,163,184,0.14)",
-    borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.22)",
-  },
-  clearPillText: { color: "#0F172A", fontWeight: "950" as any, fontSize: 12 },
-
-  whenGrid: {
-    flexDirection: "row",
-    gap: 10,
-  },
-
-  whenTile: {
-    flex: 1,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#FFFFFF",
-    padding: 14,
-    shadowColor: "#0B1220",
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 10 },
-  },
-
-  whenTileTop: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginBottom: 10,
-  },
-
-  whenBadge: {
-    width: 30,
-    height: 30,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-  },
-  whenBadgeBlue: {
-    backgroundColor: "rgba(10,132,255,0.12)",
-    borderColor: "rgba(10,132,255,0.22)",
-  },
-  whenBadgePurple: {
-    backgroundColor: "rgba(139,92,246,0.12)",
-    borderColor: "rgba(139,92,246,0.22)",
-  },
-  whenBadgeText: { fontSize: 14 },
-
-  whenTileLabel: { color: "#64748B", fontWeight: "900", fontSize: 12 },
-
-  whenTileValue: {
-    color: "#0F172A",
-    fontWeight: "950" as any,
-    fontSize: 16,
-    letterSpacing: -0.2,
-  },
-  whenTileValueMuted: { color: "#94A3B8" },
-
-  whenTileHint: {
-    marginTop: 6,
-    color: "#64748B",
-    fontWeight: "800",
-    fontSize: 12,
-  },
-
-  pickerOverlay: { flex: 1, backgroundColor: "rgba(2,6,23,0.45)", padding: 16, justifyContent: "flex-end" },
-  pickerCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    overflow: "hidden",
-    paddingBottom: 10,
-  },
-  pickerTitle: { padding: 14, fontWeight: "950" as any, color: "#0F172A", borderBottomWidth: 1, borderBottomColor: "#E2E8F0" },
-  pickerDone: { marginTop: 8, marginHorizontal: 12, borderRadius: 14, paddingVertical: 12, backgroundColor: "#0A84FF", alignItems: "center" },
-  pickerDoneText: { color: "#fff", fontWeight: "950" as any },
-
-
-  mapWrap: {
-    marginTop: 12,
-    height: 210,
-    borderRadius: 18,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#0B1220",
-  },
-  map: { flex: 1, backgroundColor: "#0B1220" },
-
-  mapOverlay: {
-    position: "absolute",
-    top: 10,
-    left: 10,
-    right: 10,
-    alignItems: "flex-start",
-  },
-  mapOverlayPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: "rgba(15,23,42,0.75)",
-    borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.18)",
-  },
-  mapOverlayText: { color: "#E2E8F0", fontWeight: "900", fontSize: 12 },
-
-  mapFallback: { flex: 1, padding: 16, justifyContent: "center" },
-  mapFallbackTitle: { color: "#E2E8F0", fontWeight: "900", fontSize: 14 },
-  mapFallbackBody: { color: "rgba(226,232,240,0.78)", marginTop: 8, lineHeight: 18 },
-
-  err: { marginTop: 12, color: "#DC2626", fontWeight: "900" },
-
-  actions: { flexDirection: "row", gap: 12, marginTop: 2 },
-  secondaryBtn: {
-    flex: 1,
-    borderRadius: 18,
-    paddingVertical: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-  },
-  secondaryText: { color: "#0F172A", fontWeight: "950" as any },
-
-  primaryBtn: {
-    flex: 1.6,
-    borderRadius: 18,
-    paddingVertical: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#0A84FF",
-    shadowColor: "#0A84FF",
-    shadowOpacity: 0.22,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 14 },
-  },
-  primaryText: { color: "#FFFFFF", fontWeight: "950" as any },
-
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(2,6,23,0.45)",
-    padding: 16,
-    justifyContent: "flex-end",
-  },
-  optionSheet: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    maxHeight: "70%",
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-  },
-  optionTitle: {
-    padding: 14,
-    fontWeight: "950" as any,
-    color: "#0F172A",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
-  },
-  optionRow: {
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#E2E8F0",
-  },
-  optionText: { color: "#0F172A", fontWeight: "850" as any },
-});

@@ -50,7 +50,7 @@ export default function ProfileHeaderButton({ size = 44 }: { size?: number }) {
 
   return (
     <TouchableOpacity
-      onPress={() => router.push("/profile")}
+      onPress={() => router.push("/profile/profileHome")}
       style={[styles.btn, { width: size, height: size, borderRadius: r }]}
       activeOpacity={0.85}
       hitSlop={10}

@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import Constants from "expo-constants";
-import ProfileHeaderButton from "../ProfileHeaderButton";
+import ProfileHeaderButton from "./ProfileHeaderButton";
 import { ScrollView, TouchableOpacity } from "react-native";
 import { Modalize } from "react-native-modalize";
 

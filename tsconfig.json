@@ -6,8 +6,9 @@
     "skipDefaultLibCheck": true,
     "noEmit": true,
     "module": "esnext",
-    "moduleResolution": "bundler"
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx"
   },
   "exclude": ["node_modules", "scripts", "test-reanimated.ts", "test.ts"],
-  "include": ["app/**/*.tsx", "app/**/*.ts", "../vision-transformer-robotics/models/profile_old.tsx"]
+  "include": ["app/**/*.tsx", "app/**/*.ts", "../vision-transformer-robotics/models/profile_old.tsx", "components/profile/ProfileHome.tsx"]
 }

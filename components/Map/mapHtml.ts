@@ -1,13 +1,13 @@
 // components/Map/mapHtml.ts
 export function buildMapHtml(args: {
-    googleKey: string;
-    eventsJson: string; // already JSON.stringify(...)
-    center: { lat: number; lng: number };
-    zoom: number;
-  }) {
-    const { googleKey, eventsJson, center, zoom } = args;
-  
-    return `<!doctype html>
+  googleKey: string;
+  eventsJson: string; // already JSON.stringify(...)
+  center: { lat: number; lng: number };
+  zoom: number;
+}) {
+  const { googleKey, eventsJson, center, zoom } = args;
+
+  return `<!doctype html>
   <html>
   <head>
     <meta charset="utf-8" />
@@ -17,12 +17,19 @@ export function buildMapHtml(args: {
   
       .emoji-pin{
         position:absolute;
-        width:42px;height:42px;border-radius:21px;
+        width:44px;height:44px;border-radius:18px;
         display:flex;align-items:center;justify-content:center;
-        font-size:22px;
-        background:#fff;
-        border:1px solid rgba(2,6,23,.10);
-        box-shadow:0 10px 22px rgba(2,6,23,.20);
+
+        /* glassy card */
+        background: rgba(255,255,255,0.92);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+
+        border: 1px solid rgba(2,6,23,.10);
+        box-shadow:
+          0 12px 26px rgba(2,6,23,.18),
+          0 2px 8px rgba(2,6,23,.10);
+
         transform:translate(-50%,-50%);
         user-select:none;-webkit-user-select:none;
         pointer-events:auto;
@@ -30,6 +37,28 @@ export function buildMapHtml(args: {
         cursor:pointer;
         touch-action: manipulation;
       }
+
+      .emoji-pin .emoji{
+        font-size:22px;
+        line-height:22px;
+        transform: translateY(-1px);
+      }
+
+      /* subtle ring */
+      .emoji-pin::after{
+        content:"";
+        position:absolute;
+        inset:-2px;
+        border-radius:20px;
+        border: 1px solid rgba(255,255,255,0.7);
+        opacity:0.9;
+      }
+
+      /* press feedback */
+      .emoji-pin:active{
+        transform:translate(-50%,-50%) scale(0.92);
+      }
+
   
       .badge{
         position:absolute;
@@ -122,7 +151,7 @@ export function buildMapHtml(args: {
         overlay.onAdd = function() {
           const div = document.createElement('div');
           div.className = 'emoji-pin';
-          div.textContent = ev.emoji || '📍';
+          div.innerHTML = '<span class="emoji">' + (ev.emoji || '📍') + '</span>';
           div.title = ev.title || '';
           div.dataset.id = ev._id || String(idx);
           this._div = div;
@@ -182,17 +211,19 @@ export function buildMapHtml(args: {
       function layoutStacks(){
         const alive = overlays.filter(o => o && o._div && o._px);
         if (alive.length === 0) return;
-  
-        const THRESH = 18;
-        const RADIUS = 22;
-  
+
+        // Bigger grouping radius = more likely to group and spread instead of overlap
+        const THRESH = 26;      // was 18
+        const BASE_RING = 26;   // px
+        const STEP_RING = 18;   // px
+
         function dist2(a,b){
           const dx = a.x - b.x, dy = a.y - b.y;
           return dx*dx + dy*dy;
         }
-  
+
         const groups = [];
-  
+
         for (const o of alive) {
           let placed = false;
           for (const g of groups) {
@@ -209,30 +240,46 @@ export function buildMapHtml(args: {
           }
           if (!placed) groups.push({ anchor: { ...o._px }, items: [o] });
         }
-  
+
         for (const g of groups) {
           const items = g.items;
-  
+
           if (items.length === 1) {
             const o = items[0];
             o._div.style.transform = 'translate(-50%,-50%)';
             o._div.style.zIndex = '1';
             continue;
           }
-  
-          for (let i=0; i<items.length; i++){
-            const o = items[i];
-            const angle = (Math.PI * 2 * i) / items.length;
-            const dx = Math.cos(angle) * RADIUS;
-            const dy = Math.sin(angle) * RADIUS;
-  
-            o._div.style.transform =
-              'translate(calc(-50% + ' + dx.toFixed(1) + 'px), calc(-50% + ' + dy.toFixed(1) + 'px))';
-            o._div.style.zIndex = String(1000 + i);
+
+          // Concentric ring layout:
+          // ring 0: 6 items, ring 1: 10 items, ring 2: 14 items...
+          let idx = 0;
+          let ring = 0;
+
+          while (idx < items.length) {
+            const capacity = 6 + ring * 4;
+            const count = Math.min(capacity, items.length - idx);
+            const radius = BASE_RING + ring * STEP_RING;
+
+            for (let i = 0; i < count; i++) {
+              const o = items[idx + i];
+              const angle = (Math.PI * 2 * i) / count;
+
+              const dx = Math.cos(angle) * radius;
+              const dy = Math.sin(angle) * radius;
+
+              o._div.style.transform =
+                'translate(calc(-50% + ' + dx.toFixed(1) + 'px), calc(-50% + ' + dy.toFixed(1) + 'px))';
+
+              o._div.style.zIndex = String(1000 + ring * 100 + i);
+            }
+
+            idx += count;
+            ring += 1;
           }
         }
       }
-  
+
       window.initMap = initMap;
   
       window.addEventListener("error", function(e){
@@ -246,5 +293,4 @@ export function buildMapHtml(args: {
     </script>
   </body>
   </html>`;
-  }
-  
+}

@@ -236,6 +236,7 @@ export default function Home() {
       <ModalizeEventSheet
         visible={open}
         onClose={() => setOpen(false)}
+        presentationStyle="overFullScreen"
         onCreate={(e: any) => {
           const n = normalizeEvent(e) ?? (e as EventPin);
           setEvents((prev) => [n, ...prev]);

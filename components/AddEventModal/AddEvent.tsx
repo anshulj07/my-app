@@ -250,87 +250,87 @@ export default function AddEventModal({
     }
   };
 
-async function createListing() {
-  if (!API_BASE) throw new Error("Missing API base URL (extra.apiBaseUrl).");
-  if (!userId) throw new Error("You must be signed in.");
-  if (!coord) throw new Error("Pick a location.");
+  async function createListing() {
+    if (!API_BASE) throw new Error("Missing API base URL (extra.apiBaseUrl).");
+    if (!userId) throw new Error("You must be signed in.");
+    if (!coord) throw new Error("Pick a location.");
 
-  // ✅ require structured location (your DB has countryCode/city etc)
-  if (!locationPayload?.countryCode || !locationPayload?.city) {
-    throw new Error("Please select a place so city/country are available.");
+    // ✅ require structured location (your DB has countryCode/city etc)
+    if (!locationPayload?.countryCode || !locationPayload?.city) {
+      throw new Error("Please select a place so city/country are available.");
+    }
+
+    // ✅ backend/db expects: free | paid | service (not event_free/event_paid)
+    const backendKind = kind === "event_free" ? "free" : kind === "event_paid" ? "paid" : "service";
+
+    const needsPrice = backendKind === "paid" || backendKind === "service";
+    if (needsPrice && priceCents === null) throw new Error("Enter a valid price.");
+
+    const timezone =
+      typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "America/New_York";
+
+    // ✅ DB has startsAt (UTC). This uses device-local interpretation of date/time.
+    // If you need strict timezone conversion, do it on the backend.
+    const startsAt =
+      dateISO && time24 ? new Date(`${dateISO}T${time24}:00`).toISOString() : undefined;
+
+    const payload = {
+      title: title.trim(),
+      description: description.trim(),
+      emoji,
+
+      creatorClerkId: userId,
+      kind: backendKind,                  // ✅ "free" | "paid" | "service"
+      priceCents: needsPrice ? priceCents : null,
+
+      timezone,
+      startsAt,                           // ✅ matches DB (omit if not set)
+      date: dateISO.trim(),
+      time: time24.trim(),
+
+      tags: [],                           // ✅ matches DB
+      visibility: "public",               // ✅ matches DB
+      status: "active",                   // ✅ matches DB
+
+      location: {
+        lat: coord.lat,
+        lng: coord.lng,
+
+        // ✅ geo point matches DB (lng first)
+        geo: { type: "Point", coordinates: [coord.lng, coord.lat] },
+
+        formattedAddress: selectedAddress || locationPayload.formattedAddress || "",
+        placeId: locationPayload.placeId || "",
+
+        countryCode: locationPayload.countryCode,
+        countryName: locationPayload.countryName || "",
+
+        admin1: locationPayload.admin1 || "",
+        admin1Code: locationPayload.admin1Code || "",
+
+        city: locationPayload.city,
+        cityKey: locationPayload.cityKey || "",
+
+        postalCode: locationPayload.postalCode || "",
+        neighborhood: locationPayload.neighborhood || "",
+
+        source: locationPayload.source || "user_typed",
+      },
+    };
+
+    const res = await fetch(`${API_BASE}/api/events/create-event`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {}),
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json?.error || "Failed to create");
+    return json;
   }
-
-  // ✅ backend/db expects: free | paid | service (not event_free/event_paid)
-  const backendKind = kind === "event_free" ? "free" : kind === "event_paid" ? "paid" : "service";
-
-  const needsPrice = backendKind === "paid" || backendKind === "service";
-  if (needsPrice && priceCents === null) throw new Error("Enter a valid price.");
-
-  const timezone =
-    typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "America/New_York";
-
-  // ✅ DB has startsAt (UTC). This uses device-local interpretation of date/time.
-  // If you need strict timezone conversion, do it on the backend.
-  const startsAt =
-    dateISO && time24 ? new Date(`${dateISO}T${time24}:00`).toISOString() : undefined;
-
-  const payload = {
-    title: title.trim(),
-    description: description.trim(),
-    emoji,
-
-    creatorClerkId: userId,
-    kind: backendKind,                  // ✅ "free" | "paid" | "service"
-    priceCents: needsPrice ? priceCents : null,
-
-    timezone,
-    startsAt,                           // ✅ matches DB (omit if not set)
-    date: dateISO.trim(),
-    time: time24.trim(),
-
-    tags: [],                           // ✅ matches DB
-    visibility: "public",               // ✅ matches DB
-    status: "active",                   // ✅ matches DB
-
-    location: {
-      lat: coord.lat,
-      lng: coord.lng,
-
-      // ✅ geo point matches DB (lng first)
-      geo: { type: "Point", coordinates: [coord.lng, coord.lat] },
-
-      formattedAddress: selectedAddress || locationPayload.formattedAddress || "",
-      placeId: locationPayload.placeId || "",
-
-      countryCode: locationPayload.countryCode,
-      countryName: locationPayload.countryName || "",
-
-      admin1: locationPayload.admin1 || "",
-      admin1Code: locationPayload.admin1Code || "",
-
-      city: locationPayload.city,
-      cityKey: locationPayload.cityKey || "",
-
-      postalCode: locationPayload.postalCode || "",
-      neighborhood: locationPayload.neighborhood || "",
-
-      source: locationPayload.source || "user_typed",
-    },
-  };
-
-  const res = await fetch(`${API_BASE}/api/events/create-event`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {}),
-    },
-    body: JSON.stringify(payload),
-  });
-
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(json?.error || "Failed to create");
-  return json;
-}
 
   const handleCreate = async () => {
     setErr(null);
@@ -369,12 +369,15 @@ async function createListing() {
   };
 
   const mapHtml = useMemo(() => makeGoogleMapHtml(GOOGLE_KEY, initialCenterRef.current), [GOOGLE_KEY]);
+  const TOP_GAP = Platform.OS === "ios" ? 48 : 32;
 
   return (
     <Modalize
       ref={sheetRef}
+      withReactModal
       onClosed={handleFullClose}
-      modalHeight={Math.min(820, Math.max(640, H * 0.92))}
+      modalHeight={H - TOP_GAP}      // leaves space
+      modalTopOffset={TOP_GAP}
       modalStyle={styles.modal}
       handleStyle={styles.handle}
       overlayStyle={styles.overlay}
@@ -382,6 +385,11 @@ async function createListing() {
       scrollViewProps={{
         keyboardShouldPersistTaps: "handled",
         showsVerticalScrollIndicator: false,
+      }}
+      reactModalProps={{
+        presentationStyle: "overFullScreen",
+        statusBarTranslucent: true,
+        animationType: "fade",
       }}
     >
       <Header

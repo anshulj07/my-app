@@ -160,14 +160,15 @@ export default function EditEventModalView(props: {
             scrollViewProps={{ keyboardShouldPersistTaps: "handled", showsVerticalScrollIndicator: false }}
             withReactModal
             reactModalProps={{
-                presentationStyle: "overFullScreen", // iOS: ensures it overlays everything
+                presentationStyle: "overFullScreen",
                 transparent: true,
-                statusBarTranslucent: true,          // Android: prevents status bar layering weirdness
+                statusBarTranslucent: true,
             }}
         >
             <Header
                 title={props.title}
                 subtitle={!props.isCreator ? "View only • Not the creator" : "Edit details • Save changes"}
+                emoji={emoji}
                 onClose={props.onClosePress}
             />
 
@@ -567,12 +568,17 @@ export default function EditEventModalView(props: {
 
 /* ---------------- small UI bits ---------------- */
 
-function Header({ title, subtitle, onClose }: { title: string; subtitle: string; onClose: () => void }) {
+
+
+function Header({ title, subtitle, emoji, onClose }: { title: string; subtitle: string; emoji: string; onClose: () => void }) {
     return (
         <View style={styles.headerWrap}>
             <View style={styles.headerGlow} />
             <View style={styles.header}>
-                <View style={{ flex: 1 }}>
+                <View style={styles.heroIcon}>
+                    <Text style={styles.heroEmoji}>{emoji}</Text>
+                </View>
+                <View style={{ flex: 1, marginLeft: 12 }}>
                     <Text style={styles.headerTitle}>Edit event</Text>
                     <Text style={styles.headerSub} numberOfLines={1}>
                         {title.trim() ? title.trim() : subtitle}
@@ -668,6 +674,18 @@ const styles = StyleSheet.create({
         zIndex: 100000,
         elevation: 100000,
     },
+
+    heroIcon: {
+        width: 48,
+        height: 48,
+        borderRadius: 18,
+        backgroundColor: "rgba(56,189,248,0.18)",
+        borderWidth: 1,
+        borderColor: "rgba(56,189,248,0.35)",
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    heroEmoji: { fontSize: 22 },
 
     handle: {
         width: 56,

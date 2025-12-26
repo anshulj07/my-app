@@ -17,7 +17,7 @@ export type EventPin = {
   lng: number;
   emoji: string;
 
-  creatorClerkId?: string; // ✅ FIX: keep this
+  creatorClerkId?: string; 
 
   kind?: "free" | "service";
   priceCents?: number | string | null;

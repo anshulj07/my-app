@@ -9,8 +9,8 @@ import Constants from "expo-constants";
 import { ClerkProvider, useAuth, useUser } from "@clerk/clerk-expo";
 import { tokenCache } from "@clerk/clerk-expo/token-cache";
 
-const SIGN_IN = "/(auth)/sign-in";
-
+// ✅ change this to your new first auth screen (video + two options)
+const SIGN_IN = "/(auth)/welcome";
 
 const APP_HOME = "/newApp/home";
 const ONBOARDING_START = "/(onboarding)/name";
@@ -63,14 +63,13 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   const inOnboardingGroup = segments[0] === "(onboarding)";
   const currentStep = segments[segments.length - 1] || "";
 
-  // prevents re-fetch loops (once per user + current route)
   const lastCheckKeyRef = useRef<string>("");
 
   useEffect(() => {
     if (!nav?.key) return;
     if (!authLoaded) return;
 
-    // signed out -> go sign in
+    // signed out -> go to welcome/auth entry screen
     if (!isSignedIn) {
       setChecking(false);
       if (!inAuthGroup) router.replace(SIGN_IN);
@@ -135,7 +134,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     EVENT_API_KEY,
   ]);
 
-  // ✅ IMPORTANT: keep navigation mounted; just overlay a loader
+  // keep navigation mounted; just overlay a loader
   const showOverlay = !nav?.key || !authLoaded || (isSignedIn && !userLoaded) || checking;
 
   return (

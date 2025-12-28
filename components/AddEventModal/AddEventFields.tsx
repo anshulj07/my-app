@@ -327,8 +327,13 @@ export default function AddEventFields(props: Props) {
                         <>
                             <View style={{ marginTop: 12 }}>
                                 <View style={styles.whenGrid}>
+                                    {/* ✅ DATE TILE */}
                                     <Pressable
-                                        onPress={() => setDateOpen(true)}
+                                        onPress={() => {
+                                            // ✅ If empty, prefill today so selecting "today" works immediately
+                                            if (!dateISO) setDateISO(toLocalISODate(new Date()));
+                                            setDateOpen(true);
+                                        }}
                                         style={styles.whenTile}
                                         android_ripple={{ color: "#E2E8F0" }}
                                     >
@@ -346,6 +351,7 @@ export default function AddEventFields(props: Props) {
                                         <Text style={styles.whenTileHint}>Tap to choose</Text>
                                     </Pressable>
 
+                                    {/* TIME TILE (unchanged) */}
                                     <Pressable
                                         onPress={() => setTimeOpen(true)}
                                         style={styles.whenTile}
@@ -380,23 +386,32 @@ export default function AddEventFields(props: Props) {
                                 ) : null}
                             </View>
 
-                            {/* Date picker */}
+                            {/* ✅ DATE PICKER (fixed: allow today immediately + block past dates) */}
                             <Modal transparent visible={dateOpen} animationType="fade" onRequestClose={() => setDateOpen(false)}>
                                 <Pressable style={styles.pickerOverlay} onPress={() => setDateOpen(false)}>
                                     <Pressable style={styles.pickerCard} onPress={() => { }}>
                                         <Text style={styles.pickerTitle}>Pick a date</Text>
+
                                         <DateTimePicker
-                                            value={isoToSafeDate(dateISO)}
+                                            value={dateISO ? isoToSafeDate(dateISO) : todayMidday()}
                                             mode="date"
                                             display={Platform.OS === "ios" ? "inline" : "default"}
                                             themeVariant="light"
+                                            minimumDate={startOfToday()} // ✅ prevents selecting past dates
                                             onChange={(_, d) => {
                                                 if (!d) return;
-                                                const iso = d.toISOString().slice(0, 10);
-                                                setDateISO(iso);
+
+                                                const chosen = new Date(d);
+                                                chosen.setHours(12, 0, 0, 0);
+
+                                                // ✅ safety: ignore any past date (extra guard)
+                                                if (chosen.getTime() < startOfToday().getTime()) return;
+
+                                                setDateISO(toLocalISODate(chosen));
                                                 if (Platform.OS !== "ios") setDateOpen(false);
                                             }}
                                         />
+
                                         <TouchableOpacity style={styles.pickerDone} onPress={() => setDateOpen(false)} activeOpacity={0.9}>
                                             <Text style={styles.pickerDoneText}>Done</Text>
                                         </TouchableOpacity>
@@ -404,7 +419,7 @@ export default function AddEventFields(props: Props) {
                                 </Pressable>
                             </Modal>
 
-                            {/* Time picker */}
+                            {/* TIME PICKER (unchanged) */}
                             <Modal transparent visible={timeOpen} animationType="fade" onRequestClose={() => setTimeOpen(false)}>
                                 <Pressable style={styles.pickerOverlay} onPress={() => setTimeOpen(false)}>
                                     <Pressable style={styles.pickerCard} onPress={() => { }}>
@@ -431,7 +446,7 @@ export default function AddEventFields(props: Props) {
                         </>
                     )}
                 </Card>
-
+                
                 {/* WHERE */}
                 <Card>
                     <CardTitle title="Where" subtitle="Search a place or drop a pin on the map." />
@@ -716,5 +731,26 @@ function timeToDate(time24: string) {
     if (Number.isFinite(mm)) d.setMinutes(mm);
     d.setSeconds(0);
     d.setMilliseconds(0);
+    return d;
+}
+
+function startOfToday() {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+}
+
+// local YYYY-MM-DD (not UTC)
+function toLocalISODate(d: Date) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+}
+
+// stable "today" value for picker (noon avoids DST edge cases)
+function todayMidday() {
+    const d = new Date();
+    d.setHours(12, 0, 0, 0);
     return d;
 }

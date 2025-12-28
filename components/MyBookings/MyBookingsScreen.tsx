@@ -11,40 +11,15 @@ import {
   UIManager,
   LayoutAnimation,
   Animated,
-  SectionList,
-  SectionListData,
-  Switch,
 } from "react-native";
 import Constants from "expo-constants";
 import { useAuth } from "@clerk/clerk-expo";
-import Ionicons from "@expo/vector-icons/Ionicons";
 import { useRouter } from "expo-router";
 import { styles } from "./MyBookingScreen.style";
 
-type EventKind = "free" | "paid" | "service";
-
-type EventDoc = {
-  _id: string;
-  title: string;
-  emoji?: string;
-  description?: string;
-
-  creatorClerkId: string;
-
-  kind: EventKind;
-  priceCents: number | null;
-
-  startsAt?: string | null;
-  date?: string;
-  time?: string;
-  status?: string;
-
-  // optional fields if you already store them
-  attendance?: number | null; // max people
-  attendees?: string[];       // array of clerk userIds
-
-  location?: { city?: string; admin1Code?: string; countryCode?: string };
-};
+import CreatedTab, { EventDoc } from "./Tabs/CreatedTab";
+import GoingTab from "./Tabs/GoingTab";
+import PastTab from "./Tabs/PastTab";
 
 type TabKey = "created" | "going" | "past";
 
@@ -74,46 +49,6 @@ function eventStartMs(ev: EventDoc): number {
   return Number.POSITIVE_INFINITY;
 }
 
-function fmtWhen(ev: EventDoc) {
-  const ms = eventStartMs(ev);
-  if (!Number.isFinite(ms) || ms === Number.POSITIVE_INFINITY) return "No time set";
-  const d = new Date(ms);
-  return d.toLocaleString(undefined, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
-function fmtWhere(ev: EventDoc) {
-  const city = ev.location?.city?.trim();
-  const s = ev.location?.admin1Code?.trim();
-  const cc = ev.location?.countryCode?.trim();
-  if (!city && !cc) return "Location not set";
-  return `${city ?? ""}${s ? `, ${s}` : ""}${cc ? ` · ${cc}` : ""}`.trim();
-}
-
-function priceLabel(ev: EventDoc) {
-  if (ev.kind === "free") return "FREE";
-  return `$${((ev.priceCents ?? 0) / 100).toFixed(2)}`;
-}
-
-function kindLabel(ev: EventDoc) {
-  if (ev.kind === "service") return "Service";
-  if (ev.kind === "paid") return "Paid event";
-  return "Free event";
-}
-
-function statusLabel(ev: EventDoc) {
-  const s = String(ev.status || "active").toLowerCase();
-  return s === "paused" ? "Paused" : "Active";
-}
-
-function isEnabled(ev: EventDoc) {
-  return String(ev.status || "active").toLowerCase() !== "paused";
-}
 
 export default function MyBookingsScreen() {
   const router = useRouter();
@@ -123,6 +58,7 @@ export default function MyBookingsScreen() {
   const EVENT_API_KEY = (Constants.expoConfig?.extra as any)?.eventApiKey as string | undefined;
 
   const [tab, setTab] = useState<TabKey>("created");
+
   const [created, setCreated] = useState<EventDoc[]>([]);
   const [goingUpcoming, setGoingUpcoming] = useState<EventDoc[]>([]);
   const [past, setPast] = useState<EventDoc[]>([]);
@@ -139,6 +75,7 @@ export default function MyBookingsScreen() {
   const [tabsW, setTabsW] = useState(0);
   const indicatorX = useRef(new Animated.Value(0)).current;
   const tabIndex = tab === "created" ? 0 : tab === "going" ? 1 : 2;
+
 
   useEffect(() => {
     if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -171,16 +108,29 @@ export default function MyBookingsScreen() {
   }, [EVENT_API_KEY]);
 
   const fetchMyEvents = useCallback(async () => {
-    const url = `${API_BASE}/api/bookings/my-bookings?clerkUserId=${encodeURIComponent(userId || "")}&limit=500`;
+    const url = `${API_BASE}/api/bookings/my-bookings?clerkUserId=${encodeURIComponent(
+      userId || ""
+    )}&limit=500`;
     const res = await fetch(url, { method: "GET", headers });
     const txt = await res.text();
     const json = safeJson(txt);
     if (!res.ok) throw new Error(json?.error || json?.detail || "Failed to fetch your events");
+
     return {
       createdEvents: Array.isArray(json?.createdEvents) ? (json.createdEvents as EventDoc[]) : [],
       goingEvents: Array.isArray(json?.goingEvents) ? (json.goingEvents as EventDoc[]) : [],
       pastEvents: Array.isArray(json?.pastEvents) ? (json.pastEvents as EventDoc[]) : [],
     };
+  }, [API_BASE, headers, userId]);
+
+  const fetchGoingEvents = useCallback(async () => {
+    const url = `${API_BASE}/api/bookings/going?clerkUserId=${encodeURIComponent(userId || "")}&limit=500`;
+    const res = await fetch(url, { method: "GET", headers });
+    const txt = await res.text();
+    const json = safeJson(txt);
+    if (!res.ok) throw new Error(json?.error || json?.detail || "Failed to fetch going events");
+
+    return Array.isArray(json?.goingEvents) ? (json.goingEvents as EventDoc[]) : [];
   }, [API_BASE, headers, userId]);
 
   const load = useCallback(async () => {
@@ -201,21 +151,35 @@ export default function MyBookingsScreen() {
     setLoading(true);
 
     try {
-      const { createdEvents } = await fetchMyEvents();
-      const sorted = createdEvents.slice().sort((a, b) => eventStartMs(a) - eventStartMs(b));
+      const [createdResp, goingResp] = await Promise.all([fetchMyEvents(), fetchGoingEvents()]);
+
+      const createdSorted = createdResp.createdEvents
+        .slice()
+        .sort((a, b) => eventStartMs(a) - eventStartMs(b));
+
+      const now = Date.now();
+
+      const goingUpcomingOnly = goingResp
+        .filter((e) => eventStartMs(e) >= now)
+        .sort((a, b) => eventStartMs(a) - eventStartMs(b));
 
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-      setCreated(sorted);
 
-      setGoingUpcoming([]);
-      setPast([]);
+      setCreated(createdSorted);
+      setGoingUpcoming(goingUpcomingOnly);
+
+      setPast(
+        (createdResp.pastEvents || [])
+          .slice()
+          .sort((a, b) => eventStartMs(b) - eventStartMs(a))
+      );
     } catch (e: any) {
       setErr(e?.message || "Something went wrong while loading events.");
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [API_BASE, userId, fetchMyEvents]);
+  }, [API_BASE, userId, fetchMyEvents, fetchGoingEvents]);
 
   useEffect(() => {
     load();
@@ -225,30 +189,6 @@ export default function MyBookingsScreen() {
     setRefreshing(true);
     load();
   }, [load]);
-
-  const nowMs = Date.now();
-
-  const sections = useMemo(() => {
-    if (tab === "created") {
-      const upcoming = created
-        .filter((e) => eventStartMs(e) >= nowMs)
-        .sort((a, b) => eventStartMs(a) - eventStartMs(b));
-
-      const pastCreated = created
-        .filter((e) => eventStartMs(e) < nowMs)
-        .sort((a, b) => eventStartMs(b) - eventStartMs(a));
-
-      const out: Array<{ title: string; hint: string; data: EventDoc[] }> = [];
-      out.push({ title: "Upcoming", hint: "Events you created that haven’t started", data: upcoming });
-      out.push({ title: "Past", hint: "Events you created earlier", data: pastCreated });
-
-      return out.filter((s) => s.data.length > 0);
-    }
-
-    const list = tab === "going" ? goingUpcoming : past;
-    if (list.length === 0) return [];
-    return [{ title: tab === "going" ? "Going" : "Past", hint: "", data: list }];
-  }, [tab, created, goingUpcoming, past, nowMs]);
 
   // ✅ Toggle API (Created -> Service only)
   const patchServiceEnabled = useCallback(
@@ -291,6 +231,21 @@ export default function MyBookingsScreen() {
 
   const TOP_PAD = (Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0) + 40;
 
+  const onPressEvent = useCallback(
+    (item: EventDoc) => {
+      router.push({
+        pathname: "/event-interest/[eventId]",
+        params: {
+          eventId: item._id,
+          kind: item.kind,
+          title: item.title,
+          emoji: item.emoji || "📍",
+        },
+      });
+    },
+    [router]
+  );
+
   return (
     <View style={[styles.screen, { paddingTop: TOP_PAD }]}>
       <Animated.View style={[styles.header, { opacity: headerFade, transform: [{ translateY: headerLift }] }]}>
@@ -306,8 +261,8 @@ export default function MyBookingsScreen() {
             <Animated.View style={[styles.tabIndicator, { width: tabsW / 3, transform: [{ translateX: indicatorX }] }]} />
           )}
           <Tab label="Created" count={created.length} active={tab === "created"} onPress={() => setTab("created")} />
-          <Tab label="Going" count={0} active={tab === "going"} onPress={() => setTab("going")} />
-          <Tab label="Past" count={0} active={tab === "past"} onPress={() => setTab("past")} />
+          <Tab label="Going" count={goingUpcoming.length} active={tab === "going"} onPress={() => setTab("going")} />
+          <Tab label="Past" count={past.length} active={tab === "past"} onPress={() => setTab("past")} />
         </View>
       </Animated.View>
 
@@ -323,57 +278,35 @@ export default function MyBookingsScreen() {
             <Text style={styles.retryTxt}>Retry</Text>
           </Pressable>
         </View>
-      ) : (
-        <SectionList
-          sections={sections as SectionListData<EventDoc>[]}
-          keyExtractor={(item) => item._id}
-          contentContainerStyle={styles.list}
-          stickySectionHeadersEnabled={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-          ListEmptyComponent={
-            <View style={styles.empty}>
-              <Text style={styles.emptyTitle}>No events yet</Text>
-              <Text style={styles.emptySub}>Explore events to get started.</Text>
-            </View>
-          }
-          renderSectionHeader={({ section }: any) => (
-            <View style={styles.sectionHeaderWrap}>
-              <View style={styles.sectionHeaderTop}>
-                <Text style={styles.sectionTitle}>{section.title}</Text>
-                {!!section.hint && <Text style={styles.sectionHint}>{section.hint}</Text>}
-              </View>
-              <View style={styles.sectionDivider} />
-            </View>
-          )}
-          renderItem={({ item, index }) => (
-            <EventCard
-              e={item}
-              index={index}
-              showToggle={tab === "created" && item.kind === "service"}
-              toggleBusy={!!toggleBusy[item._id]}
-              onToggle={(next) => patchServiceEnabled(item, next)}
-              onPress={() => {
-                router.push({
-                  pathname: "/event-interest/[eventId]",
-                  params: {
-                    eventId: item._id,
-                    kind: item.kind,
-                    title: item.title,
-                    emoji: item.emoji || "📍",
-                  },
-                });
-              }}
-            />
-          )}
-          ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
-          showsVerticalScrollIndicator={false}
+      ) : tab === "created" ? (
+        <CreatedTab
+          created={created}
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          toggleBusyById={toggleBusy}
+          onToggleServiceEnabled={patchServiceEnabled}
+          onPressEvent={onPressEvent}
         />
+      ) : tab === "going" ? (
+        <GoingTab going={goingUpcoming} refreshing={refreshing} onRefresh={onRefresh} onPressEvent={onPressEvent} />
+      ) : (
+        <PastTab past={past} refreshing={refreshing} onRefresh={onRefresh} onPressEvent={onPressEvent} />
       )}
     </View>
   );
 }
 
-function Tab({ label, count, active, onPress }: { label: string; count: number; active: boolean; onPress: () => void }) {
+function Tab({
+  label,
+  count,
+  active,
+  onPress,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  onPress: () => void;
+}) {
   return (
     <Pressable onPress={onPress} style={styles.tabBtn} android_ripple={{ color: "rgba(255,255,255,0.08)" }}>
       <Text style={[styles.tabText, active && styles.tabTextActive]} numberOfLines={1}>
@@ -381,166 +314,5 @@ function Tab({ label, count, active, onPress }: { label: string; count: number; 
       </Text>
       <Text style={[styles.tabCount, active && styles.tabCountActive]}>{count}</Text>
     </Pressable>
-  );
-}
-
-function EventCard({
-  e,
-  index,
-  showToggle,
-  toggleBusy,
-  onToggle,
-  onPress,
-}: {
-  e: EventDoc;
-  index: number;
-  showToggle: boolean;
-  toggleBusy: boolean;
-  onToggle: (next: boolean) => void;
-  onPress: () => void;
-}) {
-  const a = useRef(new Animated.Value(0)).current;
-  const y = useRef(new Animated.Value(10)).current;
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(a, { toValue: 1, duration: 220, delay: Math.min(index * 35, 180), useNativeDriver: true }),
-      Animated.timing(y, { toValue: 0, duration: 220, delay: Math.min(index * 35, 180), useNativeDriver: true }),
-    ]).start();
-  }, [a, y, index]);
-
-  const enabled = isEnabled(e);
-  const statusTxt = statusLabel(e);
-
-  const actionLabel = e.kind === "service" ? "View bookings" : "View interested people";
-  const actionIcon = e.kind === "service" ? "calendar" : "people";
-
-  return (
-    <Animated.View style={{ opacity: a, transform: [{ translateY: y }] }}>
-      <Pressable
-        onPress={onPress}
-        android_ripple={{ color: "rgba(255,255,255,0.08)" }}
-        style={({ pressed }) => [
-          styles.card,
-          {
-            borderWidth: 1,
-            borderColor: pressed ? "rgba(10,132,255,0.65)" : "rgba(255,255,255,0.10)",
-            transform: [{ scale: pressed ? 0.99 : 1 }],
-          },
-        ]}
-      >
-        {/* TOP ROW */}
-        <View style={styles.cardTop}>
-          <View style={styles.emojiPill}>
-            <Text style={styles.emojiTxt}>{e.emoji || "📍"}</Text>
-          </View>
-
-          <View style={{ flex: 1 }}>
-            {/* Title row + chevron */}
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <Text style={styles.cardTitle} numberOfLines={1}>
-                {e.title}
-              </Text>
-
-              {/* ✅ Click affordance */}
-              <Ionicons
-                name="chevron-forward"
-                size={18}
-                color="rgba(226,232,240,0.80)"
-                style={{ marginLeft: "auto" }}
-              />
-            </View>
-
-            {/* Badges */}
-            <View style={styles.badgesRow}>
-              <View style={[styles.badge, e.kind === "service" ? styles.badgeService : styles.badgeFree]}>
-                <Ionicons
-                  name={e.kind === "service" ? "sparkles" : e.kind === "paid" ? "card" : "leaf"}
-                  size={12}
-                  color="#fff"
-                />
-                <Text style={styles.badgeText}>{kindLabel(e)}</Text>
-              </View>
-
-              <View style={[styles.badge, enabled ? styles.badgeActive : styles.badgePaused]}>
-                <Ionicons name={enabled ? "checkmark" : "pause"} size={12} color="#fff" />
-                <Text style={styles.badgeText}>{statusTxt}</Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Right column: price + toggle */}
-          <View style={styles.rightCol}>
-            <View style={styles.pricePill}>
-              <Text style={styles.priceTxt}>{priceLabel(e)}</Text>
-            </View>
-
-            {showToggle ? (
-              <View style={styles.toggleWrap}>
-                {toggleBusy ? (
-                  <ActivityIndicator size="small" />
-                ) : (
-                  <Switch
-                    value={enabled}
-                    onValueChange={onToggle}
-                    trackColor={{
-                      false: "rgba(148,163,184,0.22)",
-                      true: "rgba(10,132,255,0.55)",
-                    }}
-                    thumbColor="#FFFFFF"
-                    ios_backgroundColor="rgba(148,163,184,0.22)"
-                  />
-                )}
-              </View>
-            ) : null}
-          </View>
-        </View>
-
-        {/* META GRID */}
-        <View style={styles.metaGrid}>
-          <View style={styles.metaCell}>
-            <Text style={styles.metaLabel}>When</Text>
-            <Text style={styles.metaValue} numberOfLines={1}>
-              {fmtWhen(e)}
-            </Text>
-          </View>
-
-          <View style={styles.metaCell}>
-            <Text style={styles.metaLabel}>Where</Text>
-            <Text style={styles.metaValue} numberOfLines={1}>
-              {fmtWhere(e)}
-            </Text>
-          </View>
-        </View>
-
-        {/* ✅ Bottom action bar (looks like a button) */}
-        <View
-          style={{
-            marginTop: 12,
-            paddingVertical: 10,
-            paddingHorizontal: 12,
-            borderRadius: 14,
-            backgroundColor: "rgba(255,255,255,0.06)",
-            borderWidth: 1,
-            borderColor: "rgba(255,255,255,0.10)",
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 10,
-          }}
-        >
-
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: "rgba(0, 0, 0, 0.95)", fontWeight: "900", fontSize: 13 }}>
-              {actionLabel}
-            </Text>
-            <Text style={{ color: "rgba(0, 0, 0, 0.95)", fontSize: 12, marginTop: 2 }}>
-              Opens details & list
-            </Text>
-          </View>
-
-          <Ionicons name="arrow-forward" size={16} color="rgba(0, 0, 0, 0.85)" />
-        </View>
-      </Pressable>
-    </Animated.View>
   );
 }

@@ -459,10 +459,21 @@ export default function AddEventModal({
         keyboardShouldPersistTaps: "handled",
         showsVerticalScrollIndicator: false,
       }}
+
+      // ✅ lock the sheet: no swipe-down close, no overlay-tap close
+      panGestureEnabled={false}
+      closeOnOverlayTap={false}
+
+      // ✅ optional: hide the grab handle so users don’t try to drag it
+      // withHandle={false}
+
       reactModalProps={{
         presentationStyle: "overFullScreen",
         statusBarTranslucent: true,
         animationType: "fade",
+
+        // ✅ Android: prevent hardware back button from dismissing the modal
+        onRequestClose: () => { },
       }}
     >
       <AddEventFields
@@ -551,7 +562,7 @@ export default function AddEventModal({
         selectedAddress={selectedAddress}
         locLoading={locLoading}
         googleKey={GOOGLE_KEY}
-        mapRef={mapRef}
+        mapRef={mapRef as unknown as React.RefObject<WebView>}
         mapHtml={mapHtml}
         onMapMessage={onMapMessage}
 

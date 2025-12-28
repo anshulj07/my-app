@@ -1,63 +1,73 @@
 export function textToEmoji(t: string): string {
   const s = (t || "").toLowerCase();
+  const compact = s.replace(/[^a-z0-9]+/g, ""); // catches datenight/openmic/afterparty/boardgame
+  const tokens = new Set(
+    s
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+  );
 
-  // --- Dating / social (match early so it wins) ---
-  if (/(date\s*night|datenight|romance|romantic|valentine|candle\s*light|candlelit|love\s*night)/.test(s)) return "💘";
-  if (/(first\s*date|second\s*date|third\s*date|couples?\s*(night|date)|couple\s*time|relationship|bf|gf|boyfriend|girlfriend)/.test(s)) return "💑";
-  if (/(speed\s*date|speed\s*dating|rapid\s*dating)/.test(s)) return "⚡️";
-  if (/(singles?\s*(night|event|party)|single\s*mixer|dating\s*mixer|mixer|social\s*mixer|social\s*night|meet\s*and\s*greet|meetup\s*social|mingl(e|ing)|ice\s*breaker|icebreaker|hangout|hang\s*out|get\s*together|gathering|social|community\s*night)/.test(s)) return "🫶";
-  if (/(blind\s*date|mystery\s*date)/.test(s)) return "🙈";
-  if (/(proposal|engagement|fianc(e|é)|ring\s*shopping)/.test(s)) return "💍";
-  if (/(anniversary|celebration\s*dinner|special\s*occasion)/.test(s)) return "🕯️";
+  const has = (words: string[]) =>
+    words.some((w) => tokens.has(w) || compact.includes(w));
+
+  // --- Dating / social (keep high priority) ---
+  if (has(["date", "romance", "romantic", "valentine", "candlelit", "love"])) return "💘";
+  if (has(["couple", "relationship", "boyfriend", "girlfriend", "bf", "gf"])) return "💑";
+  if (has(["speeddating", "speeddate"])) return "⚡️";
+  if (has(["single", "mixer", "meetup", "mingle", "social", "hangout", "gathering", "community"])) return "🫶";
+  if (has(["blinddate", "mysterydate"])) return "🙈";
+  if (has(["proposal", "engagement", "fiance", "fiancé", "ring"])) return "💍";
+  if (has(["anniversary", "celebration", "occasion"])) return "🕯️";
 
   // --- Parties / nightlife ---
-  if (/(party|house\s*party|club|night\s*club|dance|dancing|dj|edm|rave|night\s*out|after\s*party|afterparty)/.test(s)) return "🪩";
-  if (/(bar\s*crawl|pub\s*crawl|crawl|brewery\s*crawl)/.test(s)) return "🍻";
-  if (/(karaoke|open\s*mic|openmic)/.test(s)) return "🎤";
-  if (/(concert|live\s*music|gig|show|performance|band|festival)/.test(s)) return "🎸";
+  if (has(["party", "club", "dance", "dancing", "dj", "edm", "rave", "afterparty", "nightout"])) return "🪩";
+  if (has(["barcrawl", "pubcrawl", "crawl", "brewerycrawl"])) return "🍻";
+  if (has(["karaoke", "openmic"])) return "🎤";
+  if (has(["concert", "music", "gig", "show", "performance", "band", "festival"])) return "🎸";
 
   // --- Food & drinks ---
-  if (/(coffee|cafe|coffee\s*shop|espresso|latte|cappuccino|chai|tea|matcha)/.test(s)) return "☕️";
-  if (/(brunch|breakfast|pancakes?|waffles?)/.test(s)) return "🥞";
-  if (/(dinner|supper|fine\s*dining|restaurant|steakhouse|omakase|tasting\s*menu)/.test(s)) return "🍽️";
-  if (/(eat|food|foodie|snacks?|bites?|lunch|dinner|meal|potluck|cookout|bbq|barbecue|pizza|tacos?|sushi|ramen|noodles)/.test(s)) return "🍕";
-  if (/(wine|winery|vineyard|wine\s*tasting)/.test(s)) return "🍷";
-  if (/(cocktail|mixology|happy\s*hour|mocktail|speakeasy)/.test(s)) return "🍸";
-  if (/(drink|drinks|beer|pub|bar|taproom|brewery|craft\s*beer)/.test(s)) return "🍺";
-  if (/(dessert|ice\s*cream|gelato|boba|bubble\s*tea|desserts|sweet|cake|bakery)/.test(s)) return "🍨";
+  if (has(["coffee", "cafe", "espresso", "latte", "cappuccino", "chai", "tea", "matcha"])) return "☕️";
+  if (has(["brunch", "breakfast", "pancake", "pancakes", "waffle", "waffles"])) return "🥞";
+  if (has(["dinner", "supper", "restaurant", "steakhouse", "omakase", "tasting"])) return "🍽️";
+  if (has(["food", "foodie", "snack", "snacks", "lunch", "meal", "potluck", "cookout", "bbq", "barbecue", "pizza", "taco", "tacos", "sushi", "ramen", "noodle", "noodles"])) return "🍕";
+  if (has(["wine", "winery", "vineyard", "winetasting"])) return "🍷";
+  if (has(["cocktail", "mocktail", "mixology", "happyhour", "speakeasy"])) return "🍸";
+  if (has(["drink", "drinks", "beer", "pub", "bar", "taproom", "brewery", "craftbeer"])) return "🍺";
+  if (has(["dessert", "sweet", "icecream", "gelato", "boba", "bubbletea", "cake", "bakery"])) return "🍨";
 
   // --- Outdoor / activities ---
-  if (/(run|running|jog|jogging|sprint|marathon|5k|10k|half\s*marathon)/.test(s)) return "🏃‍♂️";
-  if (/(walk|walking|stroll|strolling|walk\s*and\s*talk|trail\s*walk)/.test(s)) return "🚶‍♂️";
-  if (/(gym|workout|training|lift|lifting|barbell|weights?|strength|crossfit|hiit)/.test(s)) return "🏋️‍♀️";
-  if (/(yoga|meditate|meditation|stretch|stretching|breathwork|pilates)/.test(s)) return "🧘‍♀️";
-  if (/(hike|hiking|trail|trek|trekking|mountain|summit|nature\s*walk)/.test(s)) return "🥾";
-  if (/(beach|ocean|seaside|sunset\s*beach)/.test(s)) return "🏖️";
-  if (/(park|picnic|outdoor\s*picnic|garden|botanical)/.test(s)) return "🌳";
-  if (/(camp|camping|bonfire|fire\s*pit|campfire|s'mores|smores)/.test(s)) return "🔥";
+  if (has(["run", "running", "jog", "jogging", "sprint", "marathon", "5k", "10k"])) return "🏃‍♂️";
+  if (has(["walk", "walking", "stroll", "strolling", "trail"])) return "🚶‍♂️";
+  if (has(["gym", "workout", "training", "lift", "lifting", "barbell", "weight", "weights", "strength", "crossfit", "hiit"])) return "🏋️‍♀️";
+  if (has(["yoga", "meditate", "meditation", "stretch", "stretching", "breathwork", "pilates"])) return "🧘‍♀️";
+  if (has(["hike", "hiking", "trek", "trekking", "mountain", "summit", "nature"])) return "🥾";
+  if (has(["beach", "ocean", "seaside", "sunset"])) return "🏖️";
+  if (has(["park", "picnic", "garden", "botanical"])) return "🌳";
+  if (has(["camp", "camping", "bonfire", "firepit", "campfire", "smores"])) return "🔥";
 
   // --- Sports / active ---
-  if (/(basketball|hoops)/.test(s)) return "🏀";
-  if (/(soccer|football\s*match)/.test(s)) return "⚽️";
-  if (/(tennis)/.test(s)) return "🎾";
-  if (/(pickleball)/.test(s)) return "🏓";
-  if (/(bowling)/.test(s)) return "🎳";
+  if (has(["basketball", "hoops"])) return "🏀";
+  if (has(["soccer", "football", "match"])) return "⚽️";
+  if (has(["tennis"])) return "🎾";
+  if (has(["pickleball"])) return "🏓";
+  if (has(["bowling"])) return "🎳";
 
   // --- Games / hobbies ---
-  if (/(board\s*game|boardgame|game\s*night|card\s*game|cards)/.test(s)) return "🎲";
-  if (/(trivia|quiz\s*night)/.test(s)) return "🧠";
-  if (/(movie|movies|film|cinema|theater|theatre|screening)/.test(s)) return "🎬";
-  if (/(museum|gallery|art\s*show|exhibit|exhibition|art\s*walk)/.test(s)) return "🖼️";
-  if (/(book\s*club|reading\s*club)/.test(s)) return "📖";
-  if (/(photography|photo\s*walk|photoshoot)/.test(s)) return "📸";
-  if (/(gaming|videogame|video\s*game|esports)/.test(s)) return "🎮";
+  if (has(["boardgame", "gamenight", "game", "card", "cards"])) return "🎲";
+  if (has(["trivia", "quiz"])) return "🧠";
+  if (has(["movie", "movies", "film", "cinema", "theater", "theatre", "screening"])) return "🎬";
+  if (has(["museum", "gallery", "art", "exhibit", "exhibition"])) return "🖼️";
+  if (has(["bookclub", "reading"])) return "📖";
+  if (has(["photography", "photowalk", "photoshoot"])) return "📸";
+  if (has(["gaming", "videogame", "esports"])) return "🎮";
 
   // --- Learning / work ---
-  if (/(study|learn|learning|read|reading|library|homework)/.test(s)) return "📚";
-  if (/(workshop|class|course|training\s*session|seminar|lecture|bootcamp)/.test(s)) return "🧑‍🏫";
-  if (/(network(ing)?|career|job\s*fair|recruiting|recruitment|professional\s*meetup|industry\s*meetup)/.test(s)) return "🤝";
-  if (/(hackathon|code\s*jam|coding|dev\s*meetup)/.test(s)) return "💻";
+  if (has(["study", "learn", "learning", "read", "reading", "library", "homework"])) return "📚";
+  if (has(["workshop", "class", "course", "training", "seminar", "lecture", "bootcamp"])) return "🧑‍🏫";
+  if (has(["network", "networking", "career", "jobfair", "recruiting", "recruitment", "professional", "industry"])) return "🤝";
+  if (has(["hackathon", "codejam", "coding", "dev"])) return "💻";
 
-  // --- Default ---
   return "📍";
 }

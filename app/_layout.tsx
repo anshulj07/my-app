@@ -9,6 +9,8 @@ import Constants from "expo-constants";
 import { ClerkProvider, useAuth, useUser } from "@clerk/clerk-expo";
 import { tokenCache } from "@clerk/clerk-expo/token-cache";
 
+import { useFonts, Sora_400Regular, Sora_600SemiBold, Sora_700Bold } from "@expo-google-fonts/sora";
+
 // ✅ change this to your new first auth screen (video + two options)
 const SIGN_IN = "/(auth)/welcome";
 
@@ -37,6 +39,7 @@ async function getOnboardingStatus(args: {
     signal,
   });
 
+  // if backend unavailable, don't block app
   if (!res.ok) return { completed: true };
 
   const j = await res.json().catch(() => ({} as any));
@@ -153,7 +156,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
             backgroundColor: "#0B0B12",
           }}
         >
-          <ActivityIndicator />
+          <ActivityIndicator color="#B8FF6A" />
         </View>
       ) : null}
     </View>
@@ -161,6 +164,13 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 }
 
 export default function RootLayout() {
+  // ✅ load fonts once for the entire app
+  const [fontsLoaded] = useFonts({
+    Sora_400Regular,
+    Sora_600SemiBold,
+    Sora_700Bold,
+  });
+
   const publishableKey =
     process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ||
     (Constants.expoConfig?.extra as any)?.clerkPublishableKey;
@@ -168,6 +178,15 @@ export default function RootLayout() {
   if (!publishableKey) {
     throw new Error(
       "Missing Clerk publishable key. Set EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY or extra.clerkPublishableKey."
+    );
+  }
+
+  // ✅ avoid font flicker / missing-font fallback on first paint
+  if (!fontsLoaded) {
+    return (
+      <View style={{ flex: 1, backgroundColor: "#0B0B12", alignItems: "center", justifyContent: "center" }}>
+        <ActivityIndicator color="#6AF0FF" />
+      </View>
     );
   }
 

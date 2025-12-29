@@ -10,11 +10,13 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Pressable,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useUser } from "@clerk/clerk-expo";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import Constants from "expo-constants";
+import { LinearGradient } from "expo-linear-gradient";
 
 export default function NameScreen() {
   const router = useRouter();
@@ -29,10 +31,7 @@ export default function NameScreen() {
   const API_BASE = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
   const EVENT_API_KEY = (Constants.expoConfig?.extra as any)?.eventApiKey as string | undefined;
 
-  const canContinue = useMemo(
-    () => firstName.trim().length >= 1 && !saving,
-    [firstName, saving]
-  );
+  const canContinue = useMemo(() => firstName.trim().length >= 1 && !saving, [firstName, saving]);
 
   const onNext = async () => {
     if (!isLoaded || !user) return;
@@ -41,7 +40,7 @@ export default function NameScreen() {
     setErr(null);
 
     try {
-      if (!API_BASE) throw new Error("Missing API base URL (extra.apiBaseUrl).");
+      if (!API_BASE) throw new Error("Config issue: extra.apiBaseUrl is missing.");
 
       const payload = {
         clerkUserId: user.id,
@@ -76,301 +75,266 @@ export default function NameScreen() {
     }
   };
 
+  const title = "Your name";
+  const subtitle = "This helps people recognize you nearby.";
+
   return (
     <SafeAreaView style={styles.safe}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.select({ ios: "padding", android: undefined })}
-      >
-        <View style={styles.page}>
-          {/* Top glow header */}
-          <View style={styles.hero}>
-            <View style={styles.heroTop}>
-              <View style={styles.pill}>
-                <View style={styles.pillDot} />
-                <Text style={styles.pillText}>Step 1 of 4</Text>
-              </View>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.select({ ios: "padding", android: undefined })}>
+        <LinearGradient colors={[THEME.bgTop, THEME.bgMid, THEME.bgBot]} style={styles.bg}>
+          {/* Top bar (match sign-in screen) */}
+          <View style={styles.topBar}>
+            <TouchableOpacity onPress={() => router.back()} activeOpacity={0.85} style={styles.iconBtn}>
+              <Ionicons name="chevron-back" size={20} color={THEME.text} />
+            </TouchableOpacity>
 
-              <View style={styles.spark}>
-                <Ionicons name="sparkles" size={16} color={COLORS.primary} />
-              </View>
-            </View>
+            <Text style={styles.brandText}>Pulse</Text>
 
-            <Text style={styles.h1}>What’s your name?</Text>
-            <Text style={styles.h2}>This helps people recognize you nearby.</Text>
+            <View style={{ width: 44 }} />
           </View>
 
-          {/* Glass card */}
-          <View style={styles.card}>
-            <View style={styles.field}>
+          {/* Content */}
+          <View style={styles.content}>
+            <Text style={styles.h1}>{title}</Text>
+            <Text style={styles.h2}>{subtitle}</Text>
+
+            <View style={styles.card}>
               <Text style={styles.label}>First name</Text>
-              <View style={[styles.inputWrap, firstName.trim() && styles.focused]}>
-                <View style={styles.leftIcon}>
-                  <Ionicons name="person-outline" size={18} color={COLORS.muted} />
-                </View>
+              <View style={[styles.field, firstName.trim().length > 0 && styles.fieldOk]}>
+                <Ionicons name="person-outline" size={18} color={THEME.muted} style={{ marginRight: 10 }} />
                 <TextInput
                   value={firstName}
                   onChangeText={setFirstName}
+                  autoCapitalize="words"
+                  autoCorrect={false}
                   placeholder="e.g. Anshul"
-                  placeholderTextColor={COLORS.placeholder}
+                  placeholderTextColor={THEME.placeholder}
                   style={styles.input}
                   returnKeyType="next"
                 />
-                <View style={styles.rightIcon}>
-                  {firstName.trim().length > 0 ? (
-                    <Ionicons name="checkmark-circle" size={18} color={COLORS.success} />
-                  ) : (
-                    <View style={{ width: 18 }} />
-                  )}
-                </View>
+                {firstName.trim().length > 0 ? (
+                  <Ionicons name="checkmark-circle" size={18} color={THEME.good} />
+                ) : (
+                  <View style={{ width: 18 }} />
+                )}
               </View>
-            </View>
 
-            <View style={styles.field}>
-              <Text style={styles.label}>Last name</Text>
-              <View style={styles.inputWrap}>
-                <View style={styles.leftIcon}>
-                  <Ionicons name="id-card-outline" size={18} color={COLORS.muted} />
-                </View>
+              <Text style={[styles.label, { marginTop: 14 }]}>
+                Last name <Text style={{ opacity: 0.7 }}>(optional)</Text>
+              </Text>
+              <View style={[styles.field, lastName.trim().length > 0 && styles.fieldOk]}>
+                <Ionicons name="id-card-outline" size={18} color={THEME.muted} style={{ marginRight: 10 }} />
                 <TextInput
                   value={lastName}
                   onChangeText={setLastName}
+                  autoCapitalize="words"
+                  autoCorrect={false}
                   placeholder="e.g. Jain"
-                  placeholderTextColor={COLORS.placeholder}
+                  placeholderTextColor={THEME.placeholder}
                   style={styles.input}
                   returnKeyType="done"
                 />
-                <View style={styles.rightIcon}>
-                  <Ionicons
-                    name={lastName.trim().length ? "checkmark-circle" : "ellipse-outline"}
-                    size={18}
-                    color={lastName.trim().length ? COLORS.success : "rgba(255,255,255,0.25)"}
-                  />
-                </View>
+                {lastName.trim().length > 0 ? (
+                  <Ionicons name="checkmark-circle" size={18} color={THEME.good} />
+                ) : (
+                  <View style={{ width: 18 }} />
+                )}
               </View>
+
+              {!!err && (
+                <View style={styles.errorBox}>
+                  <Ionicons name="alert-circle" size={18} color={THEME.bad} />
+                  <Text style={styles.errorText}>{err}</Text>
+                </View>
+              )}
+
+              <Pressable
+                onPress={onNext}
+                disabled={!canContinue}
+                style={({ pressed }) => [
+                  styles.primaryWrap,
+                  (!canContinue || saving) && styles.primaryDisabled,
+                  pressed && canContinue && !saving && styles.primaryPressed,
+                ]}
+              >
+                <LinearGradient colors={[THEME.ctaA, THEME.ctaB]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.primary}>
+                  {saving ? (
+                    <ActivityIndicator color="#0B0B12" />
+                  ) : (
+                    <View style={styles.primaryRow}>
+                      <Text style={styles.primaryText}>Continue</Text>
+                      <Ionicons name="arrow-forward" size={16} color="#0B0B12" />
+                    </View>
+                  )}
+                </LinearGradient>
+              </Pressable>
+
+              {!API_BASE ? (
+                <View style={[styles.errorBox, { marginTop: 12 }]}>
+                  <Ionicons name="bug-outline" size={18} color={THEME.bad} />
+                  <Text style={styles.errorText}>Config issue: extra.apiBaseUrl is missing.</Text>
+                </View>
+              ) : null}
             </View>
 
-            {!!err && (
-              <View style={styles.alert}>
-                <View style={styles.alertIcon}>
-                  <Ionicons name="warning-outline" size={18} color={COLORS.danger} />
-                </View>
-                <Text style={styles.alertText}>{err}</Text>
-              </View>
-            )}
-
-            <TouchableOpacity
-              onPress={onNext}
-              activeOpacity={0.92}
-              disabled={!canContinue}
-              style={[styles.cta, !canContinue && styles.ctaDisabled]}
-            >
-              {saving ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <>
-                  <Text style={styles.ctaText}>Continue</Text>
-                  <View style={styles.ctaIcon}>
-                    <Ionicons name="arrow-forward" size={18} color="#fff" />
-                  </View>
-                </>
-              )}
-            </TouchableOpacity>
-
-            {!API_BASE ? (
-              <View style={[styles.alert, { marginTop: 12 }]}>
-                <View style={styles.alertIcon}>
-                  <Ionicons name="bug-outline" size={18} color={COLORS.danger} />
-                </View>
-                <Text style={styles.alertText}>Config issue: extra.apiBaseUrl is missing.</Text>
-              </View>
-            ) : null}
+            <Text style={styles.micro}>Step 1 of 4</Text>
           </View>
-        </View>
+        </LinearGradient>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
-const COLORS = {
-  bg: "#0B0B12",
-  card: "rgba(255,255,255,0.10)",
-  border: "rgba(255,255,255,0.12)",
-  borderSoft: "rgba(255,255,255,0.08)",
-  ink: "#FFFFFF",
-  inkSoft: "rgba(255,255,255,0.82)",
-  muted: "rgba(255,255,255,0.62)",
-  placeholder: "rgba(255,255,255,0.42)",
-  primary: "#FF4D6D",
-  primary2: "#FF8A00",
-  success: "#22C55E",
-  danger: "#FB7185",
+const THEME = {
+  bgTop: "#0B0B12",
+  bgMid: "#14102A",
+  bgBot: "#090A10",
+
+  text: "#F5F7FF",
+  muted: "rgba(245,247,255,0.72)",
+  placeholder: "rgba(245,247,255,0.35)",
+
+  border: "rgba(255,255,255,0.14)",
+  card: "rgba(255,255,255,0.06)",
+
+  ctaA: "#B8FF6A",
+  ctaB: "#6AF0FF",
+
+  good: "#34D399",
+  bad: "#FB7185",
 };
 
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  safe: { flex: 1, backgroundColor: COLORS.bg },
+  safe: { flex: 1, backgroundColor: THEME.bgTop },
+  bg: { flex: 1 },
 
-  page: {
-    flex: 1,
+  topBar: {
     paddingHorizontal: 18,
-    paddingTop: 14,
-    paddingBottom: 18,
-    justifyContent: "center",
-    gap: 16,
-    backgroundColor: COLORS.bg,
-  },
-
-  // HERO
-  hero: { paddingHorizontal: 2, gap: 10 },
-  heroTop: {
+    paddingTop: 6,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
-
-  pill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: "rgba(255,77,109,0.14)",
-    borderWidth: 1,
-    borderColor: "rgba(255,77,109,0.25)",
-  },
-  pillDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 99,
-    backgroundColor: COLORS.primary2,
-    shadowColor: COLORS.primary2,
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
-  },
-  pillText: { color: COLORS.ink, fontWeight: "900", fontSize: 12, letterSpacing: 0.25 },
-
-  spark: {
-    width: 40,
-    height: 40,
+  iconBtn: {
+    width: 44,
+    height: 44,
     borderRadius: 16,
-    backgroundColor: "rgba(255,255,255,0.10)",
+    backgroundColor: "rgba(255,255,255,0.06)",
     borderWidth: 1,
-    borderColor: COLORS.borderSoft,
+    borderColor: THEME.border,
     alignItems: "center",
     justifyContent: "center",
   },
+  brandText: {
+    color: THEME.text,
+    fontFamily: "Sora_700Bold",
+    fontSize: 16,
+    letterSpacing: 0.3,
+  },
 
-  h1: { color: COLORS.ink, fontSize: 34, fontWeight: "900", letterSpacing: -1.1, lineHeight: 40 },
-  h2: { color: COLORS.muted, fontSize: 14, fontWeight: "700", lineHeight: 20 },
+  content: { flex: 1, paddingHorizontal: 18, paddingTop: 18 },
+  h1: {
+    color: THEME.text,
+    fontFamily: "Sora_700Bold",
+    fontSize: 28,
+    letterSpacing: -0.6,
+  },
+  h2: {
+    marginTop: 8,
+    color: THEME.muted,
+    fontFamily: "Sora_400Regular",
+    fontSize: 13,
+    lineHeight: 19,
+  },
 
-  // CARD
   card: {
-    backgroundColor: COLORS.card,
-    borderRadius: 28,
-    padding: 18,
+    marginTop: 18,
+    padding: 16,
+    borderRadius: 22,
+    backgroundColor: THEME.card,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: THEME.border,
     shadowColor: "#000",
-    shadowOpacity: 0.35,
-    shadowRadius: 26,
-    shadowOffset: { width: 0, height: 16 },
-    elevation: 6,
+    shadowOpacity: 0.28,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 14 },
+    elevation: 8,
   },
 
-  field: { marginTop: 12 },
-  label: { color: COLORS.inkSoft, fontWeight: "900", fontSize: 12, marginBottom: 8 },
-  optional: { color: COLORS.muted, fontWeight: "800" },
-
-  inputWrap: {
-    height: 56,
-    borderRadius: 18,
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-  },
-  focused: {
-    borderColor: "rgba(255,77,109,0.35)",
-    backgroundColor: "rgba(255,77,109,0.08)",
-  },
-
-  leftIcon: { width: 46, height: 56, alignItems: "center", justifyContent: "center", opacity: 0.95 },
-  rightIcon: { width: 46, height: 56, alignItems: "center", justifyContent: "center", opacity: 0.95 },
-
-  input: {
-    flex: 1,
-    color: COLORS.ink,
-    fontWeight: "900",
-    fontSize: 15,
-    paddingVertical: 0,
-    paddingRight: 8,
+  label: {
+    color: THEME.muted,
+    fontFamily: "Sora_600SemiBold",
+    fontSize: 12,
+    marginBottom: 10,
     letterSpacing: 0.2,
   },
 
-  // ALERT
-  alert: {
-    marginTop: 14,
+  field: {
+    height: 56,
     borderRadius: 18,
+    paddingHorizontal: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: THEME.border,
+    backgroundColor: "rgba(255,255,255,0.04)",
+  },
+  fieldOk: {
+    borderColor: "rgba(52,211,153,0.35)",
+    backgroundColor: "rgba(52,211,153,0.06)",
+  },
+
+  input: {
+    flex: 1,
+    color: THEME.text,
+    fontFamily: "Sora_600SemiBold",
+    fontSize: 14,
+    letterSpacing: 0.2,
+  },
+
+  errorBox: {
+    marginTop: 12,
     padding: 12,
+    borderRadius: 16,
     flexDirection: "row",
     gap: 10,
     alignItems: "center",
     backgroundColor: "rgba(251,113,133,0.10)",
     borderWidth: 1,
-    borderColor: "rgba(251,113,133,0.24)",
+    borderColor: "rgba(251,113,133,0.16)",
   },
-  alertIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 14,
-    backgroundColor: "rgba(251,113,133,0.14)",
-    alignItems: "center",
-    justifyContent: "center",
+  errorText: {
+    flex: 1,
+    color: "#FFD1DA",
+    fontFamily: "Sora_600SemiBold",
+    fontSize: 12,
+    lineHeight: 18,
   },
-  alertText: { color: "#FFE4EA", fontWeight: "900", flex: 1, lineHeight: 18 },
 
-  // CTA
-  cta: {
-    marginTop: 18,
+  primaryWrap: { marginTop: 16, borderRadius: 18, overflow: "hidden" },
+  primary: {
     height: 56,
     borderRadius: 18,
-    backgroundColor: COLORS.primary,
     alignItems: "center",
     justifyContent: "center",
-    flexDirection: "row",
-    gap: 10,
-    shadowColor: COLORS.primary,
-    shadowOpacity: 0.35,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 8,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.16)",
   },
-  ctaDisabled: { opacity: 0.5 },
-  ctaText: { color: "#fff", fontWeight: "900", fontSize: 16, letterSpacing: 0.3 },
-  ctaIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.16)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
-    alignItems: "center",
-    justifyContent: "center",
+  primaryDisabled: { opacity: 0.5 },
+  primaryPressed: { transform: [{ scale: 0.99 }] },
+
+  primaryRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 },
+  primaryText: {
+    color: "#0B0B12",
+    fontFamily: "Sora_700Bold",
+    fontSize: 15,
+    letterSpacing: 0.2,
   },
 
-  footer: {
-    color: "rgba(255,255,255,0.55)",
-    textAlign: "center",
-    fontWeight: "700",
+  micro: {
+    marginTop: 14,
+    color: "rgba(245,247,255,0.65)",
+    fontFamily: "Sora_400Regular",
     fontSize: 12,
-    paddingHorizontal: 10,
-    marginTop: 2,
     lineHeight: 18,
+    textAlign: "center",
   },
 });

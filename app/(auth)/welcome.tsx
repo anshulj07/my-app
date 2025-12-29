@@ -10,7 +10,7 @@ export default function WelcomeScreen() {
 
     // ✅ Put your local video here:
     // Example: create assets/videos/auth-bg.mp4 and update require path
-    const assetId = useMemo(() => require("../../assests/background.mp4"), []);
+    const assetId = useMemo(() => require("../../assests/Video.mp4"), []);
     const player = useVideoPlayer(assetId, (p) => {
         p.loop = true;
         p.muted = true;
@@ -33,7 +33,7 @@ export default function WelcomeScreen() {
             <SafeAreaView style={styles.safe}>
                 {/* Top copy */}
                 <View style={styles.top}>
-                    <Text style={styles.brand}>myApp</Text>
+                    <Text style={styles.brand}>Nudge</Text>
                     <Text style={styles.headline}>Meet people nearby.</Text>
                     <Text style={styles.subhead}>Create events, join plans, and see what’s happening around you.</Text>
                 </View>

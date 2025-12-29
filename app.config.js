@@ -5,7 +5,7 @@ export default {
     name: "my-app",
     slug: "my-app",
     scheme: "yoag",
-    plugins: ["expo-secure-store", "expo-web-browser", "expo-video"],
+    plugins: ["expo-secure-store", "expo-web-browser", "expo-video", "expo-font"],
     extra: {
       googleMapsKey: process.env.GOOGLE_MAPS_KEY,
       apiBaseUrl: process.env.API_BASE_URL,

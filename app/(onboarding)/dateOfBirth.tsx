@@ -1,5 +1,5 @@
 // app/(onboarding)/dob.tsx
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -9,12 +9,15 @@ import {
   ActivityIndicator,
   Platform,
   Modal,
+  Pressable,
+  Animated,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useUser } from "@clerk/clerk-expo";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import Constants from "expo-constants";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import { LinearGradient } from "expo-linear-gradient";
 
 function toISODate(d: Date) {
   const y = d.getFullYear();
@@ -24,7 +27,7 @@ function toISODate(d: Date) {
 }
 
 function prettyDate(d: Date) {
-  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
 }
 
@@ -36,20 +39,24 @@ function calcAge(dob: Date) {
   return age;
 }
 
-const COLORS = {
-  bg: "#07070C",
-  bg2: "#0B0B12",
-  ink: "#FFFFFF",
-  inkSoft: "rgba(255,255,255,0.82)",
-  muted: "rgba(255,255,255,0.62)",
-  faint: "rgba(255,255,255,0.38)",
-  card: "rgba(255,255,255,0.08)",
-  border: "rgba(255,255,255,0.12)",
-  borderSoft: "rgba(255,255,255,0.08)",
-  primary: "#FF4D6D",
-  accent: "#FF8A00",
-  danger: "#FB7185",
-  success: "#22C55E",
+const THEME = {
+  bgTop: "#0B0B12",
+  bgMid: "#14102A",
+  bgBot: "#090A10",
+
+  text: "#F5F7FF",
+  muted: "rgba(245,247,255,0.72)",
+  placeholder: "rgba(245,247,255,0.35)",
+
+  border: "rgba(255,255,255,0.14)",
+  card: "rgba(255,255,255,0.06)",
+
+  ctaA: "#B8FF6A",
+  ctaB: "#6AF0FF",
+
+  good: "#34D399",
+  bad: "#FB7185",
+  warn: "#FFB020",
 };
 
 export default function DobScreen() {
@@ -71,8 +78,24 @@ export default function DobScreen() {
   const under18 = age < 18;
   const canContinue = useMemo(() => !under18 && !saving, [under18, saving]);
 
+  // Animations (subtle)
+  const cardScale = useRef(new Animated.Value(1)).current;
+  const pulseAge = useRef(new Animated.Value(1)).current;
+
+  const bumpCard = () => {
+    cardScale.setValue(0.99);
+    Animated.spring(cardScale, { toValue: 1, friction: 6, tension: 180, useNativeDriver: true }).start();
+  };
+
+  const bumpAge = () => {
+    pulseAge.setValue(0.98);
+    Animated.spring(pulseAge, { toValue: 1, friction: 5, tension: 220, useNativeDriver: true }).start();
+  };
+
   const openPicker = () => {
     setErr(null);
+    bumpCard();
+
     if (Platform.OS === "android") {
       setAndroidShowPicker(true);
     } else {
@@ -83,7 +106,10 @@ export default function DobScreen() {
 
   const onAndroidChange = (_: any, selected?: Date) => {
     setAndroidShowPicker(false);
-    if (selected) setDob(selected);
+    if (selected) {
+      setDob(selected);
+      bumpAge();
+    }
   };
 
   const onNext = async () => {
@@ -93,7 +119,7 @@ export default function DobScreen() {
     setErr(null);
 
     try {
-      if (!API_BASE) throw new Error("Missing API base URL (extra.apiBaseUrl).");
+      if (!API_BASE) throw new Error("Config issue: extra.apiBaseUrl is missing.");
       if (under18) throw new Error("You must be at least 18 years old to continue.");
 
       const apiBase = API_BASE.replace(/\/$/, "");
@@ -118,7 +144,6 @@ export default function DobScreen() {
         throw new Error(msg);
       }
 
-      // ✅ flow: name -> dob -> gender -> interests -> about -> photos
       router.push("/(onboarding)/gender");
     } catch (e: any) {
       setErr(e?.message || "Failed to save DOB.");
@@ -127,302 +152,295 @@ export default function DobScreen() {
     }
   };
 
+  const title = "When were you born?";
+  const subtitle = "We only use this to confirm you’re 18+. You can change it later.";
+
+  const ageLabel = `${age} years`;
+  const ageIcon = under18 ? "alert-circle-outline" : "checkmark-circle-outline";
+  const ageColor = under18 ? THEME.bad : THEME.good;
+
   return (
     <SafeAreaView style={styles.safe}>
-      {/* Background glows */}
-      <View pointerEvents="none" style={styles.bgLayer}>
-        <View style={[styles.glow, styles.glowA]} />
-        <View style={[styles.glow, styles.glowB]} />
-        <View style={[styles.glow, styles.glowC]} />
-        <View style={styles.noiseWash} />
-      </View>
+      <LinearGradient colors={[THEME.bgTop, THEME.bgMid, THEME.bgBot]} style={styles.bg}>
+        {/* Top bar (match sign-in/gender) */}
+        <View style={styles.topBar}>
+          <TouchableOpacity onPress={() => router.back()} activeOpacity={0.85} style={styles.iconBtn}>
+            <Ionicons name="chevron-back" size={20} color={THEME.text} />
+          </TouchableOpacity>
 
-      <View style={styles.page}>
-        {/* Hero */}
-        <View style={styles.hero}>
-          <View style={styles.heroTop}>
+          <Text style={styles.brandText}>Pulse</Text>
+
+          <View style={{ width: 44 }} />
+        </View>
+
+        <View style={styles.content}>
+          {/* Header row with step pill */}
+          <View style={styles.headerRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.h1}>{title}</Text>
+              <Text style={styles.h2}>{subtitle}</Text>
+            </View>
+
             <View style={styles.stepPill}>
-              <View style={styles.stepDot} />
+              <Ionicons name="calendar-outline" size={14} color={THEME.ctaB} />
               <Text style={styles.stepText}>Step 2 of 6</Text>
             </View>
-
-            <View style={styles.heroIcon}>
-              <Ionicons name="calendar-outline" size={18} color={COLORS.primary} />
-            </View>
           </View>
 
-          <Text style={styles.h1}>When were you born?</Text>
-          <Text style={styles.h2}>We use this only to confirm you’re 18+. You can change it later.</Text>
-        </View>
+          {/* Card */}
+          <View style={styles.card}>
+            <Animated.View style={{ transform: [{ scale: cardScale }] }}>
+              <Pressable onPress={openPicker} style={({ pressed }) => [styles.dateCard, pressed && styles.pressed]}>
+                <View style={styles.dateTopRow}>
+                  <View style={styles.dateBadge}>
+                    <Ionicons name="time-outline" size={14} color={THEME.muted} />
+                    <Text style={styles.dateBadgeText}>Date of Birth</Text>
+                  </View>
 
-        {/* Card */}
-        <View style={styles.card}>
-          {/* Big date display */}
-          <TouchableOpacity onPress={openPicker} activeOpacity={0.92} style={styles.dateCard}>
-            <View style={styles.dateTopRow}>
-              <View style={styles.dateBadge}>
-                <Ionicons name="time-outline" size={14} color={COLORS.inkSoft} />
-                <Text style={styles.dateBadgeText}>Date of Birth</Text>
-              </View>
-
-              <View style={[styles.ageChip, under18 && styles.ageChipBad]}>
-                <Ionicons
-                  name={under18 ? "alert-circle-outline" : "checkmark-circle-outline"}
-                  size={14}
-                  color={under18 ? COLORS.danger : COLORS.success}
-                />
-                <Text style={styles.ageChipText}>{age} years</Text>
-              </View>
-            </View>
-
-            <Text style={styles.bigDate}>{prettyDate(dob)}</Text>
-            <Text style={styles.smallDate}>{toISODate(dob)}</Text>
-
-            <View style={styles.tapRow}>
-              <Text style={styles.tapHint}>Tap to change</Text>
-              <View style={styles.chev}>
-                <Ionicons name="chevron-forward" size={18} color={COLORS.muted} />
-              </View>
-            </View>
-          </TouchableOpacity>
-
-          {under18 ? (
-            <View style={styles.inlineWarn}>
-              <Ionicons name="information-circle-outline" size={18} color={COLORS.danger} />
-              <Text style={styles.inlineWarnText}>You must be at least 18 years old to continue.</Text>
-            </View>
-          ) : null}
-
-          {!!err && (
-            <View style={styles.alert}>
-              <View style={styles.alertIcon}>
-                <Ionicons name="warning-outline" size={18} color={COLORS.danger} />
-              </View>
-              <Text style={styles.alertText}>{err}</Text>
-            </View>
-          )}
-
-          <TouchableOpacity
-            onPress={onNext}
-            activeOpacity={0.92}
-            disabled={!canContinue}
-            style={[styles.cta, !canContinue && styles.ctaDisabled]}
-          >
-            {saving ? (
-              <>
-                <Text style={styles.ctaText}>Saving…</Text>
-                <ActivityIndicator color="#fff" />
-              </>
-            ) : (
-              <>
-                <Text style={styles.ctaText}>Continue</Text>
-                <View style={styles.ctaIcon}>
-                  <Ionicons name="arrow-forward" size={18} color="#fff" />
+                  <Animated.View style={{ transform: [{ scale: pulseAge }] }}>
+                    <View
+                      style={[
+                        styles.ageChip,
+                        {
+                          backgroundColor: under18 ? "rgba(251,113,133,0.10)" : "rgba(52,211,153,0.10)",
+                          borderColor: under18 ? "rgba(251,113,133,0.22)" : "rgba(52,211,153,0.22)",
+                        },
+                      ]}
+                    >
+                      <Ionicons name={ageIcon as any} size={14} color={ageColor} />
+                      <Text style={styles.ageChipText}>{ageLabel}</Text>
+                    </View>
+                  </Animated.View>
                 </View>
-              </>
-            )}
-          </TouchableOpacity>
 
-          <Text style={styles.footerNote}>Your DOB won’t be shown publicly.</Text>
+                <Text style={styles.bigDate}>{prettyDate(dob)}</Text>
+                <Text style={styles.smallDate}>{toISODate(dob)}</Text>
 
-          {!API_BASE ? (
-            <View style={[styles.alert, { marginTop: 12 }]}>
-              <View style={styles.alertIcon}>
-                <Ionicons name="bug-outline" size={18} color={COLORS.danger} />
+                <View style={styles.tapRow}>
+                  <View style={styles.tapHintRow}>
+                    <Ionicons name="hand-left-outline" size={14} color={THEME.muted} />
+                    <Text style={styles.tapHint}>Tap to change</Text>
+                  </View>
+                  <View style={styles.chev}>
+                    <Ionicons name="chevron-forward" size={18} color={THEME.muted} />
+                  </View>
+                </View>
+              </Pressable>
+            </Animated.View>
+
+            {under18 ? (
+              <View style={styles.inlineWarn}>
+                <Ionicons name="information-circle-outline" size={18} color={THEME.bad} />
+                <Text style={styles.inlineWarnText}>You must be at least 18 years old to continue.</Text>
               </View>
-              <Text style={styles.alertText}>Config issue: extra.apiBaseUrl is missing.</Text>
-            </View>
-          ) : null}
-        </View>
-      </View>
+            ) : null}
 
-      {/* Android picker */}
-      {androidShowPicker ? (
-        <DateTimePicker
-          value={dob}
-          mode="date"
-          display="default"
-          onChange={onAndroidChange}
-          maximumDate={new Date()}
-        />
-      ) : null}
+            {!!err && (
+              <View style={styles.errorBox}>
+                <Ionicons name="alert-circle" size={18} color={THEME.bad} />
+                <Text style={styles.errorText}>{err}</Text>
+              </View>
+            )}
 
-      {/* iOS modal (bottom sheet style) */}
-      <Modal
-        visible={iosModalOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setIosModalOpen(false)}
-      >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.sheet}>
-            <View style={styles.sheetHeader}>
-              <View style={styles.sheetHandle} />
-            </View>
+            {!API_BASE ? (
+              <View style={[styles.errorBox, { marginTop: 12 }]}>
+                <Ionicons name="bug-outline" size={18} color={THEME.bad} />
+                <Text style={styles.errorText}>Config issue: extra.apiBaseUrl is missing.</Text>
+              </View>
+            ) : null}
 
-            <View style={styles.sheetTitleRow}>
-              <Text style={styles.sheetTitle}>Select date</Text>
-              <TouchableOpacity
-                onPress={() => setIosModalOpen(false)}
-                activeOpacity={0.9}
-                style={styles.sheetClose}
+            {/* CTA */}
+            <Pressable
+              onPress={onNext}
+              disabled={!canContinue}
+              style={({ pressed }) => [
+                styles.primaryWrap,
+                (!canContinue || saving) && styles.primaryDisabled,
+                pressed && canContinue && !saving && styles.primaryPressed,
+              ]}
+            >
+              <LinearGradient
+                colors={[THEME.ctaA, THEME.ctaB]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.primary}
               >
-                <Ionicons name="close" size={18} color={COLORS.ink} />
-              </TouchableOpacity>
-            </View>
+                {saving ? (
+                  <ActivityIndicator color="#0B0B12" />
+                ) : (
+                  <View style={styles.primaryRow}>
+                    <Text style={styles.primaryText}>Continue</Text>
+                    <Ionicons name="arrow-forward" size={16} color="#0B0B12" />
+                  </View>
+                )}
+              </LinearGradient>
+            </Pressable>
 
-            <View style={styles.pickerWrap}>
-              <DateTimePicker
-                value={iosTempDob}
-                mode="date"
-                display="spinner"
-                onChange={(_, selected) => selected && setIosTempDob(selected)}
-                maximumDate={new Date()}
-              />
-            </View>
-
-            <View style={styles.sheetActions}>
-              <TouchableOpacity
-                onPress={() => setIosModalOpen(false)}
-                activeOpacity={0.9}
-                style={[styles.sheetBtn, styles.sheetBtnGhost]}
-              >
-                <Text style={styles.sheetBtnGhostText}>Cancel</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={() => {
-                  setDob(iosTempDob);
-                  setIosModalOpen(false);
-                }}
-                activeOpacity={0.9}
-                style={[styles.sheetBtn, styles.sheetBtnPrimary]}
-              >
-                <Text style={styles.sheetBtnPrimaryText}>Done</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={{ height: 8 }} />
+            <Text style={styles.micro}>Your DOB won’t be shown publicly.</Text>
           </View>
         </View>
-      </Modal>
+
+        {/* Android picker */}
+        {androidShowPicker ? (
+          <DateTimePicker value={dob} mode="date" display="default" onChange={onAndroidChange} maximumDate={new Date()} />
+        ) : null}
+
+        {/* iOS modal */}
+        <Modal
+          visible={iosModalOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setIosModalOpen(false)}
+        >
+          <View style={styles.modalBackdrop}>
+            <View style={styles.sheet}>
+              <View style={styles.sheetHeader}>
+                <View style={styles.sheetHandle} />
+              </View>
+
+              <View style={styles.sheetTitleRow}>
+                <Text style={styles.sheetTitle}>Select date</Text>
+                <TouchableOpacity onPress={() => setIosModalOpen(false)} activeOpacity={0.9} style={styles.sheetClose}>
+                  <Ionicons name="close" size={18} color={THEME.text} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.pickerWrap}>
+                <DateTimePicker
+                  value={iosTempDob}
+                  mode="date"
+                  display="spinner"
+                  onChange={(_, selected) => selected && setIosTempDob(selected)}
+                  maximumDate={new Date()}
+                />
+              </View>
+
+              <View style={styles.sheetActions}>
+                <TouchableOpacity
+                  onPress={() => setIosModalOpen(false)}
+                  activeOpacity={0.9}
+                  style={[styles.sheetBtn, styles.sheetBtnGhost]}
+                >
+                  <Text style={styles.sheetBtnGhostText}>Cancel</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => {
+                    setDob(iosTempDob);
+                    setIosModalOpen(false);
+                    bumpAge();
+                  }}
+                  activeOpacity={0.9}
+                  style={[styles.sheetBtn, styles.sheetBtnPrimary]}
+                >
+                  <Text style={styles.sheetBtnPrimaryText}>Done</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={{ height: 8 }} />
+            </View>
+          </View>
+        </Modal>
+      </LinearGradient>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.bg },
+  safe: { flex: 1, backgroundColor: THEME.bgTop },
+  bg: { flex: 1 },
 
-  bgLayer: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: COLORS.bg,
-  },
-  glow: {
-    position: "absolute",
-    borderRadius: 9999,
-    opacity: 0.7,
-  },
-  glowA: {
-    width: 420,
-    height: 420,
-    top: -160,
-    left: -140,
-    backgroundColor: "rgba(255,77,109,0.16)",
-  },
-  glowB: {
-    width: 360,
-    height: 360,
-    bottom: -140,
-    right: -120,
-    backgroundColor: "rgba(255,138,0,0.14)",
-  },
-  glowC: {
-    width: 280,
-    height: 280,
-    top: 120,
-    right: -90,
-    backgroundColor: "rgba(99,102,241,0.10)",
-  },
-  noiseWash: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(255,255,255,0.02)",
-  },
-
-  page: {
-    flex: 1,
+  topBar: {
     paddingHorizontal: 18,
-    paddingTop: 14,
-    paddingBottom: 18,
+    paddingTop: 6,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  iconBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: 1,
+    borderColor: THEME.border,
+    alignItems: "center",
     justifyContent: "center",
-    gap: 16,
+  },
+  brandText: {
+    color: THEME.text,
+    fontFamily: "Sora_700Bold",
+    fontSize: 16,
+    letterSpacing: 0.3,
   },
 
-  hero: { paddingHorizontal: 2, gap: 10 },
-  heroTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  content: { flex: 1, paddingHorizontal: 18, paddingTop: 18 },
+
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+
+  h1: {
+    color: THEME.text,
+    fontFamily: "Sora_700Bold",
+    fontSize: 28,
+    letterSpacing: -0.6,
+  },
+  h2: {
+    marginTop: 8,
+    color: THEME.muted,
+    fontFamily: "Sora_400Regular",
+    fontSize: 13,
+    lineHeight: 19,
+  },
 
   stepPill: {
+    paddingHorizontal: 12,
+    height: 34,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: 1,
+    borderColor: THEME.border,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: "rgba(255,77,109,0.12)",
-    borderWidth: 1,
-    borderColor: "rgba(255,77,109,0.22)",
   },
-  stepDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 99,
-    backgroundColor: COLORS.accent,
-    shadowColor: COLORS.accent,
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
-  },
-  stepText: { color: COLORS.ink, fontWeight: "900", fontSize: 12, letterSpacing: 0.25 },
-
-  heroIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 16,
-    backgroundColor: "rgba(255,255,255,0.10)",
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  h1: { color: COLORS.ink, fontSize: 34, fontWeight: "900", letterSpacing: -1.1, lineHeight: 40 },
-  h2: { color: COLORS.muted, fontSize: 14, fontWeight: "700", lineHeight: 20 },
+  stepText: { color: THEME.text, fontFamily: "Sora_700Bold", fontSize: 12, letterSpacing: 0.2 },
 
   card: {
-    backgroundColor: COLORS.card,
-    borderRadius: 28,
-    padding: 18,
+    marginTop: 16,
+    padding: 16,
+    borderRadius: 22,
+    backgroundColor: THEME.card,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: THEME.border,
     shadowColor: "#000",
-    shadowOpacity: 0.35,
-    shadowRadius: 26,
-    shadowOffset: { width: 0, height: 16 },
-    elevation: 6,
+    shadowOpacity: 0.28,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 14 },
+    elevation: 8,
   },
 
   dateCard: {
-    borderRadius: 24,
+    borderRadius: 20,
     padding: 16,
-    backgroundColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.04)",
     borderWidth: 1,
-    borderColor: COLORS.borderSoft,
+    borderColor: "rgba(255,255,255,0.12)",
   },
+  pressed: { opacity: 0.96 },
+
   dateTopRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 10,
+    marginBottom: 12,
+    gap: 10,
   },
+
   dateBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -430,11 +448,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.06)",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.10)",
   },
-  dateBadgeText: { color: COLORS.inkSoft, fontWeight: "900", fontSize: 12, letterSpacing: 0.2 },
+  dateBadgeText: { color: THEME.muted, fontFamily: "Sora_700Bold", fontSize: 12, letterSpacing: 0.2 },
 
   ageChip: {
     flexDirection: "row",
@@ -443,24 +461,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: "rgba(34,197,94,0.10)",
     borderWidth: 1,
-    borderColor: "rgba(34,197,94,0.22)",
   },
-  ageChipBad: {
-    backgroundColor: "rgba(251,113,133,0.10)",
-    borderColor: "rgba(251,113,133,0.22)",
-  },
-  ageChipText: { color: COLORS.ink, fontWeight: "900", fontSize: 12 },
+  ageChipText: { color: THEME.text, fontFamily: "Sora_700Bold", fontSize: 12 },
 
   bigDate: {
-    color: COLORS.ink,
-    fontWeight: "900",
+    color: THEME.text,
+    fontFamily: "Sora_700Bold",
     fontSize: 26,
     letterSpacing: -0.4,
     marginTop: 2,
   },
-  smallDate: { color: COLORS.faint, fontWeight: "800", marginTop: 6 },
+  smallDate: { color: "rgba(245,247,255,0.45)", fontFamily: "Sora_600SemiBold", marginTop: 6 },
 
   tapRow: {
     marginTop: 14,
@@ -468,88 +480,77 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  tapHint: { color: COLORS.muted, fontWeight: "800" },
+  tapHintRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  tapHint: { color: THEME.muted, fontFamily: "Sora_600SemiBold" },
+
   chev: {
     width: 36,
     height: 36,
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.06)",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.10)",
   },
 
   inlineWarn: {
     marginTop: 12,
-    borderRadius: 18,
-    padding: 12,
-    flexDirection: "row",
-    gap: 10,
-    alignItems: "center",
-    backgroundColor: "rgba(251,113,133,0.08)",
-    borderWidth: 1,
-    borderColor: "rgba(251,113,133,0.18)",
-  },
-  inlineWarnText: { color: "#FFE4EA", fontWeight: "800", flex: 1, lineHeight: 18 },
-
-  alert: {
-    marginTop: 14,
-    borderRadius: 18,
+    borderRadius: 16,
     padding: 12,
     flexDirection: "row",
     gap: 10,
     alignItems: "center",
     backgroundColor: "rgba(251,113,133,0.10)",
     borderWidth: 1,
-    borderColor: "rgba(251,113,133,0.24)",
+    borderColor: "rgba(251,113,133,0.16)",
   },
-  alertIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 14,
-    backgroundColor: "rgba(251,113,133,0.14)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  alertText: { color: "#FFE4EA", fontWeight: "900", flex: 1, lineHeight: 18 },
+  inlineWarnText: { flex: 1, color: "#FFD1DA", fontFamily: "Sora_600SemiBold", fontSize: 12, lineHeight: 18 },
 
-  cta: {
-    marginTop: 18,
-    height: 56,
-    borderRadius: 18,
-    backgroundColor: COLORS.primary,
-    alignItems: "center",
-    justifyContent: "center",
+  errorBox: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 16,
     flexDirection: "row",
     gap: 10,
-    shadowColor: COLORS.primary,
-    shadowOpacity: 0.35,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 8,
+    alignItems: "center",
+    backgroundColor: "rgba(251,113,133,0.10)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.16)",
+    borderColor: "rgba(251,113,133,0.16)",
   },
-  ctaDisabled: { opacity: 0.5 },
-  ctaText: { color: "#fff", fontWeight: "900", fontSize: 16, letterSpacing: 0.3 },
-  ctaIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.16)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
+  errorText: {
+    flex: 1,
+    color: "#FFD1DA",
+    fontFamily: "Sora_600SemiBold",
+    fontSize: 12,
+    lineHeight: 18,
+  },
+
+  primaryWrap: { marginTop: 14, borderRadius: 18, overflow: "hidden" },
+  primary: {
+    height: 56,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
   },
+  primaryDisabled: { opacity: 0.5 },
+  primaryPressed: { transform: [{ scale: 0.99 }] },
 
-  footerNote: {
+  primaryRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 },
+  primaryText: {
+    color: "#0B0B12",
+    fontFamily: "Sora_700Bold",
+    fontSize: 15,
+    letterSpacing: 0.2,
+  },
+
+  micro: {
     marginTop: 12,
-    color: "rgba(255,255,255,0.55)",
-    fontWeight: "800",
+    color: "rgba(245,247,255,0.70)",
+    fontFamily: "Sora_400Regular",
     fontSize: 12,
     lineHeight: 18,
+    textAlign: "center",
   },
 
   // Modal
@@ -579,7 +580,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 10,
   },
-  sheetTitle: { fontWeight: "900", fontSize: 16, color: "#fff" },
+  sheetTitle: { fontFamily: "Sora_700Bold", fontSize: 16, color: THEME.text },
   sheetClose: {
     width: 34,
     height: 34,
@@ -604,7 +605,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.14)",
   },
-  sheetBtnGhostText: { color: "#fff", fontWeight: "900" },
-  sheetBtnPrimary: { backgroundColor: COLORS.primary },
-  sheetBtnPrimaryText: { color: "#fff", fontWeight: "900" },
+  sheetBtnGhostText: { color: THEME.text, fontFamily: "Sora_700Bold" },
+  sheetBtnPrimary: { backgroundColor: "rgba(255,255,255,0.14)", borderWidth: 1, borderColor: "rgba(255,255,255,0.18)" },
+  sheetBtnPrimaryText: { color: THEME.text, fontFamily: "Sora_700Bold" },
 });

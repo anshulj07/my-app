@@ -37,12 +37,12 @@ const CATEGORIES: Category[] = [
     icon: "sparkles-outline",
     accent: "pink",
     items: [
-      { label: "Gym", emoji: "🏋️‍♂️" },
+      { label: "Gym", emoji: "🏋️" },
       { label: "Coffee", emoji: "☕️" },
-      { label: "Cooking", emoji: "👨‍🍳" },
+      { label: "Cooking", emoji: "🍳" },
       { label: "Foodie", emoji: "🍣" },
-      { label: "Nightlife", emoji: "🌙🥂" },
-      { label: "Self care", emoji: "🧖‍♀️✨" },
+      { label: "Nightlife", emoji: "🥂" },
+      { label: "Self care", emoji: "🧖" },
     ],
   },
   {
@@ -51,12 +51,12 @@ const CATEGORIES: Category[] = [
     icon: "trail-sign-outline",
     accent: "orange",
     items: [
-      { label: "Hiking", emoji: "🥾⛰️" },
-      { label: "Camping", emoji: "🏕️🔥" },
-      { label: "Road trips", emoji: "🚗💨" },
-      { label: "Beaches", emoji: "🏖️🌊" },
-      { label: "Cycling", emoji: "🚴‍♂️" },
-      { label: "Nature", emoji: "🌿🦋" },
+      { label: "Hiking", emoji: "🥾" },
+      { label: "Camping", emoji: "🏕️" },
+      { label: "Road trips", emoji: "🚗" },
+      { label: "Beaches", emoji: "🏖️" },
+      { label: "Cycling", emoji: "🚴" },
+      { label: "Nature", emoji: "🌿" },
     ],
   },
   {
@@ -65,12 +65,12 @@ const CATEGORIES: Category[] = [
     icon: "color-palette-outline",
     accent: "purple",
     items: [
-      { label: "Photography", emoji: "📸✨" },
-      { label: "Music", emoji: "🎧🎶" },
-      { label: "Dancing", emoji: "💃🪩" },
+      { label: "Photography", emoji: "📸" },
+      { label: "Music", emoji: "🎧" },
+      { label: "Dancing", emoji: "💃" },
       { label: "Art", emoji: "🎨" },
-      { label: "Writing", emoji: "✍️📓" },
-      { label: "Design", emoji: "🧩🖌️" },
+      { label: "Writing", emoji: "✍️" },
+      { label: "Design", emoji: "🖌️" },
     ],
   },
   {
@@ -79,12 +79,12 @@ const CATEGORIES: Category[] = [
     icon: "film-outline",
     accent: "blue",
     items: [
-      { label: "Movies", emoji: "🎬🍿" },
+      { label: "Movies", emoji: "🎬" },
       { label: "TV shows", emoji: "📺" },
-      { label: "Anime", emoji: "🌸🍥" },
-      { label: "Gaming", emoji: "🎮⚡️" },
-      { label: "Standup", emoji: "🎤😂" },
-      { label: "Karaoke", emoji: "🎙️✨" },
+      { label: "Anime", emoji: "🍥" },
+      { label: "Gaming", emoji: "🎮" },
+      { label: "Standup", emoji: "🎤" },
+      { label: "Karaoke", emoji: "🎙️" },
     ],
   },
   {
@@ -93,12 +93,12 @@ const CATEGORIES: Category[] = [
     icon: "hardware-chip-outline",
     accent: "green",
     items: [
-      { label: "AI", emoji: "🤖🧠" },
+      { label: "AI", emoji: "🤖" },
       { label: "Startups", emoji: "🚀" },
       { label: "Coding", emoji: "💻" },
-      { label: "Product", emoji: "🧩📈" },
-      { label: "Hackathons", emoji: "⚡️🏆" },
-      { label: "Gadgets", emoji: "📱✨" },
+      { label: "Product", emoji: "📈" },
+      { label: "Hackathons", emoji: "🏆" },
+      { label: "Gadgets", emoji: "📱" },
     ],
   },
 ];
@@ -238,7 +238,7 @@ export default function InterestsScreen() {
         try {
           const j = JSON.parse(text);
           msg = j?.message || j?.error || msg;
-        } catch {}
+        } catch { }
         throw new Error(msg);
       }
 
@@ -318,16 +318,18 @@ export default function InterestsScreen() {
                 return (
                   <View key={cat.key} style={styles.section}>
                     <View style={styles.sectionTop}>
-                      <View style={[styles.sectionBadge, { backgroundColor: a.tint, borderColor: a.ring }]}>
-                        <View style={[styles.sectionDot, { backgroundColor: a.dot }]} />
-                        <Ionicons name={cat.icon} size={16} color={THEME.text} />
-                        <Text style={styles.sectionTitle}>{cat.title}</Text>
+                      <View style={styles.sectionLeft}>
+                        <Ionicons name={cat.icon} size={18} color={THEME.text} />
+                        <Text style={styles.sectionTitlePlain}>{cat.title}</Text>
                       </View>
 
                       <Text style={styles.sectionHint}>
                         {atLimit ? "Max reached" : "Tap to select"}
                       </Text>
                     </View>
+
+                    <View style={styles.sectionDivider} />
+
 
                     <View style={styles.grid}>
                       {cat.items.map((it) => {
@@ -472,6 +474,27 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
 
+  sectionLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+
+  sectionTitlePlain: {
+    color: THEME.text,
+    fontFamily: "Sora_700Bold",
+    fontSize: 14,
+    letterSpacing: 0.2,
+  },
+
+  sectionDivider: {
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    marginTop: 10,
+    marginBottom: 12,
+  },
+
+
   content: { flex: 1, paddingHorizontal: 18, paddingTop: 18 },
   headerRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 },
 
@@ -542,23 +565,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
 
-  sectionBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  sectionDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 99,
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
-  },
+
   sectionTitle: { color: THEME.text, fontFamily: "Sora_700Bold", fontSize: 13, letterSpacing: 0.2 },
   sectionHint: { color: THEME.muted, fontFamily: "Sora_600SemiBold", fontSize: 12 },
 

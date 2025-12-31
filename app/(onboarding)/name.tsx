@@ -176,8 +176,6 @@ export default function NameScreen() {
                 </View>
               ) : null}
             </View>
-
-            <Text style={styles.micro}>Step 1 of 4</Text>
           </View>
         </LinearGradient>
       </KeyboardAvoidingView>

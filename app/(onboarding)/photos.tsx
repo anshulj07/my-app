@@ -19,6 +19,9 @@ import Constants from "expo-constants";
 import { generateReactNativeHelpers } from "@uploadthing/expo";
 import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
+import * as ImageManipulator from "expo-image-manipulator";
+import * as FileSystem from "expo-file-system/legacy";
+
 
 type UploadedPhoto = {
   url: string;
@@ -115,6 +118,12 @@ export default function PhotosScreen() {
   };
 
   const pickAndUpload = async () => {
+
+    console.log("🟦 [DEBUG] API_BASE_RAW:", API_BASE_RAW);
+    console.log("🟦 [DEBUG] UT_ENDPOINT:", UT_ENDPOINT);
+    console.log("🟦 [DEBUG] isLoaded:", isLoaded);
+    console.log("🟦 [DEBUG] user?.id:", user?.id);
+
     if (saving || isUploading) return;
     setErr(null);
 
@@ -146,6 +155,10 @@ export default function PhotosScreen() {
     if (result.canceled) return;
 
     const assets = result.assets ?? [];
+
+    console.log("🟦 [DEBUG] Picked assets count:", assets.length);
+    console.log("🟦 [DEBUG] First asset sample:", assets[0]);
+
     if (assets.length === 0) return;
 
     // ✅ Hard clamp: never upload more than remaining (prevents FileCountMismatch)
@@ -159,23 +172,113 @@ export default function PhotosScreen() {
     }
 
     // Build RN upload files expected by UploadThing
-    const files = clamped.map((a, idx) => {
-      const uri = a.uri;
-      const name =
-        (a.fileName && String(a.fileName)) ||
-        `photo-${Date.now()}-${idx}${uri.includes(".") ? "" : ".jpg"}`;
-      const type = (a.mimeType && String(a.mimeType)) || "image/jpeg";
-      return { uri, name, type };
-    });
+    // --- inside pickAndUpload() AFTER you compute `clamped` ---
+
+    // ✅ Convert HEIC -> JPEG
+    const files = await Promise.all(
+      clamped.map(async (a, idx) => {
+        const originalUri = a.uri;
+
+        const isHeic =
+          (a.mimeType && a.mimeType.toLowerCase().includes("heic")) ||
+          (a.fileName && a.fileName.toLowerCase().endsWith(".heic")) ||
+          originalUri.toLowerCase().endsWith(".heic");
+
+        let finalUri = originalUri;
+        let name =
+          (a.fileName && String(a.fileName)) ||
+          `photo-${Date.now()}-${idx}.jpg`;
+        let type = (a.mimeType && String(a.mimeType)) || "image/jpeg";
+
+        console.log("🟦 [FILE] picked:", {
+          idx,
+          fileName: a.fileName,
+          mimeType: a.mimeType,
+          fileSize: a.fileSize,
+          uri: originalUri,
+          isHeic,
+        });
+
+        // ✅ Convert HEIC -> JPEG
+        if (isHeic) {
+          const out = await ImageManipulator.manipulateAsync(
+            originalUri,
+            [],
+            { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG }
+          );
+
+          finalUri = out.uri;
+          name = `photo-${Date.now()}-${idx}.jpg`;
+          type = "image/jpeg";
+
+          console.log("🟦 [FILE] converted HEIC -> JPEG:", {
+            idx,
+            outUri: finalUri,
+            name,
+            type,
+          });
+        } else {
+          // ✅ Ensure a sane name + extension for non-heic too
+          const hasExt = /\.[a-z0-9]+$/i.test(name);
+          if (!hasExt) name = `${name}.jpg`;
+          if (!type) type = "image/jpeg";
+        }
+
+        // ✅ IMPORTANT: UploadThing needs `size` in init payload
+        const info = await FileSystem.getInfoAsync(finalUri);
+        // size can be undefined on some platforms/files
+        const size =
+          (typeof (info as any)?.size === "number" && (info as any).size) ||
+          (typeof a.fileSize === "number" && a.fileSize) ||
+          0;
+
+        console.log("🟦 [FILE] final descriptor:", {
+          idx,
+          finalUri,
+          name,
+          type,
+          size,
+          fsExists: (info as any)?.exists,
+        });
+
+        return {
+          uri: finalUri,
+          name,
+          type,
+          size, // ✅ REQUIRED
+        };
+      })
+    );
+
+    console.log(
+      "🟦 [FILE] files payload being sent to startUpload:",
+      files.map((f, i) => ({ i, name: f.name, type: f.type, size: f.size, uri: f.uri }))
+    );
+
+    // Optional: fail fast if size is missing (helps debugging)
+    const bad = files.find((f) => !f.size || f.size <= 0);
+    if (bad) {
+      console.log("🟥 [FILE] Invalid file descriptor (missing size):", bad);
+      setErr("Could not read file size. Please try selecting a different photo.");
+      return;
+    }
 
     try {
       console.log("🟨 [UT][client] startUpload files:", files.length, "remaining:", remaining);
-      // Expo ImagePicker returns objects that are not browser File instances; cast to satisfy the helper's File[] signature.
-      const res = await startUpload(files as unknown as File[]);
-      // onClientUploadComplete will handle merging state if the hook calls it internally,
-      // but some versions return results directly as well — handle both safely.
+
+      if (!isLoaded || !user) {
+        setErr("User not loaded. Please try again.");
+        return;
+      }
+
+      // ✅ IMPORTANT: DO NOT pass { input: ... } and DO NOT pass headers here.
+      // Headers are already set in useUploadThing(...) options.
+      console.log("🟨 [DEBUG] Calling startUpload with input:", { clerkUserId: user.id });
+
+      const res = await startUpload(files as any, { clerkUserId: user.id });
+      console.log("🟩 [DEBUG] startUpload result:", res);
+
       if (Array.isArray(res) && res.length) {
-        // If your version returns results directly but doesn't call onClientUploadComplete:
         setUploaded((prev) => {
           const merged = [
             ...prev,
@@ -196,6 +299,7 @@ export default function PhotosScreen() {
 
           return deduped.slice(0, MAX_PHOTOS);
         });
+
         bump(cardScale);
       }
     } catch (e: any) {
@@ -238,7 +342,7 @@ export default function PhotosScreen() {
         try {
           const j = JSON.parse(text);
           msg = j?.message || j?.error || msg;
-        } catch {}
+        } catch { }
         throw new Error(msg);
       }
 
@@ -263,11 +367,11 @@ export default function PhotosScreen() {
       <LinearGradient colors={[THEME.bgTop, THEME.bgMid, THEME.bgBot]} style={styles.bg}>
         {/* Top bar */}
         <View style={styles.topBar}>
-          <Pressable onPress={() => router.back()} style={({ pressed }) => [styles.iconBtn, pressed && { opacity: 0.9 }]}>
+          {/* <Pressable onPress={() => router.back()} style={({ pressed }) => [styles.iconBtn, pressed && { opacity: 0.9 }]}>
             <Ionicons name="chevron-back" size={20} color={THEME.text} />
-          </Pressable>
+          </Pressable> */}
 
-          <Text style={styles.brandText}>Pulse</Text>
+          {/* <Text style={styles.brandText}>Pulse</Text> */}
 
           <View style={{ width: 44 }} />
         </View>
@@ -276,14 +380,14 @@ export default function PhotosScreen() {
           {/* HERO */}
           <View style={styles.hero}>
             <View style={styles.heroTop}>
-              <View style={styles.stepPill}>
+              {/* <View style={styles.stepPill}>
                 <Ionicons name="images-outline" size={14} color={THEME.ctaB} />
                 <Text style={styles.stepText}>Step 6 of 6</Text>
-              </View>
+              </View> */}
 
-              <View style={styles.heroIcon}>
+              {/* <View style={styles.heroIcon}>
                 <Ionicons name="sparkles" size={16} color={THEME.ctaA} />
-              </View>
+              </View> */}
             </View>
 
             <Text style={styles.h1}>Add photos</Text>

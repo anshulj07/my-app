@@ -1,25 +1,164 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Dimensions, Keyboard } from "react-native";
+import React, { useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { Dimensions, View, Text, StyleSheet, Pressable, Platform } from "react-native";
 import { Modalize } from "react-native-modalize";
 import Constants from "expo-constants";
 import { WebView } from "react-native-webview";
 import { useAuth } from "@clerk/clerk-expo";
 
-import { styles } from "./AddEvent.styles";
-import AddEventFields from "./AddEventFields";
+import { wizardReducer, initialWizardState } from "./wizard/wizardReducer";
+import { getSteps, StepKey } from "./wizard/useWizardSteps";
+import { validateStep, validateAll, toStartsAtISO } from "./wizard/wizardValidation";
 
-import type { CreateEvent, Suggestion, LocationPayload, ListingKind } from "./types";
+import KindStep from "./steps/KindStep";
+import BasicsStep from "./steps/BasicsStep";
+import WhenStep from "./steps/WhenStep";
+import WhereStep from "./steps/WhereStep";
+import PriceStep from "./steps/PriceStep";
+import CapacityStep from "./steps/CapacityStep";
+import ServicePhotosStep from "./steps/ServicePhotosStep";
+import ReviewStep from "./steps/ReviewStep";
+import ServiceWhenStep from "./steps/ServiceWhenStep";
+import type { ListingKind } from "./wizard/wizardTypes";
 
+
+
+import type { CreateEvent } from "./types";
 import { textToEmoji } from "./utils/emoji";
-import { formatTime12h, parsePriceToCents } from "./utils/time";
-import { fetchAutocomplete, fetchPlaceDetails } from "./google/places";
-import { reverseGeocode } from "./google/geocode";
-import { buildLocationFromAddressComponents } from "./location/buildLocation";
-import { makeGoogleMapHtml } from "./map/googleMapHtml";
+import { parsePriceToCents } from "./utils/time";
 
 const DEFAULT_CENTER = { lat: 40.7128, lng: -74.006 };
 
-export default function AddEventModal({
+
+function clamp(n: number, a: number, b: number) {
+  return Math.max(a, Math.min(b, n));
+}
+
+function stepName(k: StepKey) {
+  switch (k) {
+    case "kind":
+      return "Type";
+    case "basics":
+      return "Basics";
+    case "when":
+      return "When";
+    case "where":
+      return "Where";
+    case "price":
+      return "Price";
+    case "capacity":
+      return "Limit";
+    case "servicePhotos":
+      return "Photos";
+    case "review":
+      return "Review";
+    default:
+      return "Step";
+  }
+}
+
+function stepPrompt(k: StepKey, kind: ListingKind | null) {
+  const isService = kind === "service";
+
+  switch (k) {
+    case "kind":
+      return "What are you creating today?";
+    case "basics":
+      return "Tell people what it is";
+
+    case "when":
+      return isService ? "How should people book you?" : "When is it happening?";
+
+    case "serviceWhen":
+      return "How should people book you?";
+
+    case "where":
+      return isService ? "Where do you provide the service?" : "Where should people meet?";
+
+    case "price":
+      return "Set a price";
+    case "capacity":
+      return "How many can join?";
+    case "servicePhotos":
+      return "Add a few photos";
+    case "review":
+      return "Review & publish";
+    default:
+      return "Continue";
+  }
+}
+
+
+function CircleIconButton({
+  icon,
+  onPress,
+  disabled,
+}: {
+  icon: string;
+  onPress: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <Pressable
+      onPress={disabled ? undefined : onPress}
+      style={[styles.circleBtn, disabled && { opacity: 0.45 }]}
+      hitSlop={12}
+    >
+      <Text style={styles.circleBtnIcon}>{icon}</Text>
+    </Pressable>
+  );
+}
+
+function PrimaryFooterButton({
+  label,
+  onPress,
+  disabled,
+}: {
+  label: string;
+  onPress: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <Pressable
+      onPress={disabled ? undefined : onPress}
+      style={[styles.primaryBtn, disabled && { opacity: 0.45 }]}
+    >
+      <Text style={styles.primaryBtnText}>{label}</Text>
+      <Text style={styles.primaryBtnArrow}>→</Text>
+    </Pressable>
+  );
+}
+
+function DotStepper({
+  steps,
+  activeIndex,
+  isDone,
+}: {
+  steps: StepKey[];
+  activeIndex: number;
+  isDone: (k: StepKey) => boolean;
+}) {
+  return (
+    <View style={styles.dotsRow}>
+      {steps.map((k, idx) => {
+        const active = idx === activeIndex;
+        const done = isDone(k);
+        return (
+          <View
+            key={`${k}-${idx}`}
+            style={[
+              styles.dot,
+              done && styles.dotDone,
+              active && styles.dotActive,
+              active && done && styles.dotActiveDone,
+            ]}
+          />
+        );
+      })}
+    </View>
+  );
+}
+
+export default function AddEvent({
   visible,
   onClose,
   onCreate,
@@ -29,365 +168,109 @@ export default function AddEventModal({
   onCreate: (e: CreateEvent) => void;
 }) {
   const sheetRef = useRef<Modalize>(null);
-  const mapRef = useRef<WebView>(null);
-  const initialCenterRef = useRef<{ lat: number; lng: number }>(DEFAULT_CENTER);
+  const mapRef = useRef<WebView | null>(null);
+
+  const H = Dimensions.get("window").height;
+  const TOP_GAP = 100;
 
   const { userId } = useAuth();
-
   const GOOGLE_KEY = (Constants.expoConfig?.extra as any)?.googleMapsKey as string | undefined;
   const API_BASE = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
   const EVENT_API_KEY = (Constants.expoConfig?.extra as any)?.eventApiKey as string | undefined;
 
-  const H = Dimensions.get("window").height;
+  const [state, dispatch] = useReducer(wizardReducer, initialWizardState);
+  const steps = useMemo(() => getSteps(state.kind), [state.kind]);
+  const [i, setI] = useState(0);
 
-  // Basics
-  const [title, setTitle] = useState("");
-  const [kind, setKind] = useState<ListingKind>("event_free");
-  const [priceText, setPriceText] = useState("");
+  const safeI = clamp(i, 0, Math.max(steps.length - 1, 0));
+  const stepKey: StepKey = steps[safeI] as StepKey;
 
-  // Optional
-  const [description, setDescription] = useState("");
-  const [dateISO, setDateISO] = useState(""); // YYYY-MM-DD
-  const [time24, setTime24] = useState(""); // HH:mm
+  const emoji = useMemo(() => textToEmoji(state.title), [state.title]);
 
-  // Capacity (NEW)
-  const [limitEnabled, setLimitEnabled] = useState(false);
-  const [capacityText, setCapacityText] = useState("");
-
-  // “Show more” sections
-  const [showDetails, setShowDetails] = useState(false);
-  const [showWhen, setShowWhen] = useState(false);
-
-  // Pickers
-  const [dateOpen, setDateOpen] = useState(false);
-  const [timeOpen, setTimeOpen] = useState(false);
-
-  // Location + Places
-  const [query, setQuery] = useState("");
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [loadingSug, setLoadingSug] = useState(false);
-
-  const [coord, setCoord] = useState<{ lat: number; lng: number } | null>(null);
-  const [selectedAddress, setSelectedAddress] = useState<string>("");
-  const [locationPayload, setLocationPayload] = useState<LocationPayload | null>(null);
-  const [locLoading, setLocLoading] = useState(false);
-  const [mapReady, setMapReady] = useState(false);
-
-  const [submitting, setSubmitting] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-
-  const emoji = useMemo(() => textToEmoji(title), [title]);
-
-  const priceCents = useMemo(() => {
-    if (kind === "event_free") return null;
-    return parsePriceToCents(priceText);
-  }, [kind, priceText]);
-
-  const dateLabel = useMemo(() => {
-    if (!dateISO) return "Select date";
-    return isoToSafeDate(dateISO).toLocaleDateString(undefined, {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-    });
-  }, [dateISO]);
-
-  const timeLabel = useMemo(() => {
-    if (!time24) return "Select time";
-    const [hh, mm] = time24.split(":").map((x) => parseInt(x, 10));
-    if (!Number.isFinite(hh) || !Number.isFinite(mm)) return "Select time";
-    return formatTime12h(hh, mm);
-  }, [time24]);
-
-  const hasLocation = useMemo(() => {
-    return !!coord && Number.isFinite(coord.lat) && Number.isFinite(coord.lng);
-  }, [coord]);
-
-  // Capacity derived
-  const capacity = useMemo(() => {
-    if (!limitEnabled) return null;
-    const n = parseInt(capacityText.trim(), 10);
-    if (!Number.isFinite(n) || n <= 0) return null;
-    return n;
-  }, [limitEnabled, capacityText]);
-
-  const capacityOk = useMemo(() => {
-    // ✅ only validate capacity for free events
-    if (kind !== "event_free") return true;
-    if (!limitEnabled) return true;
-
-    const n = parseInt(capacityText.trim(), 10);
-    return Number.isFinite(n) && n > 0;
-  }, [kind, limitEnabled, capacityText]);
-
-
-  const canCreate = useMemo(() => {
-    const needsPrice = kind === "event_paid" || kind === "service";
-    const priceOk = !needsPrice || priceCents !== null;
-
-    return (
-      !!GOOGLE_KEY &&
-      !!API_BASE &&
-      !!userId &&
-      !!title.trim() &&
-      hasLocation &&
-      !submitting &&
-      !locLoading &&
-      priceOk &&
-      capacityOk
-    );
-  }, [GOOGLE_KEY, API_BASE, userId, title, hasLocation, submitting, locLoading, kind, priceCents, capacityOk]);
-
-  // open/close sheet
   useEffect(() => {
     if (visible) sheetRef.current?.open();
     else sheetRef.current?.close();
   }, [visible]);
 
-  useEffect(() => {
-    if (visible) initialCenterRef.current = coord ?? initialCenterRef.current ?? DEFAULT_CENTER;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible]);
-
-  // debounce suggestions
-  useEffect(() => {
-    const t = setTimeout(() => {
-      if (!GOOGLE_KEY) return;
-      const q = query.trim();
-      if (!q) {
-        setSuggestions([]);
-        return;
-      }
-      fetchAutocomplete({
-        key: GOOGLE_KEY,
-        q,
-        setLoading: setLoadingSug,
-        setList: setSuggestions,
-        setErr,
-      });
-    }, 250);
-
-    return () => clearTimeout(t);
-  }, [query, GOOGLE_KEY]);
-
-  // update map marker
-  useEffect(() => {
-    if (!mapReady || !coord) return;
-    mapRef.current?.postMessage(JSON.stringify({ type: "setMarker", lat: coord.lat, lng: coord.lng }));
-  }, [coord, mapReady]);
-
-  const hardReset = () => {
-    setTitle("");
-    setKind("event_free");
-    setPriceText("");
-    setDescription("");
-    setDateISO("");
-    setTime24("");
-
-    // capacity reset
-    setLimitEnabled(false);
-    setCapacityText("");
-
-    setShowDetails(false);
-    setShowWhen(false);
-
-    setDateOpen(false);
-    setTimeOpen(false);
-
-    setQuery("");
-    setSuggestions([]);
-    setSelectedAddress("");
-    setCoord(null);
-    setLocationPayload(null);
-
-    setErr(null);
-    setSubmitting(false);
-    setMapReady(false);
-    setLoadingSug(false);
-    setLocLoading(false);
+  const resetAll = () => {
+    dispatch({ type: "RESET" });
+    setI(0);
   };
 
-  const handleFullClose = () => {
-    hardReset();
+  const closeAll = () => {
+    resetAll();
     onClose();
   };
 
-  const handlePickSuggestion = async (s: Suggestion) => {
-    if (!GOOGLE_KEY) return;
+  const canNext = useMemo(() => !validateStep(state as any, stepKey), [state, stepKey]);
 
-    Keyboard.dismiss();
-    setErr(null);
-    setLoadingSug(true);
-    setLocLoading(true);
-
-    try {
-      const details = await fetchPlaceDetails(GOOGLE_KEY, s.id);
-      if (!details?.latLng) {
-        setErr("Couldn’t get coordinates for that place. Try another search.");
-        return;
-      }
-
-      const addr = details.formattedAddress || [s.main, s.secondary].filter(Boolean).join(", ");
-
-      setCoord(details.latLng);
-      setSelectedAddress(addr);
-      setQuery(addr);
-      setSuggestions([]);
-
-      const loc = buildLocationFromAddressComponents({
-        lat: details.latLng.lat,
-        lng: details.latLng.lng,
-        formattedAddress: addr,
-        placeId: s.id,
-        components: details.addressComponents ?? [],
-        source: "places_autocomplete",
-      });
-
-      if (!loc?.countryCode || !loc?.city) {
-        setLocationPayload(null);
-        setErr("Couldn’t extract city/country from that place. Try a different result.");
-        return;
-      }
-
-      setLocationPayload({
-        ...loc,
-        lat: details.latLng.lat,
-        lng: details.latLng.lng,
-        formattedAddress: addr,
-        placeId: s.id,
-        source: "places_autocomplete",
-      });
-    } catch {
-      setErr("Something went wrong while selecting that place.");
-    } finally {
-      setLoadingSug(false);
-      setLocLoading(false);
-    }
+  const next = () => {
+    const err = validateStep(state as any, stepKey);
+    if (err) return dispatch({ type: "SET_ERR", err });
+    setI((p) => Math.min(p + 1, steps.length - 1));
   };
 
-  const onMapMessage = async (e: any) => {
-    try {
-      const msg = JSON.parse(e.nativeEvent.data);
-
-      if (msg?.type === "ready") setMapReady(true);
-
-      if (msg?.type === "picked" && typeof msg.lat === "number" && typeof msg.lng === "number") {
-        const picked = { lat: msg.lat, lng: msg.lng };
-        setCoord(picked);
-        setSuggestions([]);
-        setErr(null);
-
-        if (!GOOGLE_KEY) return;
-
-        setLocLoading(true);
-        setSelectedAddress("Dropped pin");
-
-        const geo = await reverseGeocode(GOOGLE_KEY, picked.lat, picked.lng);
-        if (!geo?.formattedAddress || !geo?.components?.length) {
-          setSelectedAddress("Dropped pin (no address found)");
-          return;
-        }
-
-        setSelectedAddress(geo.formattedAddress);
-
-        const loc = buildLocationFromAddressComponents({
-          lat: picked.lat,
-          lng: picked.lng,
-          formattedAddress: geo.formattedAddress,
-          placeId: geo.placeId,
-          components: geo.components,
-          source: "reverse_geocode",
-        });
-
-        setLocationPayload({
-          ...loc,
-          lat: picked.lat,
-          lng: picked.lng,
-          formattedAddress: geo.formattedAddress,
-          placeId: geo.placeId ?? "",
-          source: "reverse_geocode",
-          countryCode: loc?.countryCode ?? "",
-          countryName: loc?.countryName ?? "",
-          admin1: loc?.admin1 ?? "",
-          admin1Code: loc?.admin1Code ?? "",
-          city: loc?.city ?? "",
-          cityKey: loc?.cityKey ?? "",
-          postalCode: loc?.postalCode ?? "",
-          neighborhood: loc?.neighborhood ?? "",
-        });
-      }
-    } catch {
-      // ignore
-    } finally {
-      setLocLoading(false);
-    }
-  };
+  const back = () => setI((p) => Math.max(p - 1, 0));
 
   async function createListing() {
     if (!API_BASE) throw new Error("Missing API base URL (extra.apiBaseUrl).");
     if (!userId) throw new Error("You must be signed in.");
-    if (!coord) throw new Error("Pick a location.");
+    if (!GOOGLE_KEY) throw new Error("Google Maps key missing (extra.googleMapsKey).");
 
-    if (!locationPayload?.countryCode || !locationPayload?.city) {
-      throw new Error("Please select a place so city/country are available.");
-    }
+    const finalErr = validateAll(state as any);
+    if (finalErr) throw new Error(finalErr);
 
-    const backendKind = kind === "event_free" ? "free" : kind === "event_paid" ? "paid" : "service";
-
+    const backendKind = state.kind === "event_free" ? "free" : state.kind === "event_paid" ? "paid" : "service";
     const needsPrice = backendKind === "paid" || backendKind === "service";
-    if (needsPrice && priceCents === null) throw new Error("Enter a valid price.");
+    const priceCents = needsPrice ? parsePriceToCents(state.priceText) : null;
 
-    if (backendKind === "free" && limitEnabled && !capacityOk) {
-      throw new Error("Enter a valid capacity.");
-    }
+    const startsAt = toStartsAtISO(state.dateISO, state.time24);
+    if (!startsAt) throw new Error("Invalid date/time.");
 
     const timezone =
       typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "America/New_York";
 
-    const startsAt = dateISO && time24 ? new Date(`${dateISO}T${time24}:00`).toISOString() : undefined;
-
-    const payload = {
-      title: title.trim(),
-      description: description.trim(),
+    const payload: any = {
+      title: state.title.trim(),
+      description: state.description.trim(),
       emoji,
-
       creatorClerkId: userId,
       kind: backendKind,
       priceCents: needsPrice ? priceCents : null,
-
-      // NEW: capacity (null => open/unlimited)
-      capacity: backendKind === "free" && limitEnabled ? capacity : null,
+      capacity:
+        backendKind === "free" && state.capacityText.trim()
+          ? parseInt(state.capacityText.trim(), 10)
+          : null,
 
       timezone,
       startsAt,
-      date: dateISO.trim(),
-      time: time24.trim(),
+      date: state.dateISO,
+      time: state.time24,
+
+      photos:
+        backendKind === "service"
+          ? state.servicePhotos.map((p: any) => ({ url: p.url ?? "", key: p.key ?? "" }))
+          : [],
 
       tags: [],
       visibility: "public",
       status: "active",
 
       location: {
-        lat: coord.lat,
-        lng: coord.lng,
-        geo: { type: "Point", coordinates: [coord.lng, coord.lat] },
-
-        formattedAddress: selectedAddress || locationPayload.formattedAddress || "",
-        placeId: locationPayload.placeId || "",
-
-        countryCode: locationPayload.countryCode,
-        countryName: locationPayload.countryName || "",
-
-        admin1: locationPayload.admin1 || "",
-        admin1Code: locationPayload.admin1Code || "",
-
-        city: locationPayload.city,
-        cityKey: locationPayload.cityKey || "",
-
-        postalCode: locationPayload.postalCode || "",
-        neighborhood: locationPayload.neighborhood || "",
-
-        source: locationPayload.source || "user_typed",
+        lat: state.coord!.lat,
+        lng: state.coord!.lng,
+        geo: { type: "Point", coordinates: [state.coord!.lng, state.coord!.lat] },
+        formattedAddress: state.selectedAddress || state.locationPayload?.formattedAddress || "",
+        placeId: state.locationPayload?.placeId || "",
+        countryCode: state.locationPayload.countryCode,
+        countryName: state.locationPayload.countryName || "",
+        admin1: state.locationPayload.admin1 || "",
+        admin1Code: state.locationPayload.admin1Code || "",
+        city: state.locationPayload.city,
+        cityKey: state.locationPayload.cityKey || "",
+        postalCode: state.locationPayload.postalCode || "",
+        neighborhood: state.locationPayload.neighborhood || "",
+        source: state.locationPayload.source || "user_typed",
       },
     };
 
@@ -405,183 +288,251 @@ export default function AddEventModal({
     return json;
   }
 
-  const handleCreate = async () => {
-    setErr(null);
-
-    if (!GOOGLE_KEY) {
-      setErr("Google Maps key missing (extra.googleMapsKey).");
-      return;
-    }
-    if (!API_BASE) {
-      setErr("API base missing (extra.apiBaseUrl).");
-      return;
-    }
-    if (!userId) {
-      setErr("Sign in required.");
-      return;
-    }
-
-    setSubmitting(true);
+  const submit = async () => {
+    dispatch({ type: "SET", key: "submitting", value: true });
+    dispatch({ type: "SET_ERR", err: null });
 
     try {
       const created = await createListing();
       const ev = created?.event;
 
       onCreate({
-        title: ev?.title ?? title.trim(),
-        lat: ev?.location?.lat ?? coord?.lat ?? DEFAULT_CENTER.lat,
-        lng: ev?.location?.lng ?? coord?.lng ?? DEFAULT_CENTER.lng,
+        title: ev?.title ?? state.title.trim(),
+        lat: ev?.location?.lat ?? state.coord?.lat ?? DEFAULT_CENTER.lat,
+        lng: ev?.location?.lng ?? state.coord?.lng ?? DEFAULT_CENTER.lng,
         emoji: ev?.emoji ?? emoji,
       });
 
       sheetRef.current?.close();
     } catch (e: any) {
-      setErr(e?.message || "Something went wrong. Please try again.");
-      setSubmitting(false);
+      dispatch({ type: "SET_ERR", err: e?.message || "Something went wrong." });
+      dispatch({ type: "SET", key: "submitting", value: false });
     }
   };
 
-  const mapHtml = useMemo(() => makeGoogleMapHtml(GOOGLE_KEY, initialCenterRef.current), [GOOGLE_KEY]);
-  const TOP_GAP = 48;
+  const stepUI = () => {
+    switch (stepKey) {
+      case "kind":
+        return <KindStep state={state} dispatch={dispatch} emoji={emoji} />;
+      case "basics":
+        return <BasicsStep state={state} dispatch={dispatch} emoji={emoji} />;
+      case "when":
+        return <WhenStep state={state} dispatch={dispatch} />;
+
+      case "serviceWhen": // ✅ add this
+        return <ServiceWhenStep state={state} dispatch={dispatch} />;
+
+      case "where":
+        return (
+          <WhereStep
+            state={state}
+            dispatch={dispatch}
+            mapRef={mapRef as React.RefObject<WebView>}
+            googleKey={GOOGLE_KEY}
+          />
+        );
+      case "price":
+        return <PriceStep state={state} dispatch={dispatch} />;
+      case "capacity":
+        return <CapacityStep state={state} dispatch={dispatch} />;
+      case "servicePhotos":
+        return <ServicePhotosStep state={state} dispatch={dispatch} />;
+      case "review":
+        return <ReviewStep state={state} emoji={emoji} onSubmit={submit} />;
+      default:
+        return null;
+    }
+  };
+
+  const isDone = (k: StepKey) => !validateStep(state as any, k);
+
+  const footerLabel =
+    stepKey === "review" ? (state.submitting ? "Creating" : "Create") : "Continue";
+
+  const onFooterPress = () => {
+    if (stepKey === "review") submit();
+    else next();
+  };
+
+  const FOOTER_H = 92;
 
   return (
     <Modalize
       ref={sheetRef}
       withReactModal
-      onClosed={handleFullClose}
+      onClosed={closeAll}
       modalHeight={H - TOP_GAP}
       modalTopOffset={TOP_GAP}
       modalStyle={styles.modal}
-      handleStyle={styles.handle}
       overlayStyle={styles.overlay}
-      keyboardAvoidingBehavior="padding"
-      scrollViewProps={{
-        keyboardShouldPersistTaps: "handled",
-        showsVerticalScrollIndicator: false,
-      }}
-
-      // ✅ lock the sheet: no swipe-down close, no overlay-tap close
       panGestureEnabled={false}
       closeOnOverlayTap={false}
+      FooterComponent={
+        <View style={styles.footerWrap}>
+          {!!state.err && <Text style={styles.errText}>{state.err}</Text>}
 
-      // ✅ optional: hide the grab handle so users don’t try to drag it
-      // withHandle={false}
+          <View style={styles.footerRow}>
+            <CircleIconButton
+              icon={safeI === 0 ? "✕" : "←"}
+              onPress={safeI === 0 ? closeAll : back}
+              disabled={!!state.submitting}
+            />
 
+            <PrimaryFooterButton
+              label={footerLabel}
+              onPress={onFooterPress}
+              disabled={stepKey !== "review" ? !canNext : !!state.submitting}
+            />
+          </View>
+          <View style={{ height: Platform.OS === "ios" ? 50 : 40 }} />
+        </View>
+      }
+      scrollViewProps={{
+        keyboardShouldPersistTaps: "always",
+        showsVerticalScrollIndicator: false,
+        contentContainerStyle: [styles.content, { paddingBottom: FOOTER_H, flexGrow: 1 }],
+      }}
       reactModalProps={{
         presentationStyle: "overFullScreen",
         statusBarTranslucent: true,
         animationType: "fade",
-
-        // ✅ Android: prevent hardware back button from dismissing the modal
         onRequestClose: () => { },
       }}
     >
-      <AddEventFields
-        // header
-        emoji={emoji}
-        title={title}
-        kind={kind}
-        onClose={() => {
-          hardReset();
-          sheetRef.current?.close();
-        }}
 
-        // basics
-        setTitle={setTitle}
-        setKind={(k) => {
-          setKind(k);
-          if (k === "event_free") setPriceText("");
-          else {
-            // ✅ if not free, disable + clear capacity
-            setLimitEnabled(false);
-            setCapacityText("");
-          }
-          setErr(null);
-        }}
-        priceText={priceText}
-        setPriceText={(t) => {
-          setPriceText(t);
-          setErr(null);
-        }}
-        priceCents={priceCents}
+      {/* Light sheet body */}
+      <View style={styles.sheet}>
+        <View style={styles.handle} />
 
-        // details
-        showDetails={showDetails}
-        setShowDetails={setShowDetails}
-        description={description}
-        setDescription={setDescription}
+        <Text style={styles.stepCount}>
+          {safeI + 1} of {steps.length}
+        </Text>
 
-        // capacity
-        limitEnabled={limitEnabled}
-        setLimitEnabled={(v) => {
-          setLimitEnabled(v);
-          if (!v) setCapacityText("");
-          setErr(null);
-        }}
-        capacityText={capacityText}
-        setCapacityText={(t) => {
-          // digits only keeps it clean
-          const digits = t.replace(/[^\d]/g, "");
-          setCapacityText(digits);
-          setErr(null);
-        }}
-        capacityOk={capacityOk}
+        <Text style={styles.title}>{stepPrompt(stepKey, state.kind)}</Text>
 
-        // when
-        showWhen={showWhen}
-        setShowWhen={setShowWhen}
-        dateISO={dateISO}
-        setDateISO={setDateISO}
-        time24={time24}
-        setTime24={setTime24}
-        dateLabel={dateLabel}
-        timeLabel={timeLabel}
-        dateOpen={dateOpen}
-        setDateOpen={setDateOpen}
-        timeOpen={timeOpen}
-        setTimeOpen={setTimeOpen}
+        <DotStepper steps={steps as StepKey[]} activeIndex={safeI} isDone={isDone} />
 
-        // where
-        query={query}
-        setQuery={(t) => {
-          setQuery(t);
-          setSelectedAddress("");
-          setLocationPayload(null);
-          setErr(null);
-        }}
-        suggestions={suggestions}
-        loadingSug={loadingSug}
-        onPickSuggestion={handlePickSuggestion}
-        clearQuery={() => {
-          setQuery("");
-          setSuggestions([]);
-          setSelectedAddress("");
-          setLocationPayload(null);
-          setErr(null);
-        }}
-        selectedAddress={selectedAddress}
-        locLoading={locLoading}
-        googleKey={GOOGLE_KEY}
-        mapRef={mapRef as unknown as React.RefObject<WebView>}
-        mapHtml={mapHtml}
-        onMapMessage={onMapMessage}
+        <View style={styles.card}>
+          <View style={styles.cardBody}>{stepUI()}</View>
+        </View>
+      </View>
 
-        // errors + actions
-        err={err}
-        submitting={submitting}
-        canCreate={canCreate}
-        onCancel={() => {
-          hardReset();
-          sheetRef.current?.close();
-        }}
-        onCreate={handleCreate}
-      />
     </Modalize>
   );
 }
 
-/* ---- helpers used by UI too ---- */
-function isoToSafeDate(iso: string) {
-  if (!iso) return new Date();
-  return new Date(`${iso}T12:00:00`);
-}
+const styles = StyleSheet.create({
+  modal: {
+    backgroundColor: "#F8FAFC",       // soft canvas
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    overflow: "hidden",
+  },
+  overlay: { backgroundColor: "rgba(0,0,0,0.45)" },
+
+  content: {
+    paddingTop: 12,
+    paddingHorizontal: 16,
+    flexGrow: 1,
+  },
+
+  sheet: {
+    flex: 1,
+    backgroundColor: "#F8FAFC",
+  },
+
+  handle: {
+    alignSelf: "center",
+    width: 44,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: "#E5E7EB",
+    marginTop: 10,
+    marginBottom: 14,
+  },
+
+  stepCount: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#111827",
+    marginBottom: 10,
+  },
+
+  title: {
+    fontSize: 28,
+    lineHeight: 34,
+    fontWeight: "900",
+    color: "#0B0F19",
+    letterSpacing: -0.3,
+  },
+
+  dotsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    marginTop: 14,
+    marginBottom: 14,
+  },
+  dot: { width: 7, height: 7, borderRadius: 999, backgroundColor: "#E5E7EB" },
+  dotDone: { backgroundColor: "#111827" },
+  dotActive: { width: 18, height: 7, borderRadius: 999, backgroundColor: "#D1D5DB" },
+  dotActiveDone: { backgroundColor: "#111827" },
+
+  card: {
+    borderRadius: 14,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+
+  cardBody: {
+    padding: 14,
+    paddingTop: 40,
+  },
+
+  footerWrap: {
+    backgroundColor: "#FFFFFF",
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
+    paddingHorizontal: 16,
+    paddingTop: 10,
+  },
+  errText: {
+    color: "#B91C1C",
+    fontWeight: "900",
+    marginBottom: 8,
+    fontSize: 12,
+  },
+  footerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  circleBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 999,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  circleBtnIcon: {
+    fontSize: 18,
+    fontWeight: "900",
+    color: "#111827",
+  },
+  primaryBtn: {
+    flex: 1,
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: "#111827",
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
+  },
+  primaryBtnText: { color: "#FFFFFF", fontWeight: "900", fontSize: 15, letterSpacing: 0.2 },
+  primaryBtnArrow: { color: "#FFFFFF", fontWeight: "900", fontSize: 16, marginTop: -1 },
+});

@@ -48,11 +48,41 @@ export function textToEmoji(t: string): string {
   if (has(["camp", "camping", "bonfire", "firepit", "campfire", "smores"])) return "🔥";
 
   // --- Sports / active ---
-  if (has(["basketball", "hoops"])) return "🏀";
-  if (has(["soccer", "football", "match"])) return "⚽️";
-  if (has(["tennis"])) return "🎾";
-  if (has(["pickleball"])) return "🏓";
-  if (has(["bowling"])) return "🎳";
+  if (has(["baseball", "softball"])) return "⚾️";
+  if (has(["american football", "nfl", "football game"])) return "🏈";
+  if (has(["rugby"])) return "🏉";
+  if (has(["cricket"])) return "🏏";
+  if (has(["volleyball"])) return "🏐";
+  if (has(["badminton"])) return "🏸";
+  if (has(["table tennis", "ping pong"])) return "🏓";
+  if (has(["golf"])) return "⛳️";
+  if (has(["hockey", "ice hockey"])) return "🏒";
+  if (has(["field hockey"])) return "🏑";
+  if (has(["lacrosse"])) return "🥍";
+  if (has(["boxing"])) return "🥊";
+  if (has(["martial arts", "mma", "karate", "taekwondo", "judo"])) return "🥋";
+  if (has(["wrestling"])) return "🤼‍♂️";
+  if (has(["fencing"])) return "🤺";
+  if (has(["archery"])) return "🏹";
+  if (has(["cycling", "bike", "biking", "bicycle"])) return "🚴‍♂️";
+  if (has(["mountain biking", "mtb"])) return "🚵‍♂️";
+  if (has(["skate", "skating", "skateboard"])) return "🛹";
+  if (has(["roller skate", "roller skating"])) return "🛼";
+  if (has(["ski", "skiing"])) return "⛷️";
+  if (has(["snowboard", "snowboarding"])) return "🏂";
+  if (has(["ice skate", "ice skating"])) return "⛸️";
+  if (has(["swim", "swimming", "pool"])) return "🏊‍♂️";
+  if (has(["surf", "surfing"])) return "🏄‍♂️";
+  if (has(["row", "rowing"])) return "🚣‍♂️";
+  if (has(["canoe", "kayak", "kayaking"])) return "🛶";
+  if (has(["sail", "sailing"])) return "⛵️";
+  if (has(["scuba", "snorkel", "snorkeling", "diving"])) return "🤿";
+  if (has(["climb", "climbing", "rock climb", "bouldering"])) return "🧗‍♂️";
+  if (has(["horse", "horseback", "equestrian"])) return "🏇";
+  if (has(["fishing"])) return "🎣";
+  if (has(["shooting", "range", "target practice"])) return "🎯";
+  if (has(["dance", "dancing", "club", "party"])) return "💃";
+  if (has(["cheer", "cheerleading"])) return "📣";
 
   // --- Games / hobbies ---
   if (has(["boardgame", "gamenight", "game", "card", "cards"])) return "🎲";

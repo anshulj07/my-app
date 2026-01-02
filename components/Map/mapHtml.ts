@@ -4,8 +4,9 @@ export function buildMapHtml(args: {
   eventsJson: string; // already JSON.stringify(...)
   center: { lat: number; lng: number };
   zoom: number;
+  viewerClerkId?: string;
 }) {
-  const { googleKey, eventsJson, center, zoom } = args;
+  const { googleKey, eventsJson, center, zoom, viewerClerkId } = args;
 
   return `<!doctype html>
   <html>
@@ -59,6 +60,23 @@ export function buildMapHtml(args: {
         transform:translate(-50%,-50%) scale(0.92);
       }
 
+      .emoji-pin.mine::before{
+        content:"";
+        position:absolute;
+        right:3px;
+        top:3px;
+        width:8px;
+        height:8px;
+        border-radius:999px;
+        background:#22C55E;                
+        box-shadow: 0 0 0 2px rgba(255,255,255,0.95); /* white ring so it feels clean */
+        animation: mineBlink 1.1s ease-in-out infinite;
+      }
+
+      @keyframes mineBlink{
+        0%, 100% { opacity: 0.25; transform: scale(0.9); }
+        50%      { opacity: 1;    transform: scale(1.05); }
+      }
   
       .badge{
         position:absolute;
@@ -80,6 +98,7 @@ export function buildMapHtml(args: {
     <script>
       const DATA = ${eventsJson};
       const INITIAL_CENTER = { lat: ${center.lat}, lng: ${center.lng} };
+      const VIEWER_ID = ${JSON.stringify(viewerClerkId ?? "")};
   
       let map;
       const overlays = [];
@@ -151,6 +170,8 @@ export function buildMapHtml(args: {
         overlay.onAdd = function() {
           const div = document.createElement('div');
           div.className = 'emoji-pin';
+          const isMine = !!VIEWER_ID && ev.creatorClerkId && String(ev.creatorClerkId) === String(VIEWER_ID);
+          if (isMine) div.classList.add("mine");
           div.innerHTML = '<span class="emoji">' + (ev.emoji || '📍') + '</span>';
           div.title = ev.title || '';
           div.dataset.id = ev._id || String(idx);

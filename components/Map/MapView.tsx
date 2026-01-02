@@ -4,6 +4,7 @@ import { View, StyleSheet, Platform, Text } from "react-native";
 import { WebView } from "react-native-webview";
 import Constants from "expo-constants";
 import { buildMapHtml } from "./mapHtml";
+import { useAuth } from "@clerk/clerk-expo";
 
 /**
  * IMPORTANT:
@@ -132,6 +133,7 @@ export default function MapView({
   }
 
   const GOOGLE_KEY = (Constants.expoConfig?.extra as any)?.googleMapsKey as string | undefined;
+  const { userId } = useAuth();
 
   const safeEvents: EventPin[] = useMemo(() => {
     const list = Array.isArray(events) ? events : [];
@@ -176,6 +178,7 @@ export default function MapView({
         eventsJson: safeEventsJson,
         center,
         zoom,
+        viewerClerkId: userId ?? "",
       }),
     [GOOGLE_KEY, safeEventsJson, center.lat, center.lng, zoom]
   );

@@ -12,6 +12,7 @@ import {
   Easing,
   Platform,
   Switch,
+  Alert,
 } from "react-native";
 import Constants from "expo-constants";
 import { useAuth } from "@clerk/clerk-expo";
@@ -20,6 +21,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import type { EventPin } from "../Map/MapView";
 import JoinEventButton from "./JoinEventButton";
 import { styles } from "./PersonBookingSheet.style";
+import { apiFetch } from "../../lib/apiFetch";
 
 type Props = {
   visible: boolean;
@@ -27,6 +29,7 @@ type Props = {
   person?: EventPin | null;
   onEditDetails?: (ev: EventPin) => void;
   onStatusChanged?: (eventId: string, nextStatus: string) => void;
+  onDeleteEvent?: (eventId: string) => void;
 };
 
 function formatDateLong(ev: any) {
@@ -71,7 +74,7 @@ function titleCase(s: string) {
   return (s || "").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-export default function PersonBookingSheet({ visible, onClose, person, onEditDetails, onStatusChanged }: Props) {
+export default function PersonBookingSheet({ visible, onClose, person, onEditDetails, onStatusChanged, onDeleteEvent }: Props) {
   const router = useRouter();
   const { userId } = useAuth();
 
@@ -93,10 +96,43 @@ export default function PersonBookingSheet({ visible, onClose, person, onEditDet
     (person as any)?.creatorId ||
     "";
 
-  const kind: "free" | "service" = ((person as any)?.kind || "free") as any;
+  const kind: "free" | "service" | "paid" | "event_free" | "event_paid" = ((person as any)?.kind || "free") as any;
+  const isPaid = kind === "paid" || kind === "event_paid";
   const priceLabel = moneyFromCents((person as any)?.priceCents);
+  const priceCents: number | null = (person as any)?.priceCents ?? null;
 
   const isCreator = !!userId && !!creatorClerkId && String(userId) === String(creatorClerkId);
+
+  // ✅ Delete event handler
+  const handleDelete = () => {
+    Alert.alert(
+      "Delete Event?",
+      "This will permanently delete the event. This cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            if (!API_BASE || !eventId || !userId) return;
+            try {
+              await apiFetch(`${API_BASE}/api/events/delete-event`, {
+                method: "DELETE",
+                headers: {
+                  "Content-Type": "application/json",
+                  ...(EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {}),
+                },
+                body: JSON.stringify({ eventId, creatorClerkId: userId }),
+              });
+              close(() => onDeleteEvent?.(eventId));
+            } catch {
+              Alert.alert("Error", "Failed to delete event. Please try again.");
+            }
+          },
+        },
+      ]
+    );
+  };
 
   // ---- local status (so creator toggle can update immediately) ----
   const [statusLocal, setStatusLocal] = useState<string>("active");
@@ -129,15 +165,23 @@ export default function PersonBookingSheet({ visible, onClose, person, onEditDet
     const country = pickFirst(loc.countryCode, loc.country, (person as any)?.country);
 
     const tags = Array.isArray((person as any)?.tags) ? ((person as any).tags as string[]) : [];
+    const attendees = Array.isArray((person as any)?.attendees) ? (person as any).attendees : [];
+    const pendingRequests = Array.isArray((person as any)?.pendingRequests) ? (person as any).pendingRequests : [];
+    const attendance = (person as any)?.attendance; // capacity
 
+    const isPending = !!userId && pendingRequests.some((p: any) => String(p.clerkUserId) === String(userId));
 
     return {
       address,
       locationLine: [city, region, country].filter(Boolean).join(", "),
       dateLabel: formatDateLong(person),
       tags,
+      joinedCount: attendees.length,
+      capacity: typeof attendance === "number" ? attendance : parseInt(String(attendance || ""), 10) || null,
+      isPending,
+      joinPolicy: (person as any)?.joinPolicy as "open" | "approval" | undefined,
     };
-  }, [person]);
+  }, [person, userId]);
 
 
   // ---- fetch creator from assist_users.users ----
@@ -154,7 +198,7 @@ export default function PersonBookingSheet({ visible, onClose, person, onEditDet
       try {
         setLoadingCreator(true);
         const url = `${API_BASE}/api/users/get-user?clerkUserId=${encodeURIComponent(creatorClerkId)}`;
-        const res = await fetch(url, { headers: EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : undefined });
+        const res = await apiFetch(url, { headers: EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : undefined });
         const json = await res.json().catch(() => null);
         if (cancelled) return;
         setCreator(res.ok ? json?.user ?? null : null);
@@ -183,13 +227,17 @@ export default function PersonBookingSheet({ visible, onClose, person, onEditDet
 
   const actionLabel = isCreator
     ? "Edit details"
-    : kind === "free"
-      ? "Join event"
-      : status.toLowerCase() === "paused"
-        ? "Service paused"
-        : priceLabel
-          ? `Book • ${priceLabel}`
-          : "Book service";
+    : isPaid && priceCents
+      ? `Pay ₹${(priceCents / 100).toFixed(0)} & Join`
+      : kind === "service"
+        ? status.toLowerCase() === "paused"
+          ? "Service paused"
+          : priceLabel
+            ? `Book • ${priceLabel}`
+            : "Book service"
+        : details?.joinPolicy === "approval"
+          ? "Request to Join"
+          : "Join Event";
 
   const onPrimary = () => {
     if (!person) return;
@@ -209,7 +257,14 @@ export default function PersonBookingSheet({ visible, onClose, person, onEditDet
 
   const goToCreatorProfile = () => {
     if (!creatorClerkId) return;
-    router.push({ pathname: "/newtab/profile", params: { clerkUserId: creatorClerkId } } as any);
+    router.push({
+      pathname: "/profile/[clerkUserId]",
+      params: {
+        clerkUserId: creatorClerkId,
+        name: creatorName || "",
+        imageUrl: creatorPhoto || "",
+      },
+    } as any);
   };
 
   // ---- creator toggle: patch status quickly (service only, creator only) ----
@@ -229,7 +284,7 @@ export default function PersonBookingSheet({ visible, onClose, person, onEditDet
     try {
       setTogglingService(true);
 
-      const res = await fetch(`${API_BASE}/api/events/toggle-service`, {
+      const res = await apiFetch(`${API_BASE}/api/events/toggle-service`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -315,7 +370,7 @@ export default function PersonBookingSheet({ visible, onClose, person, onEditDet
         ? styles.tonePaused
         : styles.toneMuted;
 
-  const kindTone = kind === "service" ? styles.toneService : styles.toneFree;
+  const kindTone = kind === "service" || isPaid ? styles.toneService : styles.toneFree;
 
   const ctaDisabled = !isCreator && kind === "service" && status.toLowerCase() === "paused";
 
@@ -361,8 +416,8 @@ export default function PersonBookingSheet({ visible, onClose, person, onEditDet
                   ) : null}
 
                   <View style={[styles.miniBadge, kindTone]}>
-                    <Ionicons name={kind === "service" ? "sparkles" : "leaf"} size={14} color="#fff" />
-                    <Text style={styles.miniBadgeText}>{kind === "service" ? "Service" : "Free"}</Text>
+                    <Ionicons name={kind === "service" ? "sparkles" : isPaid ? "card" : "leaf"} size={14} color="#fff" />
+                  <Text style={styles.miniBadgeText}>{kind === "service" ? "Service" : isPaid ? "Paid" : "Free"}</Text>
                   </View>
 
                   <View style={[styles.miniBadge, statusTone]}>
@@ -391,6 +446,31 @@ export default function PersonBookingSheet({ visible, onClose, person, onEditDet
                     <Text style={styles.bigChipText}>{details?.dateLabel || "Date not set"}</Text>
                   </View>
 
+                  {kind === "free" ? (
+                    <View style={[
+                      styles.bigChip,
+                      details?.isPending ? { borderColor: "rgba(245,158,11,0.4)" } :
+                      (!!details?.capacity && details.joinedCount >= details.capacity) ? { borderColor: "rgba(248,113,113,0.4)" } : undefined
+                    ]}>
+                      <Ionicons
+                        name={details?.isPending ? "time-outline" : "people-outline"}
+                        size={16}
+                        color={details?.isPending ? "#F59E0B" : (!!details?.capacity && details.joinedCount >= details.capacity) ? "#F87171" : "rgba(226,232,240,0.92)"}
+                      />
+                      <Text style={[
+                        styles.bigChipText,
+                        details?.isPending ? { color: "#F59E0B" } :
+                        (!!details?.capacity && details.joinedCount >= details.capacity) ? { color: "#F87171" } : undefined
+                      ]}>
+                        {details?.isPending ? "Awaiting Approval" :
+                         details?.capacity
+                          ? `${details.joinedCount} / ${details.capacity} joined`
+                          : `${details?.joinedCount || 0} joined`
+                        }
+                      </Text>
+                    </View>
+                  ) : null}
+
                   {kind === "service" && priceLabel ? (
                     <View style={[styles.bigChip, styles.bigChipAccent]}>
                       <Ionicons name="cash-outline" size={16} color="#fff" />
@@ -407,6 +487,19 @@ export default function PersonBookingSheet({ visible, onClose, person, onEditDet
               contentContainerStyle={styles.body}
               keyboardShouldPersistTaps="handled"
             >
+              {/* ✅ Pending Approval Banner */}
+              {details?.isPending && (
+                <View style={styles.pendingBanner}>
+                  <View style={styles.pendingIconWrap}>
+                    <Ionicons name="hourglass" size={20} color="#F59E0B" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.pendingBannerTitle}>Request under review</Text>
+                    <Text style={styles.pendingBannerSub}>The host will notify you once you're admitted.</Text>
+                  </View>
+                </View>
+              )}
+
               {/* Creator */}
               <Pressable
                 onPress={goToCreatorProfile}
@@ -438,6 +531,61 @@ export default function PersonBookingSheet({ visible, onClose, person, onEditDet
                   </Text>
                 </View>
               </Pressable>
+
+              {/* ✅ Spot Availability (Prominent Dashboard) */}
+              {kind === "free" && details && (
+                <View style={styles.capacityCard}>
+                  <View style={styles.capacityHeader}>
+                    <View style={styles.capacityLabelRow}>
+                      <Ionicons name="people" size={16} color="#0A84FF" />
+                      <Text style={styles.sectionTitle}>Spot Availability</Text>
+                    </View>
+                    <View style={[
+                      styles.capacityStatus,
+                      details.capacity && details.joinedCount >= details.capacity ? styles.capacityStatusFull :
+                      details.joinPolicy === "approval" ? styles.capacityStatusApproval : undefined
+                    ]}>
+                      <Text style={[
+                        styles.capacityStatusText,
+                        details.capacity && details.joinedCount >= details.capacity ? styles.capacityStatusFullText :
+                        details.joinPolicy === "approval" ? styles.capacityStatusApprovalText : undefined
+                      ]}>
+                        {details.capacity && details.joinedCount >= details.capacity ? "EVENT FULL" :
+                         details.joinPolicy === "approval" ? "HOST APPROVAL" : "OPEN"}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Progress Bar */}
+                  {details.capacity ? (
+                    <View style={styles.progressBarContainer}>
+                      <View style={[
+                        styles.progressBar,
+                        {
+                          width: `${Math.min(100, (details.joinedCount / details.capacity) * 100)}%`,
+                          backgroundColor: details.joinedCount >= details.capacity ? "#F87171" : "#0A84FF"
+                        }
+                      ]} />
+                    </View>
+                  ) : (
+                    <View style={styles.progressBarContainer}>
+                      <View style={[styles.progressBar, { width: "100%", backgroundColor: "#10B981" }]} />
+                    </View>
+                  )}
+
+                  <View style={styles.capacityInfo}>
+                    <Text style={styles.capacityJoinedText}>
+                      {details.joinedCount} {details.joinedCount === 1 ? "person" : "people"} joined
+                      {details.capacity ? ` of ${details.capacity}` : " (No limit)"}
+                    </Text>
+                    {details.capacity && (
+                      <Text style={styles.capacityRemainingText}>
+                        {Math.max(0, details.capacity - details.joinedCount)} spots left
+                      </Text>
+                    )}
+                  </View>
+                </View>
+              )}
 
               {/* ✅ Creator-only toggle (service only) */}
               {isCreator && kind === "service" ? (
@@ -524,31 +672,35 @@ export default function PersonBookingSheet({ visible, onClose, person, onEditDet
             {/* STICKY CTA */}
             <View style={styles.ctaBar}>
               {isCreator ? (
-                <Pressable onPress={onPrimary} style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}>
-                  <View style={styles.ctaGlow} />
-                  <Ionicons name="create-outline" size={18} color="#fff" />
-                  <Text style={styles.ctaText}>{actionLabel}</Text>
-                </Pressable>
+                <>
+                  <Pressable onPress={onPrimary} style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}>
+                    <View style={styles.ctaGlow} />
+                    <Ionicons name="create-outline" size={18} color="#fff" />
+                    <Text style={styles.ctaText}>{actionLabel}</Text>
+                  </Pressable>
+                  <Pressable onPress={handleDelete} style={({ pressed }) => [styles.ctaGhost, styles.ctaDelete, pressed && styles.ctaGhostPressed]}>
+                    <Ionicons name="trash-outline" size={16} color="#F87171" />
+                    <Text style={styles.ctaDeleteText}>Delete Event</Text>
+                  </Pressable>
+                </>
               ) : kind === "free" ? (
                 <JoinEventButton
                   eventId={String((person as any)?._id || (person as any)?.id || "")}
                   kind={((person as any)?.kind || "free") as any}
                   priceCents={(person as any)?.priceCents ?? null}
+                  joinPolicy={((person as any)?.joinPolicy || "open") as any}
                   onJoined={() => close()}
                 />
               ) : (
-                <Pressable
-                  onPress={ctaDisabled ? undefined : onPrimary}
-                  style={({ pressed }) => [
-                    styles.cta,
-                    pressed && !ctaDisabled && styles.ctaPressed,
-                    ctaDisabled && styles.ctaDisabled,
-                  ]}
-                >
-                  <View style={styles.ctaGlow} />
-                  <Ionicons name={ctaDisabled ? "pause-circle-outline" : "card-outline"} size={18} color="#fff" />
-                  <Text style={styles.ctaText}>{actionLabel}</Text>
-                </Pressable>
+                <JoinEventButton
+                  eventId={eventId}
+                  kind={kind as any}
+                  priceCents={priceCents}
+                  eventTitle={String((person as any)?.title || "Event")}
+                  joinPolicy={((person as any)?.joinPolicy || "open") as any}
+                  onJoined={() => close()}
+                  disabled={kind === "service" && status.toLowerCase() === "paused"}
+                />
               )}
 
               <Pressable onPress={() => close()} style={({ pressed }) => [styles.ctaGhost, pressed && styles.ctaGhostPressed]}>
@@ -561,4 +713,3 @@ export default function PersonBookingSheet({ visible, onClose, person, onEditDet
     </Modal>
   );
 }
-

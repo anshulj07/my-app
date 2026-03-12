@@ -25,369 +25,318 @@ const FONT = Platform.select({
   },
 }) as any;
 
+export const COLORS = {
+  bg: "#FFF7FA",
+  card: "#FFFFFF",
+  text: "#111827",
+  muted: "#6B7280",
+  brand: "#FF4D6D",
+  brandSoft: "#FFF1F5",
+  border: "#F1F5F9",
+  success: "#10B981",
+  blue: "#3B82F6",
+};
+
 export const styles = StyleSheet.create({
   // ----- screen / header -----
   screen: {
     flex: 1,
-    backgroundColor: "#F7F8FC",
+    backgroundColor: COLORS.bg,
   },
 
   header: {
-    paddingHorizontal: 18,
+    paddingHorizontal: 20,
     paddingTop: 10,
-    paddingBottom: 14,
+    paddingBottom: 20,
   },
 
-  // ✅ from sx.headerTopRow + sx.subTitle
   headerTopRow: {
-    gap: 10,
-    marginBottom: 10,
+    marginBottom: 16,
+  },
+  title: {
+    fontSize: 32,
+    color: COLORS.text,
+    fontFamily: FONT.heavy,
+    letterSpacing: -0.8,
   },
   subTitle: {
-    marginTop: 6,
-    fontSize: 13,
-    color: "#334155",          // was rgba(100,116,139,0.92)
-    fontFamily: FONT.demi,     // was medium
-  },
-
-
-  title: {
-    fontSize: 30,
-    color: "#0F172A",
-    fontFamily: FONT.heavy,
-    letterSpacing: -0.4,
-  },
-
-  // ----- stats (optional) -----
-  statsRow: {
-    marginTop: 12,
-    flexDirection: "row",
-    gap: 10,
-  },
-  stat: {
-    flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 16,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#E6EAF2",
-    shadowColor: "#0B1220",
-    shadowOpacity: 0.04,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 1,
-  },
-  statValue: {
-    color: "#0F172A",
-    fontSize: 18,
-    fontFamily: FONT.bold,
-    letterSpacing: -0.2,
-  },
-  statLabel: {
     marginTop: 4,
-    color: "#64748B",
+    fontSize: 15,
+    color: COLORS.muted,
     fontFamily: FONT.medium,
-    fontSize: 12,
-  },
-
-  // ✅ pills (from sx)
-  pillsRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginTop: 10,
-  },
-  pill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: 999,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#E6EAF2",
-    shadowColor: "#0B1220",
-    shadowOpacity: 0.03,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 1,
-  },
-  pillText: {
-    fontSize: 12,
-    color: "#334155",
-    fontFamily: FONT.medium,
-  },
-  pillValue: {
-    fontFamily: FONT.bold,
-    color: "#0F172A",
   },
 
   // ----- tabs -----
   tabsWrap: {
-    marginTop: 12,
+    marginTop: 20,
     flexDirection: "row",
-    borderRadius: 18,
+    borderRadius: 22,
     padding: 6,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "rgba(255,255,255,0.8)",
     borderWidth: 1,
-    borderColor: "#E6EAF2",
+    borderColor: COLORS.border,
     overflow: "hidden",
-    shadowColor: "#0B1220",
-    shadowOpacity: 0.03,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 1,
+    shadowColor: "#000",
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
   tabIndicator: {
     position: "absolute",
     left: 6,
     top: 6,
     bottom: 6,
-    borderRadius: 14,
-    backgroundColor: "#F1F5FF",
-    borderWidth: 1,
-    borderColor: "#D9E2FF",
+    borderRadius: 16,
+    backgroundColor: COLORS.brand,
+    shadowColor: COLORS.brand,
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
   },
   tabBtn: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 10,
-    gap: 3,
+    paddingVertical: 12,
   },
   tabText: {
-    color: "#334155",          // was #475569
-    fontFamily: FONT.bold,     // was demi
-    fontSize: 12,
+    color: COLORS.muted,
+    fontFamily: FONT.bold,
+    fontSize: 13,
     letterSpacing: 0.2,
   },
   tabCount: {
-    color: "#475569",          // was #94A3B8
-    fontFamily: FONT.bold,
-    fontSize: 11,
+    display: "none", // Hide count inside text for cleaner look
   },
-
-  tabTextActive: { color: "#0F172A" },
-  tabCountActive: { color: "#0F172A" },
+  tabTextActive: { color: "#FFFFFF" },
 
   // ----- list -----
   list: {
-    paddingHorizontal: 18,
-    paddingBottom: 18,
+    paddingHorizontal: 20,
+    paddingBottom: 40,
   },
 
-  // ----- section header (merged with sx.sectionHeaderWrap etc) -----
+  // ----- section header -----
   sectionHeaderWrap: {
-    marginTop: 10,
-    marginBottom: 8,
+    marginTop: 24,
+    marginBottom: 12,
   },
   sectionHeaderTop: {
-    gap: 6,
+    paddingLeft: 4,
   },
   sectionTitle: {
-    color: "#0F172A",
-    fontSize: 16,
-    fontFamily: FONT.bold,
-    letterSpacing: -0.2,
+    color: COLORS.muted,
+    fontSize: 13,
+    fontFamily: FONT.heavy,
+    textTransform: "uppercase",
+    letterSpacing: 1.2,
   },
   sectionHint: {
-    marginTop: 3,
-    color: "#475569",          // was #64748B
-    fontFamily: FONT.medium,   // was regular
+    marginTop: 4,
+    color: COLORS.muted,
+    fontFamily: FONT.medium,
     fontSize: 12,
+    opacity: 0.8,
   },
-
   sectionDivider: {
-    height: 1,
-    backgroundColor: "rgba(148,163,184,0.18)",
-    marginTop: 10,
+    display: "none", // cleaner look without dividers
   },
 
   // ----- card -----
   card: {
-    borderRadius: 20,
-    padding: 14,
-    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    padding: 16,
+    backgroundColor: COLORS.card,
     borderWidth: 1,
-    borderColor: "#D6DEEA",      // was #E6EAF2 (too light)
-    shadowColor: "#0B1220",
-    shadowOpacity: 0.10,         // was 0.06
-    shadowRadius: 18,            // was 16
-    shadowOffset: { width: 0, height: 14 }, // was 12
-    elevation: 2,                // was 1
+    borderColor: COLORS.border,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 15,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 3,
   },
-
 
   cardTop: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: 14,
   },
   emojiPill: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+    width: 48,
+    height: 48,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F1F5FF",
+    backgroundColor: COLORS.brandSoft,
     borderWidth: 1,
-    borderColor: "#D9E2FF",
+    borderColor: "rgba(255, 77, 109, 0.1)",
   },
-  emojiTxt: { fontSize: 20 },
+  emojiTxt: { fontSize: 24 },
 
   cardTitle: {
-    color: "#0F172A",
-    fontFamily: FONT.bold,
-    fontSize: 15,
-    letterSpacing: -0.15,
+    color: COLORS.text,
+    fontFamily: FONT.heavy,
+    fontSize: 17,
+    letterSpacing: -0.3,
   },
   cardSubtitle: {
     marginTop: 2,
-    color: "#64748B",
+    color: COLORS.muted,
     fontFamily: FONT.medium,
     fontSize: 12,
   },
 
-  // ✅ badges (from sx)
   badgesRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 10,
     marginTop: 8,
   },
   badge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 4,
     paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
+    paddingVertical: 5,
+    borderRadius: 10,
   },
   badgeText: {
     color: "#fff",
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: FONT.bold,
+    textTransform: "uppercase",
   },
-  badgeService: { backgroundColor: "#2563EB" }, // was rgba(...)
-  badgeFree: { backgroundColor: "#16A34A" },
-  badgeActive: { backgroundColor: "#16A34A" },
-  badgePaused: { backgroundColor: "#64748B" },
+  badgeService: { backgroundColor: COLORS.blue },
+  badgeFree: { backgroundColor: COLORS.success },
+  badgeActive: { backgroundColor: COLORS.success },
+  badgePaused: { backgroundColor: COLORS.muted },
 
-
-  // right column in card (toggle + price)
   rightCol: {
     alignItems: "flex-end",
-    gap: 10,
+    gap: 8,
   },
 
   pricePill: {
     paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: "#0F172A",
-    borderWidth: 1,
-    borderColor: "#0F172A",
+    paddingVertical: 6,
+    borderRadius: 12,
+    backgroundColor: COLORS.text,
   },
   priceTxt: {
     color: "#FFFFFF",
-    fontFamily: FONT.bold,
+    fontFamily: FONT.heavy,
     fontSize: 12,
-    letterSpacing: 0.2,
+    letterSpacing: 0.5,
   },
 
-  // ✅ toggle wrap (from sx)
   toggleWrap: {
-    padding: 4,
+    padding: 2,
     borderRadius: 999,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#E6EAF2",
-    shadowColor: "#0B1220",
-    shadowOpacity: 0.03,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 1,
   },
 
   // ----- meta -----
   metaGrid: {
-    marginTop: 12,
+    marginTop: 16,
     flexDirection: "row",
-    gap: 10,
+    gap: 12,
   },
   metaCell: {
     flex: 1,
-    padding: 10,
-    borderRadius: 14,
-    backgroundColor: "#F8FAFC",
+    padding: 12,
+    borderRadius: 18,
+    backgroundColor: COLORS.bg,
     borderWidth: 1,
-    borderColor: "#E6EAF2",
+    borderColor: COLORS.border,
   },
   metaLabel: {
-    color: "#475569",          // was #94A3B8
-    fontFamily: FONT.demi,     // was medium
-    fontSize: 11,
-    letterSpacing: 0.4,
+    color: COLORS.muted,
+    fontFamily: FONT.bold,
+    fontSize: 10,
     textTransform: "uppercase",
+    letterSpacing: 0.8,
   },
   metaValue: {
-    marginTop: 6,
-    color: "#0F172A",
-    fontFamily: FONT.bold,     // was demi
-    fontSize: 13,              // was 12
+    marginTop: 4,
+    color: COLORS.text,
+    fontFamily: FONT.heavy,
+    fontSize: 13,
   },
 
+  // ----- action sub-card -----
+  actionSub: {
+    marginTop: 14,
+    padding: 14,
+    borderRadius: 18,
+    backgroundColor: COLORS.brandSoft,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  actionIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: COLORS.brand,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  actionTextMain: {
+    color: COLORS.text,
+    fontWeight: "800",
+    fontSize: 13,
+  },
+  actionTextSub: {
+    color: COLORS.muted,
+    fontSize: 11,
+    marginTop: 1,
+    fontWeight: "600",
+  },
 
   // ----- empty / errors -----
   empty: {
-    marginTop: 10,
-    padding: 16,
-    borderRadius: 18,
-    backgroundColor: "#FFFFFF",
+    marginTop: 20,
+    padding: 30,
+    borderRadius: 24,
+    backgroundColor: COLORS.card,
+    alignItems: "center",
     borderWidth: 1,
-    borderColor: "#E6EAF2",
-    shadowColor: "#0B1220",
-    shadowOpacity: 0.04,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 1,
+    borderColor: COLORS.border,
   },
   emptyTitle: {
-    color: "#0F172A",
-    fontFamily: FONT.bold,
-    fontSize: 16,
+    color: COLORS.text,
+    fontFamily: FONT.heavy,
+    fontSize: 18,
+    marginTop: 12,
   },
   emptySub: {
-    marginTop: 6,
-    color: "#64748B",
-    fontFamily: FONT.regular,
-    fontSize: 13,
-    lineHeight: 18,
+    marginTop: 8,
+    color: COLORS.muted,
+    fontFamily: FONT.medium,
+    fontSize: 14,
+    textAlign: "center",
+    lineHeight: 20,
   },
 
   center: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    gap: 10,
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
   },
   muted: {
-    color: "#334155",          // was #64748B
-    fontFamily: FONT.demi      // was medium
+    color: COLORS.muted,
+    fontFamily: FONT.bold,
+    marginTop: 12,
   },
 
-  err: { color: "#DC2626", fontFamily: FONT.bold, textAlign: "center" },
+  err: { color: COLORS.brand, fontFamily: FONT.bold, textAlign: "center", fontSize: 16 },
   retryBtn: {
-    marginTop: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 14,
-    backgroundColor: "#0F172A",
-    borderWidth: 1,
-    borderColor: "#0F172A",
+    marginTop: 16,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 16,
+    backgroundColor: COLORS.text,
   },
-  retryTxt: { color: "#FFFFFF", fontFamily: FONT.bold },
+  retryTxt: { color: "#FFFFFF", fontFamily: FONT.bold, fontSize: 15 },
 });

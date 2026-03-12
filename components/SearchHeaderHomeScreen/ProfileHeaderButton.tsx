@@ -4,6 +4,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { useFocusEffect, useRouter } from "expo-router";
 import Constants from "expo-constants";
 import { useUser } from "@clerk/clerk-expo";
+import { apiFetch } from "../../lib/apiFetch";
 
 export default function ProfileHeaderButton({ size = 44 }: { size?: number }) {
   const router = useRouter();
@@ -24,17 +25,22 @@ export default function ProfileHeaderButton({ size = 44 }: { size?: number }) {
           if (!API_BASE || !clerkUserId) return;
 
           const url = `${API_BASE.replace(/\/$/, "")}/api/profile?clerkUserId=${encodeURIComponent(clerkUserId)}`;
-          const res = await fetch(url, {
+          const res = await apiFetch(url, {
             headers: EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : undefined,
           });
 
           const j: any = await res.json().catch(() => ({}));
-          const photos: string[] = Array.isArray(j?.photos) ? j.photos : [];
+          const src = (j && typeof j === "object" && (j.profile || j.data || j)) as any;
 
-          const fromDb = photos.find((p) => typeof p === "string" && p.trim())?.trim();
+          const fromDb = typeof src?.avatar === "string" && src.avatar.trim() ? src.avatar.trim() : null;
+          const photos: string[] = Array.isArray(src?.photos) ? src.photos : [];
+          const firstPhoto = photos.find((p) => typeof p === "string" && p.trim())?.trim();
+
           const fromClerk = user?.imageUrl || undefined;
 
-          if (mounted) setAvatarUri(fromDb || fromClerk);
+          if (mounted) {
+            setAvatarUri(fromDb || firstPhoto || fromClerk);
+          }
         } catch {
           // ignore
         }

@@ -1,69 +1,117 @@
-import { Tabs } from "expo-router";
-import Ionicons from "@expo/vector-icons/Ionicons";
-import { Platform } from "react-native";
+// app/newApp/_layout.tsx
+// ✏️ UPDATED — 5 tabs: Home | Search | Explore | Bookings | Chats
+// Profile (Me) accessible via ProfileHeaderButton top-right on Home
+// NOTE: If you want a dedicated Me tab, rename this tab from "chat" and add profile back
 
-export default function TabLayout() {
+import { Tabs } from "expo-router";
+import { Platform, View, StyleSheet } from "react-native";
+import Ionicons from "@expo/vector-icons/Ionicons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useNotifications } from "../../context/NotificationContext";
+
+const BRAND  = "#FF4D6D";
+const BG     = "#FFFFFF";
+const MUTED  = "#9CA3AF";
+const BORDER = "#F3F4F6";
+
+export default function NewAppLayout() {
+  const insets = useSafeAreaInsets();
+  const { unreadCount } = useNotifications();
+
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-
-        tabBarShowLabel: true,
-        tabBarActiveTintColor: "#0A84FF",
-        tabBarInactiveTintColor: "rgba(15,23,42,0.45)",
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: "700",
-          marginTop: 2,
-        },
-
         tabBarStyle: {
-          height: 74,
-          paddingTop: 10,
-          paddingBottom: Platform.OS === "ios" ? 18 : 12,
+          backgroundColor: BG,
+          borderTopColor: BORDER,
           borderTopWidth: 1,
-          borderTopColor: "rgba(15,23,42,0.08)",
-          backgroundColor: "rgba(255,255,255,0.94)",
-          ...(Platform.OS === "ios"
-            ? {
-                shadowColor: "#0B1220",
-                shadowOpacity: 0.08,
-                shadowRadius: 18,
-                shadowOffset: { width: 0, height: -10 },
-              }
-            : { elevation: 18 }),
+          height: 56 + (Platform.OS === "ios" ? insets.bottom : 10),
+          paddingBottom: Platform.OS === "ios" ? insets.bottom : 10,
+          paddingTop: 8,
+          elevation: 0,
+          shadowColor: "#000",
+          shadowOpacity: 0.04,
+          shadowRadius: 8,
+          shadowOffset: { width: 0, height: -2 },
         },
+        tabBarActiveTintColor: BRAND,
+        tabBarInactiveTintColor: MUTED,
+        tabBarLabelStyle: { fontSize: 11, fontWeight: "700", marginTop: 2 },
+        tabBarHideOnKeyboard: true,
       }}
     >
+      {/* 1 — Home */}
       <Tabs.Screen
         name="home"
         options={{
           title: "Home",
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? "home" : "home-outline"} size={24} color={color} />
-          ),
+          tabBarIcon: ({ color, size }) => <Ionicons name="map-outline" size={size} color={color} />,
         }}
       />
 
+      {/* 2 — Search */}
+      <Tabs.Screen
+        name="search"
+        options={{
+          title: "Search",
+          tabBarIcon: ({ color, size }) => <Ionicons name="search-outline" size={size} color={color} />,
+        }}
+      />
+
+      {/* 3 — Explore */}
       <Tabs.Screen
         name="trip"
         options={{
-          title: "Trips",
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? "airplane" : "airplane-outline"} size={24} color={color} />
-          ),
+          title: "Explore",
+          tabBarIcon: ({ color, size }) => <Ionicons name="compass-outline" size={size} color={color} />,
         }}
       />
 
+      {/* 4 — Bookings (with notification dot) */}
       <Tabs.Screen
         name="mybookings"
         options={{
           title: "Bookings",
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? "calendar" : "calendar-outline"} size={24} color={color} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <View>
+              <Ionicons name="calendar-outline" size={size} color={color} />
+              {unreadCount > 0 && !focused && <View style={s.dot} />}
+            </View>
           ),
         }}
+      />
+
+      {/* 5 — Chats (folder-based route: chat/index.tsx) */}
+      <Tabs.Screen
+        name="chat/index"
+        options={{
+          title: "Chats",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="chatbubble-ellipses-outline" size={size} color={color} />
+          ),
+        }}
+      />
+
+      {/* Hide chat/[userId] from tab bar — it's a detail screen */}
+      <Tabs.Screen
+        name="chat/[userId]"
+        options={{ href: null }}
+      />
+
+      {/* Hide profile tab — accessible via header profile button */}
+      <Tabs.Screen
+        name="profile"
+        options={{ href: null }}
       />
     </Tabs>
   );
 }
+
+const s = StyleSheet.create({
+  dot: {
+    position: "absolute", top: -2, right: -4,
+    width: 8, height: 8, borderRadius: 4,
+    backgroundColor: BRAND, borderWidth: 1.5, borderColor: BG,
+  },
+});

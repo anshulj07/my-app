@@ -1,4 +1,4 @@
-// app/(onboarding)/interests.tsx
+﻿// app/(onboarding)/interests.tsx
 import React, { useMemo, useState } from "react";
 import {
   View,
@@ -13,6 +13,7 @@ import { useRouter } from "expo-router";
 import { useUser } from "@clerk/clerk-expo";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import Constants from "expo-constants";
+import { apiFetch } from "../../lib/apiFetch";
 
 const MAX_SELECT = 6;
 
@@ -152,7 +153,7 @@ export default function InterestsScreen() {
     try {
       if (!API_BASE) throw new Error("Missing API base URL (extra.apiBaseUrl).");
 
-      const res = await fetch(`${API_BASE.replace(/\/$/, "")}/api/onboarding/interests`, {
+      const res = await apiFetch(`${API_BASE.replace(/\/$/, "")}/api/onboarding/interests`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -189,10 +190,24 @@ export default function InterestsScreen() {
         {/* Top glow header */}
         <View style={styles.hero}>
           <View style={styles.heroTop}>
+            <TouchableOpacity
+              onPress={() => {
+                if (router.canGoBack()) {
+                  router.back();
+                } else {
+                  router.push("/(onboarding)/gender");
+                }
+              }}
+              activeOpacity={0.7}
+              style={styles.backBtn}
+            >
+              <Ionicons name="chevron-back" size={20} color={COLORS.ink} />
+            </TouchableOpacity>
+
             <View style={styles.pill}>
               <View style={styles.pillDot} />
               <Text style={styles.pillText}>
-                Step 2 of 4 • {selected.length}/{MAX_SELECT}
+                Step 5 of 7 • {selected.length}/{MAX_SELECT}
               </Text>
             </View>
 
@@ -344,6 +359,18 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    marginBottom: 4,
+  },
+
+  backBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   pill: {
@@ -584,3 +611,4 @@ const styles = StyleSheet.create({
     marginBottom: 74, // space for sticky bar
   },
 });
+

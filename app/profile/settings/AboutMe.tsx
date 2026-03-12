@@ -3,26 +3,66 @@ import { View, Text, StyleSheet, TouchableOpacity, TextInput, KeyboardAvoidingVi
 import Ionicons from "@expo/vector-icons/Ionicons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
+import { useAuth } from "@clerk/clerk-expo";
+import Constants from "expo-constants";
+import { apiFetch } from "../../../lib/apiFetch";
 
 const ABOUT_KEY = "profile.aboutMe";
 const ACCENT = "#E11D48"; // match your profile accent if you want to change it
 
 export default function AboutMe() {
   const router = useRouter();
+  const { userId } = useAuth();
   const [text, setText] = useState("");
   const [saving, setSaving] = useState(false);
+
+  const API_BASE = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
+  const EVENT_API_KEY = (Constants.expoConfig?.extra as any)?.eventApiKey as string | undefined;
 
   useEffect(() => {
     (async () => {
       const v = await AsyncStorage.getItem(ABOUT_KEY);
       if (typeof v === "string") setText(v);
+
+      if (!API_BASE || !userId) return;
+      try {
+        const base = API_BASE.replace(/\/$/, "");
+        const res = await apiFetch(`${base}/api/profile?clerkUserId=${encodeURIComponent(userId)}`, {
+          method: "GET",
+          headers: {
+            ...(EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {}),
+          },
+        });
+        if (!res.ok) return;
+        const j = await res.json().catch(() => ({} as any));
+        const about = typeof j?.about === "string" ? j.about : "";
+        if (about.trim()) setText(about);
+      } catch {}
     })();
-  }, []);
+  }, [API_BASE, EVENT_API_KEY, userId]);
 
   const onSave = async () => {
     try {
       setSaving(true);
       await AsyncStorage.setItem(ABOUT_KEY, text); // accepts any string incl emojis/special chars
+
+      if (API_BASE && userId) {
+        const base = API_BASE.replace(/\/$/, "");
+        const res = await apiFetch(`${base}/api/profile`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            ...(EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {}),
+          },
+          body: JSON.stringify({ clerkUserId: userId, about: text }),
+        });
+
+        if (!res.ok) {
+          const t = await res.text().catch(() => "");
+          throw new Error(t || `Failed to save about (${res.status})`);
+        }
+      }
+
       router.back(); // returns to Profile
     } finally {
       setSaving(false);

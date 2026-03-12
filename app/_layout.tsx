@@ -2,12 +2,15 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { View, ActivityIndicator } from "react-native";
 import { Stack, useRouter, useSegments, useRootNavigationState } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import "react-native-reanimated";
 import Constants from "expo-constants";
+import { apiFetch } from "../lib/apiFetch";
 
 import { ClerkProvider, useAuth, useUser } from "@clerk/clerk-expo";
 import { tokenCache } from "@clerk/clerk-expo/token-cache";
+import { NotificationProvider } from "../context/NotificationContext";
 
 const SIGN_IN = "/(auth)/sign-in";
 
@@ -29,7 +32,7 @@ async function getOnboardingStatus(args: {
     `${apiBase.replace(/\/$/, "")}` +
     `/api/onboarding/status?clerkUserId=${encodeURIComponent(clerkUserId)}`;
 
-  const res = await fetch(url, {
+  const res = await apiFetch(url, {
     method: "GET",
     headers: {
       ...(apiKey ? { "x-api-key": apiKey } : {}),
@@ -151,7 +154,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
             bottom: 0,
             alignItems: "center",
             justifyContent: "center",
-            backgroundColor: "#0B0B12",
+            backgroundColor: "#FFF7FA",
           }}
         >
           <ActivityIndicator />
@@ -174,11 +177,14 @@ export default function RootLayout() {
 
   return (
     <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
-      <AuthGate>
-        <GestureHandlerRootView style={{ flex: 1 }}>
-          <Stack screenOptions={{ headerShown: false }} />
-        </GestureHandlerRootView>
-      </AuthGate>
+      <NotificationProvider>
+        <AuthGate>
+          <StatusBar style="dark" />
+          <GestureHandlerRootView style={{ flex: 1 }}>
+            <Stack screenOptions={{ headerShown: false }} />
+          </GestureHandlerRootView>
+        </AuthGate>
+      </NotificationProvider>
     </ClerkProvider>
   );
 }

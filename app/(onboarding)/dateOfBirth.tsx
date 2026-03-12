@@ -1,4 +1,4 @@
-// app/(onboarding)/dob.tsx
+﻿// app/(onboarding)/dob.tsx
 import React, { useMemo, useState } from "react";
 import {
   View,
@@ -14,6 +14,7 @@ import { useRouter } from "expo-router";
 import { useUser } from "@clerk/clerk-expo";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import Constants from "expo-constants";
+import { apiFetch } from "../../lib/apiFetch";
 import DateTimePicker from "@react-native-community/datetimepicker";
 
 function toISODate(d: Date) {
@@ -99,7 +100,7 @@ export default function DobScreen() {
       const apiBase = API_BASE.replace(/\/$/, "");
       const payload = { clerkUserId: user.id, dob: toISODate(dob), age };
 
-      const res = await fetch(`${apiBase}/api/onboarding/dateOfBirth`, {
+      const res = await apiFetch(`${apiBase}/api/onboarding/dateOfBirth`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -141,9 +142,23 @@ export default function DobScreen() {
         {/* Hero */}
         <View style={styles.hero}>
           <View style={styles.heroTop}>
+            <TouchableOpacity
+              onPress={() => {
+                if (router.canGoBack()) {
+                  router.back();
+                } else {
+                  router.push("/(onboarding)/username");
+                }
+              }}
+              activeOpacity={0.7}
+              style={styles.backBtn}
+            >
+              <Ionicons name="chevron-back" size={20} color={COLORS.ink} />
+            </TouchableOpacity>
+
             <View style={styles.stepPill}>
               <View style={styles.stepDot} />
-              <Text style={styles.stepText}>Step 2 of 6</Text>
+              <Text style={styles.stepText}>Step 3 of 7</Text>
             </View>
 
             <View style={styles.heroIcon}>
@@ -358,7 +373,22 @@ const styles = StyleSheet.create({
   },
 
   hero: { paddingHorizontal: 2, gap: 10 },
-  heroTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  heroTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 4,
+  },
+  backBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
 
   stepPill: {
     flexDirection: "row",
@@ -608,3 +638,4 @@ const styles = StyleSheet.create({
   sheetBtnPrimary: { backgroundColor: COLORS.primary },
   sheetBtnPrimaryText: { color: "#fff", fontWeight: "900" },
 });
+

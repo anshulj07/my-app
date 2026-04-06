@@ -26,6 +26,11 @@ type UserProfile = {
   languages?: string[];
   photos?: string[];
   avatar?: string | null;
+  rating?: number;
+  eventsHosted?: number;
+  totalAttendees?: number;
+  services?: string[];
+  isVerified?: boolean;
 };
 
 export default function PublicProfileScreen() {
@@ -57,19 +62,32 @@ export default function PublicProfileScreen() {
       );
       const json = await res.json().catch(() => null);
       if (!res.ok) throw new Error(json?.error || "Failed to load profile");
+
       setProfile({
         clerkUserId: targetId,
-        name:      json?.name      || initialName || "User",
-        username:  json?.username  || "",
-        about:     json?.about     || "",
-        interests: Array.isArray(json?.interests) ? json.interests : [],
-        languages: Array.isArray(json?.languages) ? json.languages : [],
-        photos:    Array.isArray(json?.photos)    ? json.photos    : [],
-        avatar:    json?.avatar || (initialAvatar || null),
+        name:           json?.name      || initialName || "User",
+        username:       json?.username  || "",
+        about:          json?.about     || "",
+        interests:      Array.isArray(json?.interests) ? json.interests : [],
+        languages:      Array.isArray(json?.languages) ? json.languages : [],
+        photos:         Array.isArray(json?.photos)    ? json.photos    : [],
+        avatar:         json?.avatar || (initialAvatar || null),
+        // ✅ New Stats
+        rating:         json?.rating ?? 0,
+        eventsHosted:   json?.eventsHosted ?? 0,
+        totalAttendees: json?.totalAttendees ?? 0,
+        services:       Array.isArray(json?.services) ? json.services : [],
+        isVerified:     !!json?.isVerified,
       });
     } catch (e: any) {
       setErr(e?.message || "Failed to load profile");
-      setProfile({ clerkUserId: targetId, name: initialName || "User", avatar: initialAvatar || null, photos: [], interests: [], languages: [] });
+      setProfile({
+        clerkUserId: targetId,
+        name: initialName || "User",
+        avatar: initialAvatar || null,
+        photos: [], interests: [], languages: [],
+        rating: 0, eventsHosted: 0, totalAttendees: 0, services: []
+      });
     } finally {
       setLoading(false); setRefreshing(false);
     }
@@ -140,23 +158,39 @@ export default function PublicProfileScreen() {
             </View>
           )}
 
-          {/* Stats row */}
+          {/* Stats row - Redesigned to match profileHome */}
           <View style={pub.statsRow}>
             <View style={pub.statBox}>
-              <Text style={pub.statNum}>{photos.length}</Text>
-              <Text style={pub.statLab}>Photos</Text>
+              <View style={pub.statNumRow}>
+                <Ionicons name="star" size={16} color="#F5A623" style={{ marginRight: 3 }} />
+                <Text style={pub.statNum}>{(profile?.rating || 0).toFixed(1)}</Text>
+              </View>
+              <Text style={pub.statLab}>Rating</Text>
             </View>
             <View style={pub.statDivider} />
             <View style={pub.statBox}>
-              <Text style={pub.statNum}>{profile?.interests?.length ?? 0}</Text>
-              <Text style={pub.statLab}>Interests</Text>
+              <Text style={pub.statNum}>{profile?.eventsHosted ?? 0}</Text>
+              <Text style={pub.statLab}>{"Events\nHosted"}</Text>
             </View>
             <View style={pub.statDivider} />
             <View style={pub.statBox}>
-              <Text style={pub.statNum}>{profile?.languages?.length ?? 0}</Text>
-              <Text style={pub.statLab}>Languages</Text>
+              <Text style={pub.statNum}>{profile?.totalAttendees ?? 0}</Text>
+              <Text style={pub.statLab}>{"Total\nAttendees"}</Text>
             </View>
           </View>
+
+          {/* Verification Badge */}
+          {profile?.isVerified && (
+            <View style={[styles.cardRow, { marginTop: 16, width: "92%", alignSelf: "center" }]}>
+              <View style={styles.verifyIcon}>
+                <Ionicons name="shield-checkmark" size={22} color={COLORS.brand} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cardTitle}>Verified Host</Text>
+                <Text style={styles.cardSub}>Identity and records confirmed by Assisto</Text>
+              </View>
+            </View>
+          )}
 
           {/* Message button — only for other people */}
           {!isOwnProfile && (
@@ -177,6 +211,23 @@ export default function PublicProfileScreen() {
             </TouchableOpacity>
           )}
         </View>
+
+        {/* ── Services Offered ── */}
+        {(profile?.services?.length ?? 0) > 0 && (
+          <View style={styles.sectionCard}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Services Offered</Text>
+              <Ionicons name="sparkles" size={16} color={COLORS.brand} />
+            </View>
+            <View style={styles.chipsWrap}>
+              {profile!.services!.map(svc => (
+                <View key={svc} style={[styles.chip, { backgroundColor: "#F0FDFA", borderColor: "#5EEAD4" }]}>
+                  <Text style={[styles.chipTxt, { color: "#0F766E" }]}>{svc}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
 
         {/* ── About ── */}
         {!!profile?.about && (
@@ -297,6 +348,7 @@ const pub = StyleSheet.create({
     shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 2,
   },
   statBox:    { alignItems: "center", flex: 1 },
+  statNumRow: { flexDirection: "row", alignItems: "center", marginBottom: 2 },
   statNum:    { color: COLORS.text, fontWeight: "900", fontSize: 18 },
   statLab:    { color: COLORS.muted, fontWeight: "700", fontSize: 10, marginTop: 2 },
   statDivider: { width: 1, height: 32, backgroundColor: "#F3F4F6" },

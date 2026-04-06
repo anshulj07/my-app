@@ -48,6 +48,7 @@ export default function NameScreen() {
         clerkUserId: user.id,
         firstName: firstName.trim(),
         lastName: lastName.trim(),
+        email: user.primaryEmailAddress?.emailAddress ?? "",
       };
 
       const res = await apiFetch(`${API_BASE}/api/onboarding/name`, {

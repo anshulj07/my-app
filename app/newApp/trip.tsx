@@ -552,7 +552,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput,
   RefreshControl, StyleSheet, Platform, StatusBar,
-  Animated, Dimensions,
+  Animated, Dimensions, Image,
 } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import Constants from "expo-constants";
@@ -607,6 +607,7 @@ export type TripEvent = {
   joinPolicy?: "open" | "approval"; attendance?: number; attendees?: any[];
   location?: { formattedAddress?: string; city?: string; admin1?: string; admin1Code?: string };
   creatorName?: string;
+  bannerUri?: string;
 };
 
 function getDateRange(f: DateFilter) {
@@ -888,8 +889,16 @@ function GridCard({ ev, paletteIdx, wished, onWish, onPress }: {
       <TouchableOpacity style={[G.card, { width: CARD_W }]} onPress={onPress} activeOpacity={0.88}>
 
         {/* Image area */}
-        <View style={[G.imgArea, { backgroundColor: PALETTES[paletteIdx % PALETTES.length] }]}>
-          <Text style={G.emoji}>{ev.emoji || "📍"}</Text>
+        <View style={[G.imgArea, !ev.bannerUri && { backgroundColor: PALETTES[paletteIdx % PALETTES.length] }]}>
+          {ev.bannerUri ? (
+            <Image 
+              source={{ uri: ev.bannerUri }} 
+              style={StyleSheet.absoluteFill} 
+              resizeMode="cover" 
+            />
+          ) : (
+            <Text style={G.emoji}>{ev.emoji || "📍"}</Text>
+          )}
           {/* Heart */}
           <TouchableOpacity style={G.heartBtn} onPress={handleWish} hitSlop={10} activeOpacity={0.8}>
             <Animated.View style={{ transform: [{ scale: heartScale }] }}>

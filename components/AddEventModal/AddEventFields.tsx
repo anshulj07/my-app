@@ -9,6 +9,16 @@ import { WebView } from "react-native-webview";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as ImagePicker from "expo-image-picker";
+import Constants from "expo-constants";
+import { generateReactNativeHelpers } from "@uploadthing/expo";
+
+const API_BASE_RAW = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
+const EVENT_API_KEY = (Constants.expoConfig?.extra as any)?.eventApiKey as string | undefined;
+const UT_ENDPOINT = API_BASE_RAW ? `${API_BASE_RAW.replace(/\/$/, "")}/api/uploadthing` : undefined;
+
+const { useImageUploader } = generateReactNativeHelpers({
+  url: UT_ENDPOINT || "http://localhost:3000/api/uploadthing",
+});
 
 import type { Suggestion, ListingKind } from "./types";
 
@@ -536,55 +546,46 @@ function BannerImageSection({
 }) {
   const [overlayVisible, setOverlayVisible] = useState(false);
 
-  const requestAndPick = async (source: "camera" | "gallery") => {
-    console.log("📸 CAMERA RESULT:", requestAndPick);
-    try {
-      if (source === "camera") {
-        const { status } = await ImagePicker.requestCameraPermissionsAsync();
-        if (status !== "granted") {
-          Alert.alert("Permission needed", "Camera access is needed to take a photo.");
-          return;
-        }
-        const result = await ImagePicker.launchCameraAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          allowsEditing: true, aspect: [16, 9], quality: 0.85,
-        });
-        if (!result.canceled && result.assets?.[0]?.uri) {
-          console.log("✅ SELECTED IMAGE URI:", result.assets[0].uri);
-          setBannerUri(result.assets[0].uri);
-        }
-      } else {
-        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (status !== "granted") {
-          Alert.alert("Permission needed", "Photo library access is needed to pick a banner.");
-          return;
-        }
-        const result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          allowsEditing: true, aspect: [16, 9], quality: 0.85,
-        });
-        console.log("🖼️ GALLERY RESULT:", result);
-        if (!result.canceled && result.assets?.[0]?.uri) {
-          console.log("✅ SELECTED IMAGE URI:", result.assets[0].uri);
-          setBannerUri(result.assets[0].uri);
-        }
+  const { openImagePicker, isUploading } = useImageUploader("bannerImage", {
+    headers: EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : undefined,
+    onUploadBegin(fileName) { console.log("🟦 [UT][banner] Upload begin:", fileName); },
+    onClientUploadComplete(res) {
+      console.log("🟩 [UT][banner] Upload complete:", res);
+      if (Array.isArray(res) && res.length > 0) {
+        setBannerUri(res[0].url);
       }
-    } catch (e) {
-      Alert.alert("Error", "Could not open picker. Please try again.");
-    }
+    },
+    onUploadError(e) {
+      console.log("🟥 [UT][banner] Upload error:", e);
+      Alert.alert("Upload Failed", e.message || "Failed to upload banner.");
+    },
+  });
+
+  const handlePick = async (source: "camera" | "gallery") => {
+    await openImagePicker({
+      source: source === "camera" ? "camera" : "library",
+      quality: 0.85,
+      allowsEditing: true,
+      aspect: [16, 9],
+    });
     setOverlayVisible(false);
   };
 
   return (
     <View>
       <View style={[S.bannerZone, bannerUri ? S.bannerZoneHasImage : {}, { borderColor: accentColor + "55" }]}>
-        {bannerUri ? (
+        {isUploading ? (
+          <View style={S.bannerPlaceholder}>
+            <ActivityIndicator size="large" color={accentColor} />
+            <Text style={[S.bannerPlaceholderTitle, { color: accentColor }]}>Uploading banner…</Text>
+          </View>
+        ) : bannerUri ? (
           <>
             <Image source={{ uri: bannerUri }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
             <Pressable style={StyleSheet.absoluteFill} onPress={() => setOverlayVisible(v => !v)} />
             {overlayVisible && (
               <View style={S.bannerOverlay}>
-                <Pressable style={S.bannerOverlayBtn} onPress={() => requestAndPick("gallery")}>
+                <Pressable style={S.bannerOverlayBtn} onPress={() => handlePick("gallery")}>
                   <Ionicons name="image-outline" size={16} color="#fff" />
                   <Text style={S.bannerOverlayBtnText}>Change</Text>
                 </Pressable>
@@ -606,15 +607,15 @@ function BannerImageSection({
           </View>
         )}
       </View>
-      {!bannerUri && (
+      {!bannerUri && !isUploading && (
         <View style={S.bannerActions}>
           <TouchableOpacity style={[S.bannerActionBtn, { backgroundColor: accentColor }]}
-            onPress={() => requestAndPick("gallery")} activeOpacity={0.88}>
+            onPress={() => handlePick("gallery")} activeOpacity={0.88}>
             <Ionicons name="images-outline" size={16} color="#fff" />
             <Text style={S.bannerActionBtnText}>Choose photo</Text>
           </TouchableOpacity>
           <TouchableOpacity style={S.bannerActionBtnOutline}
-            onPress={() => requestAndPick("camera")} activeOpacity={0.88}>
+            onPress={() => handlePick("camera")} activeOpacity={0.88}>
             <Ionicons name="camera-outline" size={16} color={accentColor} />
             <Text style={[S.bannerActionBtnOutlineText, { color: accentColor }]}>Take photo</Text>
           </TouchableOpacity>

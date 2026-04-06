@@ -84,6 +84,7 @@ type EventDetail = {
   capacity?: number;
   language?: string;
   includes?: string[];
+  bannerUri?: string;
 };
 
 function safeJson(txt: string) {
@@ -108,9 +109,10 @@ function formatLocation(ev: EventDetail) {
 // ─────────────────────────────────────────────────────────────
 //  IMAGE CAROUSEL
 // ─────────────────────────────────────────────────────────────
-function ImageCarousel({ emoji }: { emoji: string }) {
+function ImageCarousel({ emoji, bannerUri }: { emoji: string; bannerUri?: string }) {
   const [activeIdx, setActiveIdx] = useState(0);
-  const slides = PALETTES.slice(0, 3);
+  // If we have a banner, we only show 1 slide. Otherwise 3 colored ones.
+  const slides = bannerUri ? [bannerUri] : PALETTES.slice(0, 3);
 
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     setActiveIdx(Math.round(e.nativeEvent.contentOffset.x / SW));
@@ -126,17 +128,27 @@ function ImageCarousel({ emoji }: { emoji: string }) {
         scrollEventThrottle={16}
         keyExtractor={(_, i) => String(i)}
         renderItem={({ item }) => (
-          <View style={[IC.slide, { backgroundColor: item }]}>
-            <Text style={IC.emoji}>{emoji || "📍"}</Text>
+          <View style={[IC.slide, !bannerUri && { backgroundColor: item }]}>
+            {bannerUri ? (
+              <Image 
+                source={{ uri: item }} 
+                style={StyleSheet.absoluteFill} 
+                resizeMode="cover" 
+              />
+            ) : (
+              <Text style={IC.emoji}>{emoji || "📍"}</Text>
+            )}
             <View style={IC.overlay} />
           </View>
         )}
       />
-      <View style={IC.dots}>
-        {slides.map((_, i) => (
-          <View key={i} style={[IC.dot, i === activeIdx && IC.dotActive]} />
-        ))}
-      </View>
+      {slides.length > 1 && (
+        <View style={IC.dots}>
+          {slides.map((_, i) => (
+            <View key={i} style={[IC.dot, i === activeIdx && IC.dotActive]} />
+          ))}
+        </View>
+      )}
     </View>
   );
 }
@@ -371,7 +383,7 @@ export default function EventDetailScreen() {
 
       {/* ── IMAGE CAROUSEL ── */}
       <View style={{ position: "relative" }}>
-        <ImageCarousel emoji={emoji} />
+        <ImageCarousel emoji={emoji} bannerUri={ev?.bannerUri} />
 
         {/* Back button */}
         <TouchableOpacity

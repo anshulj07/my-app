@@ -11,7 +11,7 @@
 // // // // import Ionicons from "@expo/vector-icons/Ionicons";
 // // // // import { useRouter, useFocusEffect } from "expo-router";
 // // // // import AsyncStorage from "@react-native-async-storage/async-storage";
-// // // // import { useAuth } from "@clerk/clerk-expo";
+// // // // import { useAuth, useUser } from "@clerk/clerk-expo";
 // // // // import Constants from "expo-constants";
 // // // // import * as ImagePicker from "expo-image-picker";
 // // // // import { LinearGradient } from "expo-linear-gradient";
@@ -698,7 +698,7 @@
 // // // import Ionicons from "@expo/vector-icons/Ionicons";
 // // // import { useRouter, useFocusEffect } from "expo-router";
 // // // import AsyncStorage from "@react-native-async-storage/async-storage";
-// // // import { useAuth } from "@clerk/clerk-expo";
+// // // import { useAuth, useUser } from "@clerk/clerk-expo";
 // // // import Constants from "expo-constants";
 // // // import * as ImagePicker from "expo-image-picker";
 // // // import { LinearGradient } from "expo-linear-gradient";
@@ -1380,7 +1380,7 @@
 // // import Ionicons from "@expo/vector-icons/Ionicons";
 // // import { useRouter, useFocusEffect } from "expo-router";
 // // import AsyncStorage from "@react-native-async-storage/async-storage";
-// // import { useAuth } from "@clerk/clerk-expo";
+// // import { useAuth, useUser } from "@clerk/clerk-expo";
 // // import Constants from "expo-constants";
 // // import * as ImagePicker from "expo-image-picker";
 // // import { LinearGradient } from "expo-linear-gradient";
@@ -2033,7 +2033,7 @@
 // import Ionicons from "@expo/vector-icons/Ionicons";
 // import { useRouter, useFocusEffect } from "expo-router";
 // import AsyncStorage from "@react-native-async-storage/async-storage";
-// import { useAuth } from "@clerk/clerk-expo";
+// import { useAuth, useUser } from "@clerk/clerk-expo";
 // import Constants from "expo-constants";
 // import * as ImagePicker from "expo-image-picker";
 // import { LinearGradient } from "expo-linear-gradient";
@@ -3311,7 +3311,7 @@ import {
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useRouter, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useAuth } from "@clerk/clerk-expo";
+import { useAuth, useUser } from "@clerk/clerk-expo";
 import Constants from "expo-constants";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
@@ -3369,6 +3369,14 @@ type ProfileData = {
   name?: string; username?: string; about?: string;
   interests?: string[]; languages?: string[]; photos?: string[]; avatar?: string | null;
   rating?: number; eventsHosted?: number; totalAttendees?: number;
+  email?: string; city?: string; country?: string;
+  // Stats
+  repeatedAttendees?: number;
+  newAttendees?: number;
+  thisMonthEarning?: number;
+  overallEarning?: number;
+  services?: string[];
+  reviewsCount?: number;
 };
 function sanitizePhotos(p?: unknown): string[] {
   if (!Array.isArray(p)) return [];
@@ -3381,6 +3389,7 @@ const PROFILE_ENDPOINT = "/api/profile";
 export default function ProfileHome() {
   const router = useRouter();
   const { signOut, userId } = useAuth();
+  const { user } = useUser();
   const API_BASE = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
   const EVENT_API_KEY = (Constants.expoConfig?.extra as any)?.eventApiKey as string | undefined;
 
@@ -3452,9 +3461,18 @@ export default function ProfileHome() {
         languages: Array.isArray(s?.languages) ? s.languages : [],
         photos: Array.isArray(s?.photos) ? s.photos : [],
         avatar: typeof s?.avatar === "string" ? s.avatar : null,
-        rating: s?.rating ?? s?.averageRating ?? undefined,
-        eventsHosted: s?.eventsHosted ?? s?.events_hosted ?? undefined,
-        totalAttendees: s?.totalAttendees ?? s?.total_attendees ?? undefined,
+        rating: s?.rating ?? s?.averageRating ?? 0,
+        eventsHosted: s?.eventsHosted ?? s?.events_hosted ?? 0,
+        totalAttendees: s?.totalAttendees ?? s?.total_attendees ?? 0,
+        repeatedAttendees: s?.repeatedAttendees ?? 0,
+        newAttendees: s?.newAttendees ?? 0,
+        thisMonthEarning: s?.thisMonthEarning ?? 0,
+        overallEarning: s?.overallEarning ?? 0,
+        services: Array.isArray(s?.services) ? s.services : [],
+        reviewsCount: s?.reviewsCount ?? 0,
+        email: s?.email ?? "",
+        city: s?.city ?? "",
+        country: s?.country ?? "",
       };
       setProfile(next);
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
@@ -3473,8 +3491,21 @@ export default function ProfileHome() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    try { await fetchProfile(); } finally { setRefreshing(false); }
-  }, [fetchProfile]);
+    try {
+      // 1. Force stats recalculation on server
+      if (API_BASE && userId) {
+        const statsUrl = `${API_BASE.replace(/\/$/, "")}/api/users/stats?clerkUserId=${encodeURIComponent(userId)}`;
+        await apiFetch(statsUrl, {
+          method: "GET",
+          headers: EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {},
+        }).catch(() => null);
+      }
+      // 2. Fetch fresh profile (which now has updated stats)
+      await fetchProfile();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [API_BASE, EVENT_API_KEY, userId, fetchProfile]);
 
   const handleConfirmedLogout = async () => {
     setLogoutModalOpen(false);
@@ -3553,7 +3584,7 @@ export default function ProfileHome() {
           <View style={S.statNumRow}>
             <Ionicons name="star" size={14} color={starColor} style={{ marginRight: 3 }} />
             <Text style={[S.statNum, { color: numColor }]}>
-              {(profile as any).rating ?? "4.8"}
+              {profile.rating?.toFixed(1) ?? "0.0"}
             </Text>
           </View>
           <Text style={[S.statLabel, { color: labelColor }]}>Rating</Text>
@@ -3565,7 +3596,7 @@ export default function ProfileHome() {
         {/* Events Hosted */}
         <View style={S.statItem}>
           <Text style={[S.statNum, { color: numColor }]}>
-            {(profile as any).eventsHosted ?? 10}
+            {profile.eventsHosted ?? 0}
           </Text>
           <Text style={[S.statLabel, { color: labelColor }]}>{"Events\nHosted"}</Text>
         </View>
@@ -3576,7 +3607,7 @@ export default function ProfileHome() {
         {/* Total Attendees */}
         <View style={S.statItem}>
           <Text style={[S.statNum, { color: numColor }]}>
-            {(profile as any).totalAttendees ?? 300}
+            {profile.totalAttendees ?? 0}
           </Text>
           <Text style={[S.statLabel, { color: labelColor }]}>{"Total\nAttendees"}</Text>
         </View>
@@ -3741,11 +3772,17 @@ export default function ProfileHome() {
             </Text>
             <View style={S.coverMetaRow}>
               <Ionicons name="mail-outline" size={11} color="rgba(255,255,255,0.75)" />
-              <Text style={S.coverMeta}>email@gmail.com</Text>
+              <Text style={S.coverMeta} numberOfLines={1}>
+                {profile.email || user?.primaryEmailAddress?.emailAddress || "No email added"}
+              </Text>
             </View>
             <View style={S.coverMetaRow}>
               <Ionicons name="location-outline" size={11} color="rgba(255,255,255,0.75)" />
-              <Text style={S.coverMeta}>Location, Country</Text>
+              <Text style={S.coverMeta} numberOfLines={1}>
+                {profile.city || profile.country 
+                  ? `${profile.city || ""}${profile.city && profile.country ? ", " : ""}${profile.country || ""}`
+                  : "Location not added"}
+              </Text>
             </View>
           </Animated.View>
         </View>
@@ -3936,7 +3973,10 @@ export default function ProfileHome() {
               </TouchableOpacity>
             </View>
             <View style={S.chipsWrap}>
-              {["Yoga Classes", "Meditation Session", "Workshops", "Photowalk"].map(s => (
+              {(profile.services?.length
+                ? profile.services
+                : ["Yoga Classes", "Meditation Session", "Workshops", "Photowalk"]
+              ).map(s => (
                 <View key={s} style={S.chip}>
                   <Text style={S.chipTxt}>{s}</Text>
                 </View>
@@ -3955,10 +3995,14 @@ export default function ProfileHome() {
               <Text style={S.secTitle}>Earning</Text>
               <View style={{ height: 10 }} />
               <Text style={S.infoCardRow}>
-                This Month : <Text style={S.infoCardVal}>₹1,000</Text>
+                This Month : <Text style={S.infoCardVal}>
+                  ₹{((profile.thisMonthEarning ?? 0) / 100).toLocaleString()}
+                </Text>
               </Text>
               <Text style={S.infoCardRow}>
-                Overall : <Text style={S.infoCardVal}>₹3,298.78</Text>
+                Overall : <Text style={S.infoCardVal}>
+                ₹{((profile.overallEarning ?? 0) / 100).toLocaleString()}
+                </Text>
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={C.cov3} />
@@ -3975,13 +4019,19 @@ export default function ProfileHome() {
               <Text style={S.secTitle}>Attendees Overview</Text>
               <View style={{ height: 10 }} />
               <Text style={S.infoCardRow}>
-                Repeated Attendees : <Text style={S.infoCardVal}>103</Text>
+                Repeated Attendees : <Text style={S.infoCardVal}>
+                  {profile.repeatedAttendees ?? 0}
+                </Text>
               </Text>
               <Text style={S.infoCardRow}>
-                New Attendees : <Text style={S.infoCardVal}>137</Text>
+                New Attendees : <Text style={S.infoCardVal}>
+                  {profile.newAttendees ?? 0}
+                </Text>
               </Text>
               <Text style={S.infoCardRow}>
-                Total attendees : <Text style={S.infoCardVal}>300</Text>
+                Total attendees : <Text style={S.infoCardVal}>
+                  {profile.totalAttendees ?? 0}
+                </Text>
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={C.cov3} />

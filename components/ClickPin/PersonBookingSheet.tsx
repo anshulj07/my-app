@@ -1146,7 +1146,7 @@ export default function PersonBookingSheet({
   const priceLabel = fromCentsLabel((person as any)?.priceCents);
   const priceCents: number | null = (person as any)?.priceCents ?? null;
   const isCreator = !!userId && !!creatorClerkId && String(userId) === String(creatorClerkId);
-  const bannerImg = (person as any)?.imageUrl || (person as any)?.coverImage || (person as any)?.image || "";
+  const bannerImg = (person as any)?.bannerUri || (person as any)?.bannerImage || (person as any)?.imageUrl || (person as any)?.coverImage || (person as any)?.image || "";
 
   /* ── state ── */
   const [statusLocal, setStatusLocal] = useState("active");
@@ -1311,6 +1311,16 @@ export default function PersonBookingSheet({
     ]).start(({ finished }) => { if (finished) { onClose(); after?.(); } });
   };
 
+  const navigateToProfile = () => {
+    if (!creatorClerkId) return;
+    close(() => {
+      router.push({
+        pathname: "/profile/[clerkUserId]",
+        params: { clerkUserId: creatorClerkId, name: creatorName, imageUrl: creatorPhoto },
+      } as any);
+    });
+  };
+
   const isActive = statusLocal.toLowerCase() === "active";
   const isFull = !!(D?.capacity && D.joined >= D.capacity);
   const pct = D?.capacity ? Math.min(100, (D.joined / D.capacity) * 100) : 100;
@@ -1399,7 +1409,7 @@ export default function PersonBookingSheet({
 
               <View style={S.orderCard}>
                 {/* Organizer row */}
-                <View style={S.orderOrgRow}>
+                <TouchableOpacity style={S.orderOrgRow} activeOpacity={0.7} onPress={navigateToProfile}>
                   <View style={S.orderOrgAvatar}>
                     {creatorPhoto
                       ? <Image source={{ uri: creatorPhoto }} style={{ width: 32, height: 32, borderRadius: 16 }} />
@@ -1422,7 +1432,8 @@ export default function PersonBookingSheet({
                       <Text style={S.verifiedText}>Verified</Text>
                     </View>
                   )}
-                </View>
+                  <Ionicons name="chevron-forward" size={14} color={C.hint} style={{ marginLeft: 4 }} />
+                </TouchableOpacity>
 
                 <View style={S.orderDivider} />
 

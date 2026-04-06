@@ -14,6 +14,7 @@ import {
   StyleSheet, Platform, StatusBar, Animated,
   Dimensions,
 } from "react-native";
+import { Image } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
@@ -121,9 +122,17 @@ function EventCard({ ev, idx, wished, onWish, onPress }: {
     <Animated.View style={[EC.wrap, { opacity: op }]}>
       <TouchableOpacity style={EC.card} onPress={onPress} activeOpacity={0.9}>
 
-        {/* ── Image / emoji area ── */}
-        <View style={[EC.imgArea, { backgroundColor: PALETTES[idx % PALETTES.length] }]}>
-          <Text style={EC.emoji}>{ev.emoji || "📍"}</Text>
+        {/* ── Image area ── */}
+        <View style={[EC.imgArea, !ev.bannerUri && { backgroundColor: PALETTES[idx % PALETTES.length] }]}>
+          {ev.bannerUri ? (
+            <Image 
+              source={{ uri: ev.bannerUri }} 
+              style={EC.img} 
+              resizeMode="cover" 
+            />
+          ) : (
+            <Text style={EC.emoji}>{ev.emoji || "📍"}</Text>
+          )}
 
           {/* Heart button top-right */}
           <TouchableOpacity style={EC.heartBtn} onPress={handleWish} hitSlop={12} activeOpacity={0.8}>
@@ -203,6 +212,7 @@ const EC = StyleSheet.create({
     width: "100%", height: 200,
     alignItems: "center", justifyContent: "center",
   },
+  img: { width: "100%", height: "100%" },
   emoji: { fontSize: 70 },
   heartBtn: {
     position: "absolute", top: 12, right: 12,

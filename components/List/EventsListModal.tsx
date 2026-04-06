@@ -521,6 +521,7 @@ import {
   Platform,
 } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import { useRouter } from "expo-router";
 
 type EventPin = {
   _id?: string;
@@ -617,6 +618,7 @@ export default function EventsListModal({
   events: EventPin[];
   myCity: string;
 }) {
+  const router = useRouter();
   const [tab, setTab] = useState<"my" | "other">("my");
   const [q, setQ] = useState("");
   const [kindFilter, setKindFilter] = useState<KindFilter>("all");
@@ -803,7 +805,23 @@ export default function EventsListModal({
                     const whenText = e.when || (e.date ? `${e.date}${e.time ? " · " + e.time : ""}` : "");
 
                     return (
-                      <View key={`${e._id ?? e.title}-${idx}`} style={styles.card}>
+                      <TouchableOpacity
+                        key={`${e._id ?? e.title}-${idx}`}
+                        style={styles.card}
+                        activeOpacity={0.85}
+                        onPress={() => {
+                          onClose();
+                          router.push({
+                            pathname: "/newApp/event-detail" as any,
+                            params: {
+                              eventId: e._id || "",
+                              kind: e.kind || "free",
+                              title: e.title || "Event",
+                              emoji: e.emoji || "📍",
+                            },
+                          });
+                        }}
+                      >
                         <View style={styles.emojiBubble}>
                           <Text style={styles.emojiText}>{e.emoji ?? "📍"}</Text>
                         </View>
@@ -818,7 +836,7 @@ export default function EventsListModal({
                         <View style={[styles.kindBadge, { backgroundColor: badge.bg, borderColor: badge.border }]}>
                           <Text style={[styles.kindBadgeText, { color: badge.text }]}>{badge.label}</Text>
                         </View>
-                      </View>
+                      </TouchableOpacity>
                     );
                   })}
                 </View>

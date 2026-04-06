@@ -35,6 +35,7 @@ const C = {
   muted:   "#888888",
   border:  "#EBEBEB",
   red:     "#FF4B6E",
+  redLt:   "#FFF0F3",
   card:    "#e6e6dd",
   teal:    "#3ECFB2",
   tealBg:  "#E8FAF7",
@@ -78,6 +79,7 @@ type EventDetail = {
   };
   creatorName?: string;
   creatorClerkId?: string;
+  creatorAvatar?: string;
   duration?: string;
   capacity?: number;
   language?: string;
@@ -200,7 +202,7 @@ function AttendeeAvatarRow({ attendees, total, onViewAll }: {
     <TouchableOpacity style={AA.row} onPress={onViewAll} activeOpacity={0.82}>
       <View style={AA.avatarGroup}>
         {preview.map((a, i) => (
-          <View key={a.clerkUserId} style={[AA.avatarWrap, { marginLeft: i === 0 ? 0 : -10, zIndex: 10 - i }]}>
+          <View key={`${a.clerkUserId}-${i}`} style={[AA.avatarWrap, { marginLeft: i === 0 ? 0 : -10, zIndex: 10 - i }]}>
             {a.imageUrl
               ? <Image source={{ uri: a.imageUrl }} style={AA.avatarImg} />
               : <View style={[AA.avatarImg, AA.avatarFallback]}>
@@ -407,6 +409,29 @@ export default function EventDetailScreen() {
         <View style={S.infoBlock}>
           <Text style={S.title}>{title}</Text>
 
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => {
+              if (ev?.creatorClerkId) {
+                router.push({
+                  pathname: "/profile/[clerkUserId]",
+                  params: { clerkUserId: ev.creatorClerkId, name: ev.creatorName || "" }
+                } as any);
+              }
+            }}
+            style={S.hostHeaderRow}
+          >
+            <View style={S.hostSmallAvatar}>
+              {ev?.creatorAvatar ? (
+                <Image source={{ uri: ev.creatorAvatar }} style={S.hostSmallAvatarImg} />
+              ) : (
+                <Text style={S.hostSmallInitial}>{(ev?.creatorName || "H").charAt(0).toUpperCase()}</Text>
+              )}
+            </View>
+            <Text style={S.hostHeaderTxt}>By {ev?.creatorName || "Local Host"}</Text>
+            <Ionicons name="checkmark-circle" size={12} color={C.teal} />
+          </TouchableOpacity>
+
           {!!loc && (
             <View style={S.locRow}>
               <Ionicons name="location-sharp" size={14} color={C.red} />
@@ -524,6 +549,43 @@ export default function EventDetailScreen() {
                 <Text style={S.approvalTxt}>Requires host approval to join</Text>
               </View>
             )}
+
+            {/* Meet the host */}
+            <View style={{ marginTop: 24 }}>
+              <Text style={S.sectionTitle}>Meet your host</Text>
+              <TouchableOpacity
+                style={S.hostCard}
+                activeOpacity={0.88}
+                onPress={() => {
+                  if (ev?.creatorClerkId) {
+                    router.push({
+                      pathname: "/profile/[clerkUserId]",
+                      params: {
+                        clerkUserId: ev.creatorClerkId,
+                        name: ev.creatorName || "Host",
+                      }
+                    } as any);
+                  }
+                }}
+              >
+                <View style={S.hostAvatar}>
+                  {ev?.creatorAvatar ? (
+                    <Image source={{ uri: ev.creatorAvatar }} style={S.hostAvatarImg} />
+                  ) : (
+                    <Text style={S.hostInitial}>
+                      {(ev?.creatorName || "H").charAt(0).toUpperCase()}
+                    </Text>
+                  )}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={S.hostName}>{ev?.creatorName || "Local Host"}</Text>
+                  <Text style={S.hostBadge}>Verified Organizer</Text>
+                </View>
+                <View style={S.hostProfileBtn}>
+                  <Text style={S.hostProfileTxt}>View Profile</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
           </View>
         ) : (
           /* ── DETAILS TAB ── */
@@ -538,12 +600,30 @@ export default function EventDetailScreen() {
               { label: "Join",      val: ev?.joinPolicy === "approval" ? "Approval required" : "Open to all" },
               { label: "Hosted by", val: ev?.creatorName || "Local Host" },
               { label: "Status",    val: ev?.status    || "Active" },
-            ].map((row, i) => (
-              <View key={i} style={S.detailRow}>
-                <Text style={S.detailLabel}>{row.label}</Text>
-                <Text style={S.detailVal}>{row.val}</Text>
-              </View>
-            ))}
+            ].map((row, i) => {
+              const isHost = row.label === "Hosted by";
+              return (
+                <TouchableOpacity
+                  key={i}
+                  disabled={!isHost || !ev?.creatorClerkId}
+                  onPress={() => {
+                    if (isHost && ev?.creatorClerkId) {
+                      router.push({
+                        pathname: "/profile/[clerkUserId]",
+                        params: { clerkUserId: ev.creatorClerkId, name: ev.creatorName || "" }
+                      } as any);
+                    }
+                  }}
+                  activeOpacity={0.7}
+                  style={S.detailRow}
+                >
+                  <Text style={S.detailLabel}>{row.label}</Text>
+                  <Text style={[S.detailVal, isHost && ev?.creatorClerkId && { color: C.teal }]}>
+                    {row.val}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         )}
       </ScrollView>
@@ -663,4 +743,39 @@ const S = StyleSheet.create({
     borderWidth: 1.5, borderColor: C.green + "55",
   },
   bookedTxt: { fontSize: 15, fontWeight: "800", color: C.green },
+
+  // Host Card
+  hostCard: {
+    flexDirection: "row", alignItems: "center", gap: 14,
+    padding: 16, borderRadius: 20, backgroundColor: C.card,
+    borderWidth: 1.5, borderColor: C.border,
+  },
+  hostAvatar: {
+    width: 52, height: 52, borderRadius: 16,
+    backgroundColor: C.redLt, alignItems: "center", justifyContent: "center",
+    borderWidth: 1, borderColor: C.red + "22",
+  },
+  hostInitial: { fontSize: 22, fontWeight: "900", color: C.red },
+  hostName:    { fontSize: 16, fontWeight: "900", color: C.ink },
+  hostBadge:   { fontSize: 12, fontWeight: "600", color: C.muted, marginTop: 2 },
+  hostProfileBtn: {
+    paddingHorizontal: 14, paddingVertical: 8,
+    borderRadius: 10, backgroundColor: C.redLt,
+    borderWidth: 1, borderColor: C.red + "33",
+  },
+  hostProfileTxt: { fontSize: 12, fontWeight: "800", color: C.red },
+
+  // Host Header (under title)
+  hostHeaderRow: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    marginBottom: 12, marginTop: -4,
+  },
+  hostSmallAvatar: {
+    width: 24, height: 24, borderRadius: 8,
+    backgroundColor: C.redLt, alignItems: "center", justifyContent: "center",
+  },
+  hostSmallInitial: { fontSize: 12, fontWeight: "900", color: C.red },
+  hostSmallAvatarImg: { width: "100%", height: "100%", borderRadius: 8 },
+  hostHeaderTxt:    { fontSize: 13, fontWeight: "700", color: C.ink2, opacity: 0.9 },
+  hostAvatarImg:    { width: "100%", height: "100%", borderRadius: 16 },
 });

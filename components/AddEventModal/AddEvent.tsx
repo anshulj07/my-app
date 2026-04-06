@@ -1,4 +1,4 @@
-﻿
+
 // components/AddEventModal/AddEvent.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Dimensions, Keyboard } from "react-native";
@@ -6,7 +6,7 @@ import { Modalize } from "react-native-modalize";
 import Constants from "expo-constants";
 import { apiFetch } from "../../lib/apiFetch";
 import { WebView } from "react-native-webview";
-import { useAuth } from "@clerk/clerk-expo";
+import { useAuth, useUser } from "@clerk/clerk-expo";
 
 import { styles } from "./AddEvent.styles";
 import AddEventFields from "./AddEventFields";
@@ -38,6 +38,7 @@ export default function AddEventModal({
   const initialCenterRef = useRef<{ lat: number; lng: number }>(DEFAULT_CENTER);
 
   const { userId } = useAuth();
+  const { user }   = useUser();
 
   const GOOGLE_KEY = (Constants.expoConfig?.extra as any)?.googleMapsKey as string | undefined;
   const API_BASE = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
@@ -231,7 +232,9 @@ console.log("SENDING BANNER URI:", bannerUri);
     const payload = {
       title: title.trim(), description: description.trim(), emoji,
   bannerUri: bannerUri,
-      creatorClerkId: userId, kind: backendKind, priceCents: needsPrice ? priceCents : null,
+      creatorClerkId: userId,
+      creatorName: `${user?.firstName || ""} ${user?.lastName || ""}`.trim() || user?.username || "Local Host",
+      kind: backendKind, priceCents: needsPrice ? priceCents : null,
       capacity: backendKind === "free" && limitEnabled ? capacity : null,
       timezone, startsAt, date: dateISO.trim(), time: time24.trim(),
       // Service slots

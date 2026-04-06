@@ -839,7 +839,7 @@ export default function TripScreen() {
                       onWish={() => toggleWish(ev._id)}
                       onPress={() =>
                         router.push({
-                          pathname: "/event-interest/[eventId]" as any,
+                          pathname: "/newApp/event-detail" as any,
                           params: { eventId: ev._id, kind: ev.kind, title: ev.title, emoji: ev.emoji || "📍" },
                         })
                       }

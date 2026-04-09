@@ -81,6 +81,10 @@ function normalizeEvent(e: any): EventPin | null {
     when:        [e?.date, e?.time].filter(Boolean).join(" · "),
     address:     e?.location?.formattedAddress ?? e?.location?.address ?? e?.address ?? "",
     status:      e?.status ?? "active",
+    // ✅ Needed for live pin detection in map
+    startsAt:    e?.startsAt ?? null,
+    date:        e?.date ?? null,
+    time:        e?.time ?? null,
   };
 }
 
@@ -232,7 +236,11 @@ export default function Home() {
   useEffect(() => { loadMyLocation(); loadEvents(); }, [loadEvents, loadMyLocation]);
 
   const filteredEvents = useMemo(() => {
-    const active = events.filter(e => String(e.status ?? "active").toLowerCase() === "active");
+    // ✅ Show active events + live events (started but status still "active")
+    const active = events.filter(e => {
+      const st = String(e.status ?? "active").toLowerCase();
+      return st === "active" || st === "live";
+    });
     if (!activeFilter) return active;
     return active.filter(e => {
       const kind = String((e as any).kind ?? "").toLowerCase(), f = activeFilter.toLowerCase();

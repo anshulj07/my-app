@@ -44,6 +44,22 @@ export function buildMapHtml(args: {
     .ep.free   {border-left:3px solid #16a34a;}
     .ep.paid   {border-left:3px solid #ea580c;}
     .ep.service{border-left:3px solid #7c3aed;}
+    .ep.live{
+      border-left:3px solid #ef4444;
+      box-shadow:0 2px 10px rgba(239,68,68,0.28),0 0 0 0 rgba(239,68,68,0.4);
+      animation:liveGlow 1.8s ease-in-out infinite;
+    }
+    .ep.live .et{color:#dc2626;font-weight:700;}
+    .ep.live .live-dot{
+      width:7px;height:7px;border-radius:50%;background:#ef4444;
+      animation:livePulse 1.2s ease-in-out infinite;
+      flex-shrink:0;
+    }
+    @keyframes liveGlow{
+      0%,100%{box-shadow:0 2px 10px rgba(239,68,68,0.25),0 0 0 0 rgba(239,68,68,0.35)}
+      50%{box-shadow:0 2px 16px rgba(239,68,68,0.45),0 0 0 5px rgba(239,68,68,0)}
+    }
+    @keyframes livePulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.5);opacity:0.6}}
     .ep.pressing{transform:translate(-50%,-100%) translateY(-6px) scale(0.88)!important;transition:transform 0.07s ease!important;}
     .ep.sel{
       background:#111;border-color:#111;
@@ -200,7 +216,8 @@ export function buildMapHtml(args: {
       clearTimeout(toastTimer);
       toastTimer=setTimeout(function(){el.classList.remove('show');},2200);
     }
-    function kindClass(k){
+    function kindClass(k,isLive){
+      if(isLive)return'live';
       if(!k)return'';
       if(k.indexOf('free')>=0)return'free';
       if(k.indexOf('paid')>=0)return'paid';
@@ -265,17 +282,31 @@ export function buildMapHtml(args: {
       post('stackClose',{});
     }
 
+    function isEventLive(ev){
+      if(!ev)return false;
+      if(ev.status==='ended')return false;
+      if(!ev.startsAt&&!ev.date)return false;
+      var startMs;
+      if(ev.startsAt){startMs=new Date(ev.startsAt).getTime();
+      }else if(ev.date&&ev.time){startMs=new Date(ev.date+'T'+ev.time+':00Z').getTime();
+      }else if(ev.date){startMs=new Date(ev.date+'T12:00:00Z').getTime();}
+      if(!startMs||!isFinite(startMs))return false;
+      return startMs<=Date.now();
+    }
+
     /* ══ PIN OVERLAY ══ */
     function makePinOverlay(ev,idx){
       var rec={ev:ev,px:null,div:null};
+      var live=isEventLive(ev);
       var ov=new google.maps.OverlayView();
       ov.onAdd=function(){
         var div=document.createElement('div');
-        div.className='ep entering '+(kindClass(ev.kind));
+        div.className='ep entering '+(kindClass(ev.kind,live));
         var title=ev.title||'';
-        div.innerHTML=
-          '<span class="em">'+(ev.emoji||'📍')+'</span>'+
-          (title.length>0&&title.length<=18?'<span class="et">'+title+'</span>':'');
+        var inner=live
+          ? '<span class="live-dot"></span><span class="et">LIVE · '+title.slice(0,14)+(title.length>14?'…':'')+'</span>'
+          : '<span class="em">'+(ev.emoji||'📍')+'</span>'+(title.length>0&&title.length<=18?'<span class="et">'+title+'</span>':'');
+        div.innerHTML=inner;
         rec.div=div;
         div.addEventListener('pointerdown',function(e){e.preventDefault();e.stopPropagation();div.classList.add('pressing');},{passive:false});
         div.addEventListener('pointerup',function(e){e.stopPropagation();div.classList.remove('pressing');},{passive:false});

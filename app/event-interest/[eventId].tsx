@@ -1,632 +1,17 @@
-// import React, { useCallback, useEffect, useMemo, useState } from "react";
-// import {
-//   View, Text, ActivityIndicator, Pressable, FlatList, Image,
-//   SectionList, RefreshControl, StatusBar, Platform, StyleSheet, Dimensions,
-//   LayoutAnimation, UIManager,
-// } from "react-native";
-// import { useLocalSearchParams, useRouter } from "expo-router";
-// import Constants from "expo-constants";
-// import { useAuth } from "@clerk/clerk-expo";
-// import Ionicons from "@expo/vector-icons/Ionicons";
-
-// const { width: W } = Dimensions.get("window");
-
-// type EventKind = "free" | "paid" | "service";
-
-// type AttendeeRow = {
-//   clerkId: string;
-//   name?: string;
-//   email?: string;
-//   phone?: string;
-//   message?: string;
-//   imageUrl?: string;
-//   joinedAt?: string;
-//   checkedIn?: boolean;
-//   checkedInAt?: string | null;
-// };
-
-// type BookingRow = {
-//   _id: string;
-//   customerClerkId?: string;
-//   customerName?: string;
-//   customerEmail?: string;
-//   whenISO?: string;
-//   notes?: string;
-// };
-
-// type EventDoc = {
-//   _id: string;
-//   title: string;
-//   emoji?: string;
-//   kind: EventKind;
-//   attendance?: number | null; // Limit
-//   attendees?: any[];
-//   pendingRequests?: any[];
-// };
-
-// function safeJson(txt: string) { try { return JSON.parse(txt); } catch { return null; } }
-
-// function dateKey(iso?: string) {
-//   if (!iso) return "Unknown date";
-//   const d = new Date(iso);
-//   if (!Number.isFinite(d.getTime())) return "Unknown date";
-//   return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
-// }
-
-// function fmtJoinedAt(iso?: string) {
-//   if (!iso) return "";
-//   const d = new Date(iso);
-//   if (!Number.isFinite(d.getTime())) return "";
-//   return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
-// }
-
-// export default function EventInterestScreen() {
-//   const router = useRouter();
-//   const { userId } = useAuth();
-
-//   const params = useLocalSearchParams<{ eventId: string; kind: EventKind; title?: string; emoji?: string }>();
-//   const eventId = String(params.eventId || "");
-//   const kind = (String(params.kind || "free") as EventKind);
-//   const titleParam = String(params.title || "");
-//   const emojiParam = String(params.emoji || "📍");
-
-//   const API_BASE = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
-//   const EVENT_API_KEY = (Constants.expoConfig?.extra as any)?.eventApiKey as string | undefined;
-
-//   const headers = useMemo(() => ({
-//     "Content-Type": "application/json",
-//     ...(EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {}),
-//   }), [EVENT_API_KEY]);
-
-//   const [loading, setLoading] = useState(true);
-//   const [refreshing, setRefreshing] = useState(false);
-//   const [err, setErr] = useState<string | null>(null);
-//   const [eventData, setEventData] = useState<EventDoc | null>(null);
-//   const [attendees, setAttendees] = useState<AttendeeRow[]>([]);
-//   const [pendingRequests, setPendingRequests] = useState<AttendeeRow[]>([]);
-//   const [bookingSections, setBookingSections] = useState<Array<{ title: string; data: BookingRow[] }>>([]);
-//   const [admitBusy, setAdmitBusy] = useState<Record<string, boolean>>({});
-
-//   const load = useCallback(async () => {
-//     if (!API_BASE) { setErr("Missing API base URL."); setLoading(false); setRefreshing(false); return; }
-//     if (!userId) { setErr("You must be signed in."); setLoading(false); setRefreshing(false); return; }
-//     if (!eventId) { setErr("Missing event ID."); setLoading(false); setRefreshing(false); return; }
-
-//     setErr(null); setLoading(true);
-
-//     try {
-//       if (kind === "service") {
-//         const res = await fetch(
-//           `${API_BASE}/api/bookings/service-bookings?eventId=${encodeURIComponent(eventId)}&creatorClerkId=${encodeURIComponent(userId)}`,
-//           { method: "GET", headers }
-//         );
-//         const json = safeJson(await res.text());
-//         if (!res.ok) throw new Error(json?.error || "Failed to fetch service bookings");
-
-//         const list: BookingRow[] = Array.isArray(json?.bookings) ? json.bookings : [];
-//         const map = new Map<string, BookingRow[]>();
-//         for (const b of list) {
-//           const k = dateKey(b.whenISO);
-//           map.set(k, [...(map.get(k) || []), b]);
-//         }
-//         const sections = Array.from(map.entries())
-//           .map(([k, v]) => ({ title: k, data: v.sort((a, b) => String(a.whenISO || "").localeCompare(String(b.whenISO || ""))) }))
-//           .sort((a, b) => a.title.localeCompare(b.title));
-//         setBookingSections(sections);
-//         setAttendees([]);
-//       } else {
-//         const res = await fetch(
-//           `${API_BASE}/api/events/${encodeURIComponent(eventId)}`,
-//           { method: "GET", headers }
-//         );
-//         const json = safeJson(await res.text());
-//         if (!res.ok) throw new Error(json?.error || "Event not found");
-
-//         const ev = json?.event;
-//         setEventData(ev);
-
-//         const raw = Array.isArray(ev?.attendees) ? ev.attendees : [];
-
-//         const list: AttendeeRow[] = raw
-//           .map((a: any) => {
-//             if (!a) return null;
-//             if (typeof a === "string") return { clerkId: a };
-//             return {
-//               clerkId: String(a.clerkId || a.clerkUserId || a.id || ""),
-//               name: typeof a.name === "string" ? a.name : "",
-//               email: typeof a.email === "string" ? a.email : "",
-//               phone: typeof a.phone === "string" ? a.phone : "",
-//               message: typeof a.message === "string" ? a.message : "",
-//               imageUrl: String(a.imageUrl || a.avatar || a.photo || ""),
-//               joinedAt: typeof a.joinedAt === "string" ? a.joinedAt : "",
-//               checkedIn: !!a.checkedIn,
-//               checkedInAt: a.checkedInAt || null,
-//             };
-//           })
-//           .filter((a: any) => a && a.clerkId) as AttendeeRow[];
-
-//         setAttendees(list);
-//         setBookingSections([]);
-
-//         const rawPending = Array.isArray(ev?.pendingRequests) ? ev.pendingRequests : [];
-//         const pendingList: AttendeeRow[] = rawPending.map((p: any) => ({
-//           clerkId: String(p.clerkUserId || ""),
-//           name: p.name || "",
-//           message: p.message || "",
-//           imageUrl: String(p.imageUrl || p.avatar || p.photo || ""),
-//           joinedAt: p.requestedAt || "",
-//           email: p.email || "",
-//           phone: p.phone || "",
-//         })).filter((p: AttendeeRow) => p.clerkId);
-//         setPendingRequests(pendingList);
-//       }
-//     } catch (e: any) {
-//       setErr(e?.message || "Something went wrong.");
-//     } finally {
-//       setLoading(false); setRefreshing(false);
-//     }
-//   }, [API_BASE, userId, eventId, kind, headers]);
-
-//   useEffect(() => { load(); }, [load]);
-//   const onRefresh = useCallback(() => { setRefreshing(true); load(); }, [load]);
-
-//   const handleAdmitReject = async (targetClerkId: string, action: "admit" | "reject") => {
-//     if (!API_BASE || !userId || !eventId) return;
-//     const busyKey = `${targetClerkId}-${action}`;
-//     setAdmitBusy(prev => ({ ...prev, [busyKey]: true }));
-//     try {
-//       const res = await fetch(`${API_BASE}/api/events/admit-request`, {
-//         method: "POST",
-//         headers,
-//         body: JSON.stringify({
-//           eventId,
-//           creatorClerkId: userId,
-//           requestClerkUserId: targetClerkId,
-//           action,
-//         }),
-//       });
-//       const json = await res.json().catch(() => null);
-//       if (!res.ok) throw new Error(json?.error || "Action failed");
-      
-//       // ✅ Smoothly remove the card
-//       if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental)
-//         UIManager.setLayoutAnimationEnabledExperimental(true);
-//       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-      
-//       await load(); // Refresh lists
-//     } catch (e: any) {
-//       alert(e.message);
-//     } finally {
-//       setAdmitBusy(prev => {
-//         const next = { ...prev };
-//         delete next[busyKey];
-//         return next;
-//       });
-//     }
-//   };
-
-//   const checkedInCount = attendees.filter((a) => a.checkedIn).length;
-//   const capacity = eventData?.attendance || null;
-//   const remaining = capacity ? Math.max(0, capacity - attendees.length) : null;
-//   const fillPct = capacity ? Math.min(100, (attendees.length / capacity) * 100) : 0;
-
-//   const headerTitle = kind === "service" ? "Service Bookings" : "Manage Attendees";
-//   const currentTitle = eventData?.title || titleParam;
-//   const currentEmoji = eventData?.emoji || emojiParam;
-
-//   const TOP_PAD = (Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0) + 40;
-
-//   return (
-//     <View style={[sc.screen, { paddingTop: TOP_PAD }]}>
-//       <StatusBar barStyle="dark-content" translucent />
-      
-//       {/* Header */}
-//       <View style={sc.header}>
-//         <Pressable onPress={() => router.back()} style={sc.backBtn}>
-//           <Ionicons name="chevron-back" size={20} color="#111827" />
-//         </Pressable>
-//         <View style={{ flex: 1 }}>
-//           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-//             <Text style={sc.emojiText}>{currentEmoji}</Text>
-//             <Text style={sc.eventTitle} numberOfLines={1}>{currentTitle}</Text>
-//           </View>
-//           <Text style={sc.headerActionText}>{headerTitle}</Text>
-//         </View>
-//       </View>
-
-//       {loading ? (
-//         <View style={sc.center}>
-//           <ActivityIndicator color="#0A84FF" size="large" />
-//           <Text style={sc.muted}>Loading dashboard…</Text>
-//         </View>
-//       ) : err ? (
-//         <View style={sc.center}>
-//           <View style={sc.errorIcon}>
-//             <Ionicons name="alert-circle" size={40} color="#F87171" />
-//           </View>
-//           <Text style={sc.errText}>{err}</Text>
-//           <Pressable onPress={load} style={sc.retryBtn}><Text style={sc.retryText}>Retry</Text></Pressable>
-//         </View>
-//       ) : (
-//         <View style={{ flex: 1 }}>
-//           {/* Dashboard Stats */}
-//           {kind !== "service" && (
-//             <View style={sc.dashContainer}>
-//               <View style={sc.dashRow}>
-//                 <View style={sc.statBox}>
-//                   <Text style={sc.statVal}>{attendees.length}</Text>
-//                   <Text style={sc.statLab}>Total Joined</Text>
-//                 </View>
-//                 <View style={sc.statBox}>
-//                   <Text style={[sc.statVal, { color: "#4ADE80" }]}>{checkedInCount}</Text>
-//                   <Text style={sc.statLab}>Checked In</Text>
-//                 </View>
-//                 {capacity !== null && (
-//                   <View style={sc.statBox}>
-//                     <Text style={[sc.statVal, { color: remaining === 0 ? "#F87171" : "#FFD700" }]}>{remaining}</Text>
-//                     <Text style={sc.statLab}>Remaining</Text>
-//                   </View>
-//                 )}
-//               </View>
-
-//               {capacity !== null && (
-//                 <View style={sc.progressWrap}>
-//                   <View style={sc.progressLabelRow}>
-//                     <Text style={sc.progressText}>Event Capacity</Text>
-//                     <Text style={sc.progressText}>{attendees.length} / {capacity}</Text>
-//                   </View>
-//                   <View style={sc.progressBar}>
-//                     <View style={[sc.progressFill, { width: `${fillPct}%` }]} />
-//                   </View>
-//                   {remaining !== null && remaining <= 5 && remaining > 0 && (
-//                     <Text style={sc.urgentText}>Hurry! Only {remaining} spaces left.</Text>
-//                   )}
-//                   {remaining === 0 && (
-//                     <Text style={[sc.urgentText, { color: "#F87171" }]}>Event is fully booked.</Text>
-//                   )}
-//                 </View>
-//               )}
-//             </View>
-//           )}
-
-//           {kind === "service" ? (
-//             <SectionList
-//               sections={bookingSections}
-//               keyExtractor={(item) => item._id}
-//               contentContainerStyle={sc.list}
-//               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#0A84FF" />}
-//               ListEmptyComponent={<EmptyCard title="No bookings yet" sub="When users book your service, they'll appear here." />}
-//               renderSectionHeader={({ section }) => (
-//                 <View style={sc.sectionHead}>
-//                   <Text style={sc.sectionTitle}>{section.title}</Text>
-//                 </View>
-//               )}
-//               renderItem={({ item }) => (
-//                 <View style={sc.card}>
-//                   <View style={sc.cardTopRow}>
-//                     <View style={sc.avatarBox}>
-//                       <Text style={sc.avatarText}>{(item.customerName || "?").charAt(0).toUpperCase()}</Text>
-//                     </View>
-//                     <View style={{ flex: 1 }}>
-//                       <Text style={sc.cardName}>{item.customerName || "Customer"}</Text>
-//                       {!!item.customerEmail && <Text style={sc.cardMeta}>{item.customerEmail}</Text>}
-//                     </View>
-//                   </View>
-//                   {!!item.whenISO && (
-//                     <View style={sc.metaRow}>
-//                       <Ionicons name="time-outline" size={14} color="rgba(255,255,255,0.4)" />
-//                       <Text style={sc.cardMeta}>{new Date(item.whenISO).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</Text>
-//                     </View>
-//                   )}
-//                   {!!item.notes && (
-//                     <View style={sc.notesBox}>
-//                       <Text style={sc.notesText}>"{item.notes}"</Text>
-//                     </View>
-//                   )}
-//                 </View>
-//               )}
-//               ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
-//             />
-//           ) : (
-//             <FlatList
-//               data={attendees}
-//               keyExtractor={(x) => x.clerkId}
-//               contentContainerStyle={sc.list}
-//               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#0A84FF" />}
-//               ListHeaderComponent={
-//                 <View>
-//                   {pendingRequests.length > 0 && (
-//                     <View style={{ marginBottom: 24 }}>
-//                       <Text style={[sc.listLabel, { color: "#F59E0B" }]}>Pending Approvals ({pendingRequests.length})</Text>
-//                       {pendingRequests.map((p: AttendeeRow) => (
-//                         <PendingRequestCard
-//                           key={p.clerkId}
-//                           item={p}
-//                           onAdmit={() => handleAdmitReject(p.clerkId, "admit")}
-//                           onReject={() => handleAdmitReject(p.clerkId, "reject")}
-//                           admitBusy={admitBusy}
-//                         />
-//                       ))}
-//                     </View>
-//                   )}
-//                   <Text style={sc.listLabel}>Attendee List ({attendees.length})</Text>
-//                 </View>
-//               }
-//               ListEmptyComponent={<EmptyCard title="No attendees yet" sub="When users join your event, their details will show up here." />}
-//               renderItem={({ item }) => (
-//                 <Pressable
-//                   style={({ pressed }) => [sc.card, item.checkedIn && sc.cardChecked, pressed && { opacity: 0.88, transform: [{ scale: 0.985 }] }]}
-//                   onPress={() => {
-//                     if (item.clerkId) {
-//                       router.push({
-//                         pathname: "/profile/[clerkUserId]",
-//                         params: {
-//                           clerkUserId: item.clerkId,
-//                           name: item.name || "",
-//                           imageUrl: item.imageUrl || "",
-//                         },
-//                       } as any);
-//                     }
-//                   }}
-//                 >
-//                   <View style={sc.cardTopRow}>
-//                     <View style={sc.avatarBox}>
-//                       {item.imageUrl ? (
-//                         <Image source={{ uri: item.imageUrl }} style={sc.avatarImage} />
-//                       ) : (
-//                         <Text style={[sc.avatarText, item.checkedIn && { color: "#4ADE80" }]}>
-//                           {(item.name || "G").charAt(0).toUpperCase()}
-//                         </Text>
-//                       )}
-//                     </View>
-//                     <View style={{ flex: 1 }}>
-//                       <Text style={sc.cardName}>{item.name || "Guest"}</Text>
-//                       <Text style={sc.cardTime}>Joined {fmtJoinedAt(item.joinedAt)}</Text>
-//                     </View>
-//                     {item.checkedIn ? (
-//                       <View style={sc.checkedInBadge}>
-//                         <Ionicons name="checkmark-done" size={12} color="#4ADE80" />
-//                         <Text style={sc.checkedInBadgeText}>Verified</Text>
-//                       </View>
-//                     ) : (
-//                       <View style={sc.pendingBadge}>
-//                         <Text style={sc.pendingBadgeText}>Pending check-in</Text>
-//                       </View>
-//                     )}
-//                     <Ionicons name="chevron-forward" size={14} color="rgba(148,163,184,0.3)" style={{ marginLeft: 4 }} />
-//                   </View>
-
-//                   <View style={sc.contactRow}>
-//                     {!!item.email && (
-//                       <View style={sc.contactChip}>
-//                         <Ionicons name="mail" size={12} color="#94A3B8" />
-//                         <Text style={sc.contactChipText} numberOfLines={1}>{item.email}</Text>
-//                       </View>
-//                     )}
-//                     {!!item.phone && (
-//                       <View style={sc.contactChip}>
-//                         <Ionicons name="call" size={12} color="#94A3B8" />
-//                         <Text style={sc.contactChipText}>{item.phone}</Text>
-//                       </View>
-//                     )}
-//                   </View>
-
-//                   {!!item.message && (
-//                     <View style={sc.notesBox}>
-//                       <Text style={sc.notesText}>"{item.message}"</Text>
-//                     </View>
-//                   )}
-//                 </Pressable>
-//               )}
-//               ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
-//             />
-//           )}
-//         </View>
-//       )}
-//     </View>
-//   );
-// }
-
-// function EmptyCard({ title, sub }: { title: string; sub: string }) {
-//   return (
-//     <View style={sc.emptyCard}>
-//       <Ionicons name="people-outline" size={32} color="rgba(255,255,255,0.15)" />
-//       <Text style={sc.emptyTitle}>{title}</Text>
-//       <Text style={sc.emptySub}>{sub}</Text>
-//     </View>
-//   );
-// }
-
-// function PendingRequestCard({ item, onAdmit, onReject, admitBusy }: {
-//   item: AttendeeRow;
-//   onAdmit: () => void;
-//   onReject: () => void;
-//   admitBusy: Record<string, boolean>;
-// }) {
-//   const admitKey = `${item.clerkId}-admit`;
-//   const rejectKey = `${item.clerkId}-reject`;
-//   const busy = !!(admitBusy[admitKey] || admitBusy[rejectKey]);
-
-//   return (
-//     <View style={[sc.card, { marginBottom: 10, borderColor: "rgba(245,158,11,0.2)" }]}>
-//       <View style={sc.cardTopRow}>
-//         <View style={sc.avatarBox}>
-//           {item.imageUrl ? (
-//             <Image source={{ uri: item.imageUrl }} style={sc.avatarImage} />
-//           ) : (
-//             <Text style={[sc.avatarText, { color: "#F59E0B" }]}>{(item.name || "P").charAt(0).toUpperCase()}</Text>
-//           )}
-//         </View>
-//         <View style={{ flex: 1 }}>
-//           <Text style={sc.cardName}>{item.name || "User"}</Text>
-//           <Text style={sc.cardTime}>Requested {fmtJoinedAt(item.joinedAt)}</Text>
-//         </View>
-//       </View>
-//       {!!item.message && (
-//         <View style={sc.notesBox}>
-//           <Text style={sc.notesText}>"{item.message}"</Text>
-//         </View>
-//       )}
-//       <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
-//         <Pressable
-//           onPress={onAdmit}
-//           disabled={busy}
-//           style={({ pressed }) => [sc.admitBtn, busy && { opacity: 0.6 }, pressed && { opacity: 0.8 }]}
-//         >
-//           {admitBusy[admitKey] ? <ActivityIndicator color="#fff" size="small" /> : <Text style={sc.admitText}>✓ Admit</Text>}
-//         </Pressable>
-//         <Pressable
-//           onPress={onReject}
-//           disabled={busy}
-//           style={({ pressed }) => [sc.rejectBtn, busy && { opacity: 0.6 }, pressed && { opacity: 0.8 }]}
-//         >
-//           {admitBusy[rejectKey] ? <ActivityIndicator color="rgba(255,255,255,0.4)" size="small" /> : <Text style={sc.rejectText}>✕ Decline</Text>}
-//         </Pressable>
-//       </View>
-//     </View>
-//   );
-// }
-
-// const sc = StyleSheet.create({
-//   screen: { flex: 1, backgroundColor: "#FFF7FA" },
-//   header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingBottom: 20, gap: 14 },
-//   backBtn: {
-//     width: 40, height: 40, borderRadius: 14,
-//     backgroundColor: "#fff",
-//     borderWidth: 1, borderColor: "#F1F5F9",
-//     alignItems: "center", justifyContent: "center",
-//   },
-//   emojiText: { fontSize: 20 },
-//   eventTitle: { color: "#111827", fontSize: 18, fontWeight: "900", flex: 1 },
-//   headerActionText: { color: "#6B7280", fontSize: 13, fontWeight: "700", marginTop: 1 },
-
-//   dashContainer: {
-//     marginHorizontal: 16, marginBottom: 20,
-//     padding: 18, borderRadius: 24,
-//     backgroundColor: "#fff",
-//     borderWidth: 1, borderColor: "#F1F5F9",
-//   },
-//   dashRow: { flexDirection: "row", justifyContent: "space-between", gap: 10 },
-//   statBox: { flex: 1, alignItems: "center" },
-//   statVal: { color: "#0A84FF", fontSize: 24, fontWeight: "900" },
-//   statLab: { color: "#6B7280", fontSize: 10, fontWeight: "800", marginTop: 4, textAlign: "center", textTransform: "uppercase" },
-
-//   progressWrap: { marginTop: 20 },
-//   progressLabelRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
-//   progressText: { color: "#6B7280", fontSize: 12, fontWeight: "800" },
-//   progressBar: { height: 8, backgroundColor: "#F3F4F6", borderRadius: 4, overflow: "hidden" },
-//   progressFill: { height: "100%", backgroundColor: "#0A84FF", borderRadius: 4 },
-//   urgentText: { color: "#F59E0B", fontSize: 11, fontWeight: "800", marginTop: 8, textAlign: "center" },
-
-//   list: { paddingHorizontal: 16, paddingBottom: 100 },
-//   listLabel: { color: "#111827", fontSize: 15, fontWeight: "900", marginBottom: 12, marginTop: 4 },
-
-//   sectionHead: { marginTop: 20, marginBottom: 10, paddingHorizontal: 4 },
-//   sectionTitle: { color: "#0A84FF", fontWeight: "900", fontSize: 14, textTransform: "uppercase", letterSpacing: 0.5 },
-
-//   card: {
-//     padding: 14, borderRadius: 20,
-//     backgroundColor: "#fff",
-//     borderWidth: 1, borderColor: "#F1F5F9",
-//   },
-//   cardChecked: {
-//     backgroundColor: "rgba(74,222,128,0.03)",
-//     borderColor: "rgba(74,222,128,0.15)",
-//   },
-//   cardTopRow: { flexDirection: "row", alignItems: "center", gap: 12 },
-//   avatarBox: {
-//     width: 44, height: 44, borderRadius: 15,
-//     backgroundColor: "rgba(10,132,255,0.1)",
-//     borderWidth: 1.5, borderColor: "rgba(10,132,255,0.2)",
-//     alignItems: "center", justifyContent: "center",
-//     overflow: "hidden",
-//   },
-//   avatarImage: {
-//     width: "100%",
-//     height: "100%",
-//     resizeMode: "cover",
-//   },
-//   avatarText: { color: "#0A84FF", fontSize: 18, fontWeight: "900" },
-//   cardName: { color: "#111827", fontWeight: "900", fontSize: 15 },
-//   cardTime: { color: "#6B7280", fontSize: 11, fontWeight: "700", marginTop: 2 },
-
-//   checkedInBadge: {
-//     flexDirection: "row", alignItems: "center", gap: 4,
-//     paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10,
-//     backgroundColor: "rgba(74,222,128,0.1)",
-//     borderWidth: 1, borderColor: "rgba(74,222,128,0.2)",
-//   },
-//   checkedInBadgeText: { color: "#4ADE80", fontSize: 10, fontWeight: "900" },
-//   pendingBadge: {
-//     paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10,
-//     backgroundColor: "#F3F4F6",
-//     borderWidth: 1, borderColor: "#E5E7EB",
-//   },
-//   pendingBadgeText: { color: "#6B7280", fontSize: 10, fontWeight: "800" },
-
-//   contactRow: { flexDirection: "row", gap: 8, marginTop: 14, flexWrap: "wrap" },
-//   contactChip: {
-//     flexDirection: "row", alignItems: "center", gap: 5,
-//     paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10,
-//     backgroundColor: "#F9FAFB",
-//     borderWidth: 1, borderColor: "#F1F5F9",
-//     maxWidth: W * 0.5,
-//   },
-//   contactChipText: { color: "#4B5563", fontSize: 11, fontWeight: "700" },
-
-//   notesBox: {
-//     marginTop: 12, padding: 10, borderRadius: 12,
-//     backgroundColor: "#F9FAFB",
-//     borderWidth: 1, borderColor: "#F1F5F9",
-//   },
-//   notesText: { color: "#6B7280", fontSize: 12, fontWeight: "600", fontStyle: "italic", lineHeight: 18 },
-
-//   metaRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 10 },
-//   cardMeta: { color: "#6B7280", fontSize: 12, fontWeight: "700" },
-
-//   admitBtn: {
-//     flex: 1, height: 42, borderRadius: 13,
-//     backgroundColor: "#0A84FF", alignItems: "center", justifyContent: "center",
-//   },
-//   admitText: { color: "#fff", fontWeight: "900", fontSize: 13 },
-//   rejectBtn: {
-//     flex: 1, height: 42, borderRadius: 13,
-//     backgroundColor: "#F3F4F6", alignItems: "center", justifyContent: "center",
-//     borderWidth: 1, borderColor: "#E5E7EB",
-//   },
-//   rejectText: { color: "#4B5563", fontWeight: "800", fontSize: 13 },
-
-//   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 30 },
-//   errorIcon: { marginBottom: 16 },
-//   errText: { color: "#EF4444", fontWeight: "800", textAlign: "center", lineHeight: 22 },
-//   muted: { color: "#6B7280", marginTop: 14, fontWeight: "700" },
-//   retryBtn: {
-//     marginTop: 20, paddingVertical: 12, paddingHorizontal: 32,
-//     borderRadius: 15, backgroundColor: "rgba(10,132,255,0.12)",
-//     borderWidth: 1, borderColor: "rgba(10,132,255,0.3)",
-//   },
-//   retryText: { color: "#0A84FF", fontWeight: "900" },
-
-//   emptyCard: {
-//     paddingVertical: 40, alignItems: "center",
-//     backgroundColor: "#fff",
-//     borderRadius: 24, borderWidth: 1, borderColor: "#F1F5F9",
-//     marginTop: 10,
-//   },
-//   emptyTitle: { color: "#111827", fontWeight: "900", fontSize: 16, marginTop: 12 },
-//   emptySub: { color: "#6B7280", marginTop: 6, fontWeight: "700", textAlign: "center", paddingHorizontal: 30 },
-// });
 import React, { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import {
   View, Text, ActivityIndicator, Pressable, FlatList, Image,
   SectionList, RefreshControl, StatusBar, Platform, StyleSheet, Dimensions,
-  LayoutAnimation, UIManager, Animated,
+  LayoutAnimation, UIManager, Animated, TouchableOpacity, Modal, ScrollView,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import Constants from "expo-constants";
 import { useAuth } from "@clerk/clerk-expo";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import Svg, { Circle, G } from "react-native-svg";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { BlurView } from "expo-blur";
+import * as Haptics from "expo-haptics";
 
 const { width: W } = Dimensions.get("window");
 
@@ -659,8 +44,10 @@ type EventDoc = {
   emoji?: string;
   kind: EventKind;
   attendance?: number | null;
+  views?: number;
   attendees?: any[];
   pendingRequests?: any[];
+  creatorClerkId?: string;
 };
 
 function safeJson(txt: string) { try { return JSON.parse(txt); } catch { return null; } }
@@ -785,56 +172,7 @@ function DonutChart({ checkedInPct, uncheckedPct, remainingPct }: {
   );
 }
 
-// Animated Legend Item
-function AnimatedLegendItem({ 
-  color, 
-  label, 
-  percentage, 
-  delay 
-}: { 
-  color: string; 
-  label: string; 
-  percentage: number; 
-  delay: number;
-}) {
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(20)).current;
 
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 600,
-        delay,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 600,
-        delay,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [delay]);
-
-  return (
-    <Animated.View 
-      style={[
-        sc.legendItem, 
-        { 
-          opacity: fadeAnim,
-          transform: [{ translateX: slideAnim }]
-        }
-      ]}
-    >
-      <View style={[sc.legendColor, { backgroundColor: color }]} />
-      <View style={{ flex: 1 }}>
-        <Text style={sc.legendLabel}>{label}</Text>
-      </View>
-      <Text style={sc.legendPct}>{percentage}%</Text>
-    </Animated.View>
-  );
-}
 
 export default function EventInterestScreen() {
   const router = useRouter();
@@ -856,6 +194,7 @@ export default function EventInterestScreen() {
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [eventData, setEventData] = useState<EventDoc | null>(null);
   const [attendees, setAttendees] = useState<AttendeeRow[]>([]);
@@ -913,7 +252,7 @@ export default function EventInterestScreen() {
               email: typeof a.email === "string" ? a.email : "",
               phone: typeof a.phone === "string" ? a.phone : "",
               message: typeof a.message === "string" ? a.message : "",
-              imageUrl: String(a.imageUrl || a.avatar || a.photo || ""),
+              imageUrl: (a.imageUrl || a.avatar || a.photo) || "",
               joinedAt: typeof a.joinedAt === "string" ? a.joinedAt : "",
               checkedIn: !!a.checkedIn,
               checkedInAt: a.checkedInAt || null,
@@ -929,7 +268,7 @@ export default function EventInterestScreen() {
           clerkId: String(p.clerkUserId || ""),
           name: p.name || "",
           message: p.message || "",
-          imageUrl: String(p.imageUrl || p.avatar || p.photo || ""),
+          imageUrl: (p.imageUrl || p.avatar || p.photo) || "",
           joinedAt: p.requestedAt || "",
           email: p.email || "",
           phone: p.phone || "",
@@ -969,7 +308,9 @@ export default function EventInterestScreen() {
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       
       await load();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e: any) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       alert(e.message);
     } finally {
       setAdmitBusy(prev => {
@@ -1003,6 +344,9 @@ export default function EventInterestScreen() {
     remainingPct = 0;
   }
 
+  // For service events, eventData is never fetched — only the host navigates here, so always true
+  const isHost = kind === "service" ? true : userId === eventData?.creatorClerkId;
+
   const headerTitle = kind === "service" ? "Service Bookings" : "Manage Attendees";
   const currentTitle = eventData?.title || titleParam;
   const currentEmoji = eventData?.emoji || emojiParam;
@@ -1025,6 +369,21 @@ export default function EventInterestScreen() {
           </View>
           <Text style={sc.headerActionText}>{headerTitle}</Text>
         </View>
+
+        {isHost && (
+          <TouchableOpacity 
+            style={sc.notifBtn} 
+            onPress={() => setShowNotifications(true)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="notifications-outline" size={24} color="#111827" />
+            {pendingRequests.length > 0 && (
+              <View style={sc.notifBadge}>
+                <Text style={sc.notifBadgeText}>{pendingRequests.length}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        )}
       </View>
 
       {loading ? (
@@ -1042,46 +401,6 @@ export default function EventInterestScreen() {
         </View>
       ) : (
         <View style={{ flex: 1 }}>
-          {/* Animated Donut Chart Dashboard */}
-          {kind !== "service" && (
-            <View style={sc.chartContainer}>
-              <Text style={sc.chartTitle}>Attendees Overview</Text>
-              
-              <View style={sc.chartWrapper}>
-                <DonutChart 
-                  checkedInPct={checkedInPct} 
-                  uncheckedPct={uncheckedPct} 
-                  remainingPct={remainingPct} 
-                />
-              </View>
-
-              <View style={sc.legendContainer}>
-                <AnimatedLegendItem
-                  color="#2E3B8E"
-                  label="Checked In"
-                  percentage={checkedInPct}
-                  delay={0}
-                />
-
-                <AnimatedLegendItem
-                  color="#5B63D3"
-                  label="Pending Check-in"
-                  percentage={uncheckedPct}
-                  delay={150}
-                />
-
-                {capacity && remainingPct > 0 && (
-                  <AnimatedLegendItem
-                    color="#B8BCE8"
-                    label="Remaining"
-                    percentage={remainingPct}
-                    delay={300}
-                  />
-                )}
-              </View>
-            </View>
-          )}
-
           {kind === "service" ? (
             <SectionList
               sections={bookingSections}
@@ -1102,7 +421,7 @@ export default function EventInterestScreen() {
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={sc.cardName}>{item.customerName || "Customer"}</Text>
-                      {!!item.customerEmail && <Text style={sc.cardMeta}>{item.customerEmail}</Text>}
+                      {(isHost && !!item.customerEmail) && <Text style={sc.cardMeta}>{item.customerEmail}</Text>}
                     </View>
                   </View>
                   {!!item.whenISO && (
@@ -1128,21 +447,56 @@ export default function EventInterestScreen() {
               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#5B63D3" />}
               ListHeaderComponent={
                 <View>
-                  {pendingRequests.length > 0 && (
-                    <View style={{ marginBottom: 24 }}>
-                      <Text style={[sc.listLabel, { color: "#F59E0B" }]}>Pending Approvals ({pendingRequests.length})</Text>
-                      {pendingRequests.map((p: AttendeeRow) => (
-                        <PendingRequestCard
-                          key={p.clerkId}
-                          item={p}
-                          onAdmit={() => handleAdmitReject(p.clerkId, "admit")}
-                          onReject={() => handleAdmitReject(p.clerkId, "reject")}
-                          admitBusy={admitBusy}
-                        />
-                      ))}
+                  {/* Analytics Dashboard moved inside FlatList Header */}
+                  <View style={{ marginBottom: 24 }}>
+                    {/* Engagement Stat */}
+                    <View style={sc.engagementCard}>
+                      <View style={sc.engagementInfo}>
+                        <Text style={sc.engagementLabel}>EVENT ENGAGEMENT</Text>
+                        <Text style={sc.engagementValue}>{eventData?.views || 0}<Text style={sc.engagementUnit}> views</Text></Text>
+                      </View>
+                      <View style={sc.engagementIcon}>
+                        <Ionicons name="eye" size={24} color="#5B63D3" />
+                      </View>
                     </View>
-                  )}
-                  <Text style={sc.listLabel}>Attendee List ({attendees.length})</Text>
+
+                    {/* Metric Grid */}
+                    <View style={sc.metricRow}>
+                      <View style={sc.metricCard}>
+                        <Text style={sc.metricValue}>{capacity || "∞"}</Text>
+                        <Text style={sc.metricLabel}>Total Spots</Text>
+                      </View>
+                      <View style={sc.metricCard}>
+                        <Text style={[sc.metricValue, { color: "#5B63D3" }]}>{totalAttendees}</Text>
+                        <Text style={sc.metricLabel}>Joined</Text>
+                      </View>
+                      <View style={sc.metricCard}>
+                        <Text style={[sc.metricValue, { color: "#2E3B8E" }]}>{checkedInCount}</Text>
+                        <Text style={sc.metricLabel}>Verified</Text>
+                      </View>
+                    </View>
+
+                    {/* Progress Card (Donut only) */}
+                    <View style={sc.progContainer}>
+                      <View style={sc.progHeader}>
+                        <Text style={sc.progTitle}>Admission Progress</Text>
+                        <Text style={sc.progSub}>{checkedInCount} verified out of {totalAttendees} joined</Text>
+                      </View>
+                      <View style={sc.chartWrapper}>
+                        <DonutChart checkedInPct={checkedInPct} uncheckedPct={uncheckedPct} remainingPct={remainingPct} />
+                        <View style={{ position: 'absolute', alignItems: 'center' }}>
+                          <Text style={{ fontSize: 24, fontWeight: '900', color: '#1F2937' }}>{checkedInCount}</Text>
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: '#6B7280', textTransform: 'uppercase' }}>Verified</Text>
+                        </View>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Join Requests and Activity are now in the Notification Hub icon */}
+                  <View style={sc.listHeaderRow}>
+                    <Ionicons name="people" size={18} color="#1F2937" />
+                    <Text style={sc.listLabel}>Attendance List ({attendees.length})</Text>
+                  </View>
                 </View>
               }
               ListEmptyComponent={<EmptyCard title="No attendees yet" sub="When users join your event, their details will show up here." />}
@@ -1189,20 +543,22 @@ export default function EventInterestScreen() {
                     <Ionicons name="chevron-forward" size={14} color="rgba(148,163,184,0.3)" style={{ marginLeft: 4 }} />
                   </View>
 
-                  <View style={sc.contactRow}>
-                    {!!item.email && (
-                      <View style={sc.contactChip}>
-                        <Ionicons name="mail" size={12} color="#94A3B8" />
-                        <Text style={sc.contactChipText} numberOfLines={1}>{item.email}</Text>
-                      </View>
-                    )}
-                    {!!item.phone && (
-                      <View style={sc.contactChip}>
-                        <Ionicons name="call" size={12} color="#94A3B8" />
-                        <Text style={sc.contactChipText}>{item.phone}</Text>
-                      </View>
-                    )}
-                  </View>
+                  {isHost && (
+                    <View style={sc.contactRow}>
+                      {!!item.email && (
+                        <View style={sc.contactChip}>
+                          <Ionicons name="mail" size={12} color="#94A3B8" />
+                          <Text style={sc.contactChipText} numberOfLines={1}>{item.email}</Text>
+                        </View>
+                      )}
+                      {!!item.phone && (
+                        <View style={sc.contactChip}>
+                          <Ionicons name="call" size={12} color="#94A3B8" />
+                          <Text style={sc.contactChipText}>{item.phone}</Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
 
                   {!!item.message && (
                     <View style={sc.notesBox}>
@@ -1214,8 +570,203 @@ export default function EventInterestScreen() {
               ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
             />
           )}
+          <NotificationModal 
+            visible={showNotifications} 
+            onClose={() => setShowNotifications(false)} 
+            pending={pendingRequests}
+            attendees={attendees}
+            eventTitle={currentTitle}
+            eventEmoji={currentEmoji}
+            onAdmit={(id) => handleAdmitReject(id, "admit")}
+            onReject={(id) => handleAdmitReject(id, "reject")}
+            admitBusy={admitBusy}
+          />
         </View>
       )}
+    </View>
+  );
+}
+
+function NotificationModal({ 
+  visible, onClose, pending, attendees, eventTitle, eventEmoji, onAdmit, onReject, admitBusy
+}: {
+  visible: boolean;
+  onClose: () => void;
+  pending: AttendeeRow[];
+  attendees: AttendeeRow[];
+  eventTitle: string;
+  eventEmoji: string;
+  onAdmit: (id: string) => void;
+  onReject: (id: string) => void;
+  admitBusy: Record<string, boolean>;
+}) {
+  const insets = useSafeAreaInsets();
+  
+  // Recent activity: attendees sorted by joinedAt
+  const activity = [...attendees].sort((a,b) => String(b.joinedAt || "").localeCompare(String(a.joinedAt || ""))).slice(0, 10);
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent statusBarTranslucent>
+      <View style={{ flex: 1, backgroundColor: "#FDFCF8" }}>
+        {/* Header Section from Screenshot */}
+        <View style={{ backgroundColor: "#FDFCF8", paddingTop: insets.top + 10 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 20 }}>
+            <TouchableOpacity 
+              onPress={onClose} 
+              style={[sc.backBtn, { backgroundColor: '#F3F4F6', borderWidth: 0 }]}
+            >
+              <Ionicons name="close" size={24} color="#111827" />
+            </TouchableOpacity>
+          </View>
+          
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 24, gap: 16 }}>
+            <View style={{ 
+              width: 56, height: 56, borderRadius: 16, 
+              backgroundColor: '#E8FAF7', 
+              alignItems: 'center', justifyContent: 'center' 
+            }}>
+              <Ionicons name="notifications" size={30} color="#FBBF24" />
+            </View>
+            <View>
+              <Text style={{ fontSize: 28, fontWeight: '900', color: '#111827' }}>Notifications</Text>
+              <Text style={{ fontSize: 14, color: '#6B7280', fontWeight: '500' }}>Requests & recent activity</Text>
+            </View>
+          </View>
+        </View>
+
+        <ScrollView 
+          contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 40 }}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Join Requests */}
+          {pending.length > 0 && (
+            <View style={{ marginBottom: 32 }}>
+              <View style={sc.notifSectionTitleRow}>
+                <View style={sc.redDot} />
+                <Text style={sc.notifSectionTitle}>JOIN REQUESTS</Text>
+                <View style={sc.notifSectionBadge}>
+                  <Text style={sc.notifSectionBadgeText}>{pending.length}</Text>
+                </View>
+              </View>
+              {pending.map(p => (
+                <PendingRequestCard 
+                  key={p.clerkId} 
+                  item={p} 
+                  onAdmit={() => onAdmit(p.clerkId)} 
+                  onReject={() => onReject(p.clerkId)} 
+                  admitBusy={admitBusy}
+                  eventEmoji={eventEmoji}
+                  eventTitle={eventTitle}
+                />
+              ))}
+            </View>
+          )}
+
+          {/* Recent Activity */}
+          <View>
+            <View style={sc.notifSectionTitleRow}>
+              <View style={[sc.redDot, { backgroundColor: "#10B981" }]} />
+              <Text style={sc.notifSectionTitle}>RECENT ACTIVITY</Text>
+            </View>
+            {activity.length === 0 ? (
+              <View style={{ padding: 20, alignItems: 'center' }}>
+                <Text style={{ color: '#9CA3AF', fontSize: 13 }}>No recent activity yet.</Text>
+              </View>
+            ) : (
+              activity.map(a => (
+                <View key={a.clerkId} style={sc.notifActivityRow}>
+                  <View style={sc.notifActivityAvatar}>
+                    {a.imageUrl ? (
+                      <Image source={{ uri: a.imageUrl }} style={sc.notifActivityImg} />
+                    ) : (
+                      <Text style={sc.notifActivityInitial}>{(a.name || "U").charAt(0)}</Text>
+                    )}
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={sc.notifActivityText}>
+                      <Text style={{ fontWeight: '700' }}>{a.name || "Guest"}</Text> joined your event
+                    </Text>
+                    <Text style={sc.notifActivityTime}>{fmtJoinedAt(a.joinedAt)}</Text>
+                  </View>
+                  <View style={sc.joinedBadge}>
+                    <Text style={sc.joinedBadgeText}>Joined ✓</Text>
+                  </View>
+                </View>
+              ))
+            )}
+          </View>
+        </ScrollView>
+      </View>
+    </Modal>
+  );
+}
+
+function PendingRequestCard({ item, onAdmit, onReject, admitBusy, eventEmoji, eventTitle }: {
+  item: AttendeeRow;
+  onAdmit: () => void;
+  onReject: () => void;
+  admitBusy: Record<string, boolean>;
+  eventEmoji?: string;
+  eventTitle?: string;
+}) {
+  const admitKey = `${item.clerkId}-admit`;
+  const rejectKey = `${item.clerkId}-reject`;
+  const busy = !!(admitBusy[admitKey] || admitBusy[rejectKey]);
+
+  return (
+    <View style={sc.notifCard}>
+      <View style={{ flexDirection: 'row', gap: 12 }}>
+        <View style={sc.notifAvatarLarge}>
+          {item.imageUrl ? (
+            <Image source={{ uri: item.imageUrl }} style={sc.notifImgLarge} />
+          ) : (
+            <View style={[sc.notifImgLarge, { backgroundColor: '#B8BCE8', justifyContent: 'center' }]}>
+              <Text style={{ textAlign: 'center', color: '#fff', fontSize: 18, fontWeight: '700' }}>
+                {(item.name || "P").charAt(0).toUpperCase()}
+              </Text>
+            </View>
+          )}
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={sc.notifCardTitle}>
+            <Text style={{ fontWeight: '700' }}>{item.name || "User"}</Text> wants to join {eventEmoji} {eventTitle}
+          </Text>
+          <Text style={sc.notifCardTime}>{fmtJoinedAt(item.joinedAt)}</Text>
+        </View>
+      </View>
+
+      {!!item.message && (
+        <View style={sc.notifMsgBox}>
+          <Text style={sc.notifMsgText}>"{item.message}"</Text>
+        </View>
+      )}
+
+      <View style={sc.notifBtnRow}>
+        <Pressable
+          onPress={onAdmit}
+          disabled={busy}
+          style={({ pressed }) => [sc.notifAdmitBtn, busy && { opacity: 0.6 }, pressed && { opacity: 0.8 }]}
+        >
+          {admitBusy[admitKey] ? <ActivityIndicator color="#fff" size="small" /> : (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Ionicons name="checkmark" size={16} color="#fff" />
+              <Text style={sc.notifAdmitText}>Admit</Text>
+            </View>
+          )}
+        </Pressable>
+        <Pressable
+          onPress={onReject}
+          disabled={busy}
+          style={({ pressed }) => [sc.notifDeclineBtn, busy && { opacity: 0.6 }, pressed && { opacity: 0.8 }]}
+        >
+          {admitBusy[rejectKey] ? <ActivityIndicator color="#6B7280" size="small" /> : (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Ionicons name="close" size={16} color="#6B7280" />
+              <Text style={sc.notifDeclineText}>Decline</Text>
+            </View>
+          )}
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -1223,59 +774,9 @@ export default function EventInterestScreen() {
 function EmptyCard({ title, sub }: { title: string; sub: string }) {
   return (
     <View style={sc.emptyCard}>
-      <Ionicons name="people-outline" size={32} color="rgba(91,99,211,0.2)" />
+      <Ionicons name="hourglass-outline" size={40} color="#D1D5DB" />
       <Text style={sc.emptyTitle}>{title}</Text>
       <Text style={sc.emptySub}>{sub}</Text>
-    </View>
-  );
-}
-
-function PendingRequestCard({ item, onAdmit, onReject, admitBusy }: {
-  item: AttendeeRow;
-  onAdmit: () => void;
-  onReject: () => void;
-  admitBusy: Record<string, boolean>;
-}) {
-  const admitKey = `${item.clerkId}-admit`;
-  const rejectKey = `${item.clerkId}-reject`;
-  const busy = !!(admitBusy[admitKey] || admitBusy[rejectKey]);
-
-  return (
-    <View style={[sc.card, { marginBottom: 10, borderColor: "rgba(245,158,11,0.2)" }]}>
-      <View style={sc.cardTopRow}>
-        <View style={sc.avatarBox}>
-          {item.imageUrl ? (
-            <Image source={{ uri: item.imageUrl }} style={sc.avatarImage} />
-          ) : (
-            <Text style={[sc.avatarText, { color: "#F59E0B" }]}>{(item.name || "P").charAt(0).toUpperCase()}</Text>
-          )}
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={sc.cardName}>{item.name || "User"}</Text>
-          <Text style={sc.cardTime}>Requested {fmtJoinedAt(item.joinedAt)}</Text>
-        </View>
-      </View>
-      {!!item.message && (
-        <View style={sc.notesBox}>
-          <Text style={sc.notesText}>"{item.message}"</Text>
-        </View>
-      )}
-      <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
-        <Pressable
-          onPress={onAdmit}
-          disabled={busy}
-          style={({ pressed }) => [sc.admitBtn, busy && { opacity: 0.6 }, pressed && { opacity: 0.8 }]}
-        >
-          {admitBusy[admitKey] ? <ActivityIndicator color="#fff" size="small" /> : <Text style={sc.admitText}>✓ Admit</Text>}
-        </Pressable>
-        <Pressable
-          onPress={onReject}
-          disabled={busy}
-          style={({ pressed }) => [sc.rejectBtn, busy && { opacity: 0.6 }, pressed && { opacity: 0.8 }]}
-        >
-          {admitBusy[rejectKey] ? <ActivityIndicator color="rgba(0,0,0,0.4)" size="small" /> : <Text style={sc.rejectText}>✕ Decline</Text>}
-        </Pressable>
-      </View>
     </View>
   );
 }
@@ -1292,6 +793,80 @@ const sc = StyleSheet.create({
   emojiText: { fontSize: 20 },
   eventTitle: { color: "#1F2937", fontSize: 18, fontWeight: "700", flex: 1 },
   headerActionText: { color: "#6B7280", fontSize: 13, fontWeight: "600", marginTop: 1 },
+
+  notifBtn: {
+    width: 44, height: 44, borderRadius: 14,
+    backgroundColor: "#E8FAF7", alignItems: "center", justifyContent: "center",
+    position: "relative",
+  },
+  notifBadge: {
+    position: "absolute", top: -4, right: -4,
+    minWidth: 18, height: 18, borderRadius: 9,
+    backgroundColor: "#F87171", alignItems: "center", justifyContent: "center",
+    paddingHorizontal: 4,
+    borderWidth: 2, borderColor: "#F8F9FA",
+  },
+  notifBadgeText: { color: "#FFF", fontSize: 10, fontWeight: "900" },
+
+  notifHeader: {
+    flexDirection: "row", alignItems: "center",
+    paddingHorizontal: 20, paddingBottom: 16,
+    backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: "#E5E7EB",
+  },
+  notifHeaderTitle: { fontSize: 18, fontWeight: "800", color: "#111827" },
+  notifHeaderSub: { fontSize: 13, color: "#6B7280", marginTop: 2 },
+
+  notifSectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16, marginTop: 12 },
+  redDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#F87171" },
+  notifSectionTitle: { fontSize: 12, fontWeight: "800", color: "#6B7280", letterSpacing: 0.5 },
+  notifSectionBadge: {
+    paddingHorizontal: 8, height: 18, borderRadius: 9,
+    backgroundColor: "#FEE2E2", alignItems: "center", justifyContent: "center",
+  },
+  notifSectionBadgeText: { color: "#F87171", fontSize: 11, fontWeight: "900" },
+
+  notifCard: {
+    backgroundColor: "#fff", borderRadius: 20, padding: 20,
+    marginBottom: 16, borderWeight: 1, borderColor: "#E5E7EB",
+    shadowColor: "#000", shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03, shadowRadius: 10, elevation: 2,
+  },
+  notifAvatarLarge: { width: 44, height: 44, borderRadius: 18, overflow: 'hidden' },
+  notifImgLarge: { width: "100%", height: "100%" },
+  notifCardTitle: { fontSize: 14, color: "#111827", lineHeight: 20 },
+  notifCardTime: { fontSize: 12, color: "#9CA3AF", marginTop: 4 },
+  notifMsgBox: {
+    marginTop: 14, padding: 14, borderRadius: 14,
+    backgroundColor: "#F9FAFB", borderWidth: 1, borderColor: "#F3F4F6",
+  },
+  notifMsgText: { fontSize: 13, color: "#4B5563", fontStyle: "italic" },
+  notifBtnRow: { flexDirection: 'row', gap: 12, marginTop: 20 },
+  notifAdmitBtn: {
+    flex: 1, height: 44, borderRadius: 12,
+    backgroundColor: "#10B981", alignItems: "center", justifyContent: "center",
+  },
+  notifAdmitText: { color: "#fff", fontWeight: "700", fontSize: 14 },
+  notifDeclineBtn: {
+    flex: 1, height: 44, borderRadius: 12,
+    backgroundColor: "#fff", borderWidth: 1, borderColor: "#E5E7EB",
+    alignItems: "center", justifyContent: "center",
+  },
+  notifDeclineText: { color: "#6B7280", fontWeight: "600", fontSize: 14 },
+
+  notifActivityRow: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff',
+    borderRadius: 20, padding: 16, marginBottom: 12,
+  },
+  notifActivityAvatar: { width: 40, height: 40, borderRadius: 16, backgroundColor: '#E0E7FF', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  notifActivityImg: { width: '100%', height: '100%' },
+  notifActivityInitial: { color: '#5B63D3', fontWeight: '700', fontSize: 16 },
+  notifActivityText: { fontSize: 13, color: '#111827', lineHeight: 18 },
+  notifActivityTime: { fontSize: 11, color: '#9CA3AF', marginTop: 2 },
+  joinedBadge: {
+    paddingHorizontal: 10, height: 24, borderRadius: 12,
+    backgroundColor: '#ECFDF5', alignItems: 'center', justifyContent: 'center',
+  },
+  joinedBadgeText: { color: '#10B981', fontSize: 11, fontWeight: '800' },
 
   chartContainer: {
     marginHorizontal: 16,
@@ -1317,33 +892,11 @@ const sc = StyleSheet.create({
     width: "100%",
     gap: 12,
   },
-  legendItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#F9FAFB",
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    gap: 12,
-  },
-  legendColor: {
-    width: 8,
-    height: 40,
-    borderRadius: 4,
-  },
-  legendLabel: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#9CA3AF",
-  },
-  legendPct: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#4B5563",
-  },
+
 
   list: { paddingHorizontal: 16, paddingBottom: 100 },
-  listLabel: { color: "#1F2937", fontSize: 15, fontWeight: "700", marginBottom: 12, marginTop: 4 },
+  listHeaderRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12, marginTop: 4 },
+  listLabel: { color: "#1F2937", fontSize: 15, fontWeight: "700" },
 
   sectionHead: { marginTop: 20, marginBottom: 10, paddingHorizontal: 4 },
   sectionTitle: { color: "#5B63D3", fontWeight: "700", fontSize: 14, textTransform: "uppercase", letterSpacing: 0.5 },
@@ -1431,6 +984,34 @@ const sc = StyleSheet.create({
   },
   retryText: { color: "#5B63D3", fontWeight: "700" },
 
+  engagementCard: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    backgroundColor: "rgba(91,99,211,0.06)", borderRadius: 20,
+    padding: 20, marginBottom: 16,
+    borderWidth: 1, borderColor: "rgba(91,99,211,0.1)",
+  },
+  engagementInfo: { flex: 1 },
+  engagementLabel: { fontSize: 10, fontWeight: "800", color: "#5B63D3", letterSpacing: 1, marginBottom: 4 },
+  engagementValue: { fontSize: 24, fontWeight: "900", color: "#1F2937" },
+  engagementUnit: { fontSize: 14, color: "#6B7280", fontWeight: "500" },
+  engagementIcon: { width: 48, height: 48, borderRadius: 24, backgroundColor: "#fff", alignItems: "center", justifyContent: "center", shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 5, elevation: 2 },
+
+  metricRow: { flexDirection: "row", gap: 10, marginBottom: 16 },
+  metricCard: { flex: 1, backgroundColor: "#fff", padding: 16, borderRadius: 20, borderWidth: 1, borderColor: "#E5E7EB", alignItems: "center" },
+  metricValue: { fontSize: 20, fontWeight: "900", color: "#1F2937", marginBottom: 4 },
+  metricLabel: { fontSize: 10, fontWeight: "800", color: "#6B7280", textTransform: "uppercase" },
+
+  progContainer: { backgroundColor: "#fff", padding: 20, borderRadius: 20, borderWidth: 1, borderColor: "#E5E7EB" },
+  progHeader: { marginBottom: 16 },
+  progTitle: { fontSize: 15, fontWeight: "800", color: "#1F2937", marginBottom: 4 },
+  progSub: { fontSize: 12, color: "#6B7280", fontWeight: "500" },
+  progBarOuter: { height: 12, backgroundColor: "#F3F4F6", borderRadius: 6, flexDirection: "row", overflow: "hidden" },
+  progSegment: { height: "100%" },
+  progLegend: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 16 },
+  legItem: { flexDirection: "row", alignItems: "center", gap: 6 },
+  legDot: { width: 8, height: 8, borderRadius: 4 },
+  legText: { fontSize: 11, fontWeight: "600", color: "#4B5563" },
+
   emptyCard: {
     paddingVertical: 40, alignItems: "center",
     backgroundColor: "#fff",
@@ -1439,4 +1020,5 @@ const sc = StyleSheet.create({
   },
   emptyTitle: { color: "#1F2937", fontWeight: "700", fontSize: 16, marginTop: 12 },
   emptySub: { color: "#6B7280", marginTop: 6, fontWeight: "500", textAlign: "center", paddingHorizontal: 30 },
+
 });

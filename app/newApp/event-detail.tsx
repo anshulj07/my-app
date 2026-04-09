@@ -18,10 +18,12 @@ import { useAuth } from "@clerk/clerk-expo";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { apiFetch } from "../../lib/apiFetch";
+import { formatEventDateTime } from "../../lib/dateUtils";
 
 // ─────────────────────────────────────────────────────────────
 //  TOKENS
 // ─────────────────────────────────────────────────────────────
+import JoinEventButton from "../../components/ClickPin/JoinEventButton";
 const { width: SW } = Dimensions.get("window");
 const IMG_H = 280;
 
@@ -211,50 +213,77 @@ function AttendeeAvatarRow({ attendees, total, onViewAll }: {
   const extra   = total - preview.length;
 
   return (
-    <TouchableOpacity style={AA.row} onPress={onViewAll} activeOpacity={0.82}>
-      <View style={AA.avatarGroup}>
-        {preview.map((a, i) => (
-          <View key={`${a.clerkUserId}-${i}`} style={[AA.avatarWrap, { marginLeft: i === 0 ? 0 : -10, zIndex: 10 - i }]}>
-            {a.imageUrl
-              ? <Image source={{ uri: a.imageUrl }} style={AA.avatarImg} />
-              : <View style={[AA.avatarImg, AA.avatarFallback]}>
-                  <Text style={AA.avatarLetter}>{(a.name || "?")[0].toUpperCase()}</Text>
-                </View>
-            }
-          </View>
-        ))}
-        {extra > 0 && (
-          <View style={[AA.avatarWrap, AA.extraWrap, { marginLeft: -10 }]}>
-            <Text style={AA.extraTxt}>+{extra}</Text>
-          </View>
-        )}
+    <TouchableOpacity style={AA.container} onPress={onViewAll} activeOpacity={0.85}>
+      <Text style={AA.goingTitle}>Going {total}</Text>
+      
+      <View style={AA.avatarRow}>
+        <View style={AA.avatarGroup}>
+          {preview.map((a, i) => (
+            <View key={`${a.clerkUserId}-${i}`} style={[AA.avatarWrap, { marginLeft: i === 0 ? 0 : -12, zIndex: 10 - i }]}>
+              {a.imageUrl
+                ? <Image source={{ uri: a.imageUrl }} style={AA.avatarImg} />
+                : <View style={[AA.avatarImg, AA.avatarFallback]}>
+                    <Text style={AA.avatarLetter}>{(a.name || "?")[0].toUpperCase()}</Text>
+                  </View>
+              }
+            </View>
+          ))}
+          {extra > 0 && (
+            <View style={[AA.avatarWrap, AA.extraWrap, { marginLeft: -12 }]}>
+              <Text style={AA.extraTxt}>+{extra}</Text>
+            </View>
+          )}
+        </View>
+        <View style={AA.viewMoreBtn}>
+          <Text style={AA.viewMoreTxt}>Check who's going</Text>
+          <Ionicons name="chevron-forward" size={14} color={C.muted} />
+        </View>
       </View>
-      <View style={{ flex: 1, marginLeft: 12 }}>
-        <Text style={AA.countTxt}>
-          {total > 0 ? `${total} ${total === 1 ? "person" : "people"} attending` : "Be the first to join!"}
-        </Text>
-        <Text style={AA.viewAllTxt}>View Attendance →</Text>
-      </View>
-      <Ionicons name="chevron-forward" size={16} color={C.green} />
     </TouchableOpacity>
   );
 }
 
 const AA = StyleSheet.create({
-  row: {
-    flexDirection: "row", alignItems: "center",
-    backgroundColor: C.greenLt, borderRadius: 16, padding: 14,
-    borderWidth: 1.5, borderColor: C.green + "44",
+  container: {
+    paddingVertical: 8,
+  },
+  goingTitle: {
+    fontSize: 22,
+    fontWeight: "900",
+    color: C.ink,
+    marginBottom: 12,
+    letterSpacing: -0.5,
+  },
+  avatarRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   avatarGroup:   { flexDirection: "row", alignItems: "center" },
-  avatarWrap:    { width: 34, height: 34, borderRadius: 17, borderWidth: 2, borderColor: C.white, overflow: "hidden" },
+  avatarWrap:    { 
+    width: 38, height: 38, borderRadius: 19, 
+    borderWidth: 2.5, borderColor: C.bg, 
+    overflow: "hidden", backgroundColor: C.white 
+  },
   avatarImg:     { width: "100%", height: "100%" },
-  avatarFallback:{ backgroundColor: C.tealBg, alignItems: "center", justifyContent: "center" },
-  avatarLetter:  { fontSize: 12, fontWeight: "900", color: C.teal },
-  extraWrap:     { backgroundColor: C.green, alignItems: "center", justifyContent: "center" },
-  extraTxt:      { color: "#fff", fontSize: 10, fontWeight: "900" },
-  countTxt:      { fontSize: 13, fontWeight: "800", color: C.ink },
-  viewAllTxt:    { fontSize: 11, fontWeight: "700", color: C.green, marginTop: 2 },
+  avatarFallback:{ backgroundColor: "#E2E8F0", alignItems: "center", justifyContent: "center" },
+  avatarLetter:  { fontSize: 13, fontWeight: "900", color: "#64748B" },
+  extraWrap:     { backgroundColor: "#FF4B6E", alignItems: "center", justifyContent: "center", borderWidth: 2.5, borderColor: C.bg },
+  extraTxt:      { color: "#fff", fontSize: 11, fontWeight: "900" },
+  viewMoreBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(0,0,0,0.03)",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+  },
+  viewMoreTxt: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: C.muted,
+  },
 });
 
 // ─────────────────────────────────────────────────────────────
@@ -282,6 +311,7 @@ export default function EventDetailScreen() {
   const [bookmarked, setBookmarked] = useState(false);
   const [bookingBusy, setBookingBusy] = useState(false);
   const [booked,     setBooked]     = useState(false);
+  const [userName,   setUserName]   = useState<string>("Guest");
 
   const fade = useRef(new Animated.Value(0)).current;
 
@@ -293,6 +323,21 @@ export default function EventDetailScreen() {
     "Content-Type": "application/json",
     ...(EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {}),
   };
+
+  // ── Fetch user's name for join API ─────────────────────────
+  useEffect(() => {
+    if (!API_BASE || !userId) return;
+    apiFetch(`${API_BASE}/api/profile?clerkUserId=${encodeURIComponent(userId)}`, {
+      method: "GET",
+      headers: { "Content-Type": "application/json", ...(EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {}) },
+    }).then(async (res) => {
+      const json = await res.json().catch(() => null);
+      const fn = json?.profile?.firstName || json?.user?.profile?.firstName || "";
+      const ln = json?.profile?.lastName  || json?.user?.profile?.lastName  || "";
+      const fullName = `${fn} ${ln}`.trim();
+      if (fullName) setUserName(fullName);
+    }).catch(() => {});
+  }, [API_BASE, userId]);
 
   // ── Fetch event detail ──────────────────────────────────────
   const loadEvent = useCallback(async () => {
@@ -331,31 +376,6 @@ export default function EventDetailScreen() {
 
   useEffect(() => { loadEvent(); }, [loadEvent]);
 
-  // ── Book / Join ─────────────────────────────────────────────
-  const handleBook = useCallback(async () => {
-    if (!API_BASE || !userId || !event || bookingBusy) return;
-    setBookingBusy(true);
-    try {
-      const res  = await apiFetch(`${API_BASE}/api/events/join`, {
-        method: "POST", headers,
-        body: JSON.stringify({
-          eventId:       event._id,
-          clerkUserId:   userId,
-          joinPolicy:    event.joinPolicy || "open",
-        }),
-      });
-      const json = safeJson(await res.text());
-      if (res.ok) {
-        setBooked(true);
-      } else {
-        // If already joined, still mark as booked
-        const msg = (json?.error || "").toLowerCase();
-        if (msg.includes("already") || msg.includes("joined")) setBooked(true);
-      }
-    } catch {}
-    finally { setBookingBusy(false); }
-  }, [API_BASE, userId, event, bookingBusy]);
-
   // ── Helpers ─────────────────────────────────────────────────
   const ev         = event;
   const title      = ev?.title      || params.title || "Event";
@@ -366,6 +386,14 @@ export default function EventDetailScreen() {
   const attendees  = ev?.attendees ?? [];
   const totalCount = ev?.attendance ?? attendees.length;
   const isCreator  = ev?.creatorClerkId && userId === ev.creatorClerkId;
+
+  // ── Book / Join Logic ─────────────────────────────────────────
+  // Check if user is already in attendees list
+  useEffect(() => {
+    if (!userId || !ev?.attendees) return;
+    const isJoined = ev.attendees.some(a => String(a.clerkUserId || "") === userId);
+    if (isJoined) setBooked(true);
+  }, [userId, ev?.attendees]);
 
   const TOP = (Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0) + insets.top;
 
@@ -473,7 +501,9 @@ export default function EventDetailScreen() {
                 <View style={S.divider} />
                 <View style={S.statItem}>
                   <Ionicons name="time-outline" size={14} color={C.muted} />
-                  <Text style={S.statVal} numberOfLines={1}>{ev?.time || ev?.date}</Text>
+                  <Text style={S.statVal} numberOfLines={1}>
+                    {formatEventDateTime(ev?.date, ev?.time)}
+                  </Text>
                 </View>
               </>
             )}
@@ -642,31 +672,37 @@ export default function EventDetailScreen() {
 
       {/* ── STICKY FOOTER ── */}
       <View style={[S.stickyFooter, { paddingBottom: insets.bottom + 12 }]}>
-        {booked ? (
+        {isCreator ? (
+          // Creator sees "View My Event" → navigates to Bookings tab (Created)
+          <TouchableOpacity
+            style={S.bookNowBtn}
+            onPress={() => router.push("/newApp/mybookings" as any)}
+            activeOpacity={0.88}
+          >
+            <Text style={S.bookNowTxt}>View My Event</Text>
+            <Ionicons name="arrow-forward" size={18} color="#fff" />
+          </TouchableOpacity>
+        ) : booked ? (
           <View style={S.bookedBanner}>
             <Ionicons name="checkmark-circle" size={20} color={C.green} />
             <Text style={S.bookedTxt}>
               {ev?.joinPolicy === "approval" ? "Request Sent! Awaiting approval" : "You're going! 🎉"}
             </Text>
           </View>
-        ) : (
-          <TouchableOpacity
-            style={[S.bookNowBtn, bookingBusy && { opacity: 0.7 }]}
-            onPress={handleBook}
-            activeOpacity={0.88}
-            disabled={bookingBusy}
-          >
-            {bookingBusy
-              ? <ActivityIndicator color="#fff" size="small" />
-              : <>
-                  <Text style={S.bookNowTxt}>
-                    {isCreator ? "View My Event" : ev?.kind === "paid" ? `Book Now · ${price}` : "Join Now · Free"}
-                  </Text>
-                  <Ionicons name="arrow-forward" size={18} color="#fff" />
-                </>
-            }
-          </TouchableOpacity>
-        )}
+        ) : ev ? (
+          <JoinEventButton
+            eventId={ev._id}
+            kind={ev.kind}
+            priceCents={ev.priceCents}
+            eventTitle={ev.title}
+            creatorClerkId={ev.creatorClerkId}
+            startDate={ev.date || (ev.startsAt ? String(ev.startsAt).split("T")[0] : "")}
+            endDate={ev.date || (ev.startsAt ? String(ev.startsAt).split("T")[0] : "")}
+            eventLocation={ev.location?.formattedAddress || ""}
+            label={ev.kind === "paid" ? `Book Now · ${price}` : "Join Now · Free"}
+            onJoined={() => setBooked(true)}
+          />
+        ) : null}
       </View>
 
     </Animated.View>

@@ -251,6 +251,7 @@ import { useRouter } from "expo-router";
 import Constants from "expo-constants";
 import { useAuth } from "@clerk/clerk-expo";
 import { apiFetch } from "../../../lib/apiFetch";
+import HistorySummaryModal from "../../../components/profile/HistorySummaryModal";
 
 const C = {
   bg: "#F7F8FA", card: "#FFFFFF", cardBorder: "#EAECF0",
@@ -321,6 +322,7 @@ export default function History() {
   const [created, setCreated] = useState<HistoryEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [summaryEvent, setSummaryEvent] = useState<HistoryEvent | null>(null);
 
   const load = useCallback(async () => {
     if (!API_BASE || !userId) { setLoading(false); return; }
@@ -420,9 +422,29 @@ export default function History() {
               </Text>
             </View>
           }
-          renderItem={({ item }) => <EventRow item={item} onPress={() => {}} />}
+          renderItem={({ item }) => (
+            <EventRow
+              item={item}
+              onPress={() => {
+                if (item.status?.toLowerCase() === "ended" && item._role === "created") {
+                  setSummaryEvent(item);
+                } else {
+                  router.push({
+                    pathname: "/event-interest/[eventId]",
+                    params: { eventId: item._id, kind: item.kind, title: item.title, emoji: item.emoji || "📍" },
+                  } as any);
+                }
+              }}
+            />
+          )}
         />
       )}
+
+      <HistorySummaryModal
+        visible={!!summaryEvent}
+        onClose={() => setSummaryEvent(null)}
+        event={summaryEvent as any}
+      />
     </SafeAreaView>
   );
 }

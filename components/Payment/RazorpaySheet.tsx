@@ -1,8 +1,8 @@
 // components/Payment/RazorpaySheet.tsx
 // WebView-based Razorpay checkout — Expo Go compatible
-// Usage: <RazorpaySheet visible={true} orderData={...} userInfo={...} onSuccess={...} onDismiss={...} />
+// Fixed: ERR|STEP_UNKNOWN — better script loading, retry, error handling
 
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useCallback } from "react";
 import {
   Modal,
   View,
@@ -10,8 +10,8 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
-  Platform,
   SafeAreaView,
+  Alert,
 } from "react-native";
 import { WebView } from "react-native-webview";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -43,21 +43,30 @@ type Props = {
   userInfo:   RazorpayUserInfo;
   onSuccess:  (payload: RazorpaySuccessPayload) => void;
   onDismiss:  () => void;
-  onFailed?:  (error: string) => void;
+  onFailed?:  (error: string, details?: any) => void;
+  prefillMethod?: string;
 };
 
-// ✅ Razorpay checkout HTML — inline mein inject karte hain
+// ✅ Razorpay HTML — fetches checkout.js inline, retries if needed
 function buildRazorpayHtml(order: RazorpayOrderData, user: RazorpayUserInfo): string {
   const amountInRupees = (order.amount / 100).toFixed(2);
 
-  return `
-<!DOCTYPE html>
+  const keyJS          = JSON.stringify(order.keyId);
+  const orderIdJS      = JSON.stringify(order.orderId);
+  const currencyJS     = JSON.stringify(order.currency);
+  const nameJS         = JSON.stringify(order.eventTitle || "Event Payment");
+  const descriptionJS  = JSON.stringify(order.description || `Pay ₹${amountInRupees}`);
+  const userNameJS     = JSON.stringify(user.name || "User");
+  const userEmailJS    = JSON.stringify(user.email || "");
+  const userPhoneJS    = JSON.stringify(user.phone || "");
+  const amountJS       = order.amount;
+
+  return `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
-  <title>Payment</title>
-  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>Secure Payment</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -69,11 +78,12 @@ function buildRazorpayHtml(order: RazorpayOrderData, user: RazorpayUserInfo): st
       min-height: 100vh;
       padding: 20px;
     }
-    .loader {
+    #status {
       text-align: center;
       color: #fff;
+      padding: 20px;
     }
-    .loader .spinner {
+    .spinner {
       width: 48px; height: 48px;
       border: 4px solid rgba(255,255,255,0.1);
       border-top: 4px solid #0A84FF;
@@ -82,75 +92,208 @@ function buildRazorpayHtml(order: RazorpayOrderData, user: RazorpayUserInfo): st
       margin: 0 auto 16px;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
-    .loader p { color: rgba(255,255,255,0.6); font-size: 14px; font-weight: 600; }
     .amount { color: #fff; font-size: 28px; font-weight: 900; margin-bottom: 8px; }
+    .msg { color: rgba(255,255,255,0.6); font-size: 14px; font-weight: 600; }
+    .err { color: #ff6b6b; font-size: 13px; margin-top: 12px; }
   </style>
 </head>
 <body>
-  <div class="loader">
+  <div id="status">
     <div class="spinner"></div>
     <div class="amount">₹${amountInRupees}</div>
-    <p>Opening payment...</p>
+    <p class="msg" id="msg">Loading payment gateway...</p>
+    <p class="err" id="err"></p>
   </div>
 
   <script>
-    var options = {
-      key:         "${order.keyId}",
-      amount:      "${order.amount}",
-      currency:    "${order.currency}",
-      name:        "${order.eventTitle || "Event Payment"}",
-      description: "${order.description || `Pay ₹${amountInRupees} to join`}",
-      order_id:    "${order.orderId}",
-      prefill: {
-        name:    "${user.name}",
-        email:   "${user.email}",
-        contact: "${user.phone || ""}",
-      },
-      theme: {
-        color: "#0A84FF",
-      },
-      modal: {
-        ondismiss: function() {
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: "RAZORPAY_DISMISSED"
+    // ── Bridge console to React Native ──
+    (function() {
+      var origLog = console.log;
+      var origErr = console.error;
+      var origWarn = console.warn;
+      function bridge(level, args) {
+        try {
+          window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: "CONSOLE_LOG", level: level,
+            message: Array.from(args).map(function(a) {
+              return typeof a === 'object' ? JSON.stringify(a) : String(a);
+            }).join(' ')
           }));
-        }
-      },
-      handler: function(response) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type:    "RAZORPAY_SUCCESS",
-          payload: {
-            razorpay_payment_id: response.razorpay_payment_id,
-            razorpay_order_id:   response.razorpay_order_id,
-            razorpay_signature:  response.razorpay_signature,
-          }
-        }));
+        } catch(e) {}
       }
+      console.log  = function() { bridge('log',  arguments); origLog.apply(console, arguments); };
+      console.error = function() { bridge('error', arguments); origErr.apply(console, arguments); };
+      console.warn  = function() { bridge('warn',  arguments); origWarn.apply(console, arguments); };
+    })();
+
+    function setMsg(text) {
+      var el = document.getElementById('msg');
+      if (el) el.textContent = text;
+    }
+    function setErr(text) {
+      var el = document.getElementById('err');
+      if (el) el.textContent = text;
+    }
+
+    // ── Global error catcher ──
+    window.onerror = function(msg, src, line, col, err) {
+      console.error('GlobalError', msg, 'line:', line);
+      sendFailed('JS Error: ' + msg);
+      return true;
     };
 
-    // Auto-open Razorpay after 800ms (page load hone do)
-    setTimeout(function() {
+    function sendFailed(errMsg, code, step, reason) {
+      window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'RAZORPAY_FAILED',
+        error: errMsg || 'Payment failed',
+        details: (code || 'ERR') + ' | ' + (step || 'STEP_UNKNOWN') + ' | ' + (reason || 'unknown')
+      }));
+    }
+
+    // ── Load Razorpay script dynamically ──
+    var loadAttempts = 0;
+    var maxAttempts = 3;
+    var rzpLoaded = false;
+
+    function loadRazorpayScript(cb) {
+      loadAttempts++;
+      console.log('Loading Razorpay SDK, attempt', loadAttempts);
+      setMsg('Loading payment SDK... (' + loadAttempts + '/' + maxAttempts + ')');
+
+      var script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.async = true;
+      script.onload = function() {
+        console.log('Razorpay SDK loaded successfully');
+        rzpLoaded = true;
+        cb(null);
+      };
+      script.onerror = function(e) {
+        console.error('Failed to load Razorpay SDK:', e);
+        if (loadAttempts < maxAttempts) {
+          setTimeout(function() { loadRazorpayScript(cb); }, 2000);
+        } else {
+          cb(new Error('Could not load Razorpay. Check internet connection.'));
+        }
+      };
+      document.head.appendChild(script);
+    }
+
+    function startPayment() {
+      if (typeof Razorpay === 'undefined') {
+        console.error('Razorpay still not available after script load');
+        setErr('Payment SDK failed to initialize.');
+        sendFailed('Razorpay SDK not available');
+        return;
+      }
+
+      setMsg('Opening Razorpay...');
+      console.log('Initializing Razorpay with orderId:', ${orderIdJS});
+
+      var options = {
+        key:         ${keyJS},
+        amount:      ${amountJS},
+        currency:    ${currencyJS},
+        name:        ${nameJS},
+        description: ${descriptionJS},
+        order_id:    ${orderIdJS},
+        prefill: {
+          name:    ${userNameJS},
+          email:   ${userEmailJS},
+          contact: ${userPhoneJS}
+        },
+        config: {
+          display: {
+            blocks: {
+              utib: {
+                name: 'Pay via UPI',
+                instruments: [
+                  { method: 'upi' },
+                ]
+              },
+              other: {
+                name: 'Other Payment Methods',
+                instruments: [
+                  { method: 'card' },
+                  { method: 'netbanking' },
+                  { method: 'wallet' },
+                ]
+              }
+            },
+            sequence: ['block.utib', 'block.other'],
+            preferences: {
+              show_default_blocks: false
+            }
+          }
+        },
+        theme: { color: '#0A84FF', hide_topbar: false },
+        modal: {
+          escape: true,
+          backdropclose: false,
+          confirm_close: false,
+          ondismiss: function() {
+            console.log('Razorpay modal dismissed');
+            window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'RAZORPAY_DISMISSED'
+            }));
+          }
+        },
+        handler: function(response) {
+          console.log('Payment SUCCESS:', response.razorpay_payment_id);
+          window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'RAZORPAY_SUCCESS',
+            payload: {
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_order_id:   response.razorpay_order_id,
+              razorpay_signature:  response.razorpay_signature
+            }
+          }));
+        }
+      };
+
       try {
         var rzp = new Razorpay(options);
-        rzp.on("payment.failed", function(resp) {
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type:   "RAZORPAY_FAILED",
-            error:  resp.error.description || "Payment failed",
-            code:   resp.error.code,
-          }));
+
+        rzp.on('payment.failed', function(resp) {
+          var e = resp.error || {};
+          console.error('Payment FAILED:', JSON.stringify(e));
+          sendFailed(
+            e.description || e.reason || 'Payment failed. Please try again.',
+            e.code,
+            e.step,
+            e.reason
+          );
         });
+
         rzp.open();
-      } catch(e) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type:  "RAZORPAY_FAILED",
-          error: e.message || "Could not open payment gateway",
+        console.log('Razorpay modal opened');
+
+        // Notify RN that modal is open
+        window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'RAZORPAY_READY'
         }));
+      } catch(e) {
+        console.error('Razorpay init/open error:', e.message);
+        setErr('Error: ' + e.message);
+        sendFailed('Initialization error: ' + e.message);
       }
-    }, 800);
+    }
+
+    // ── Start ──
+    window.addEventListener('load', function() {
+      loadRazorpayScript(function(err) {
+        if (err) {
+          setErr(err.message);
+          sendFailed(err.message);
+          return;
+        }
+        // Small delay to ensure SDK is fully ready
+        setTimeout(startPayment, 500);
+      });
+    });
   </script>
 </body>
-</html>
-  `.trim();
+</html>`.trim();
 }
 
 export default function RazorpaySheet({
@@ -163,25 +306,47 @@ export default function RazorpaySheet({
 }: Props) {
   const webViewRef = useRef<any>(null);
   const [loading, setLoading] = useState(true);
+  const [webViewKey, setWebViewKey] = useState(0);
 
   const html = buildRazorpayHtml(orderData, userInfo);
 
-  function handleMessage(event: any) {
+  const handleMessage = useCallback((event: any) => {
     try {
       const msg = JSON.parse(event.nativeEvent.data);
 
-      if (msg.type === "RAZORPAY_SUCCESS") {
-        onSuccess(msg.payload as RazorpaySuccessPayload);
-      } else if (msg.type === "RAZORPAY_DISMISSED") {
-        onDismiss();
-      } else if (msg.type === "RAZORPAY_FAILED") {
-        const errMsg = msg.error || "Payment failed. Please try again.";
-        onFailed?.(errMsg);
+      if (msg.type === "CONSOLE_LOG") {
+        const logFn = msg.level === "error" ? console.error : msg.level === "warn" ? console.warn : console.log;
+        logFn(`[RZP-WebView]`, msg.message);
+        return;
+      }
+
+      switch (msg.type) {
+        case "RAZORPAY_READY":
+          setLoading(false);
+          break;
+        case "RAZORPAY_SUCCESS":
+          setLoading(false);
+          onSuccess(msg.payload as RazorpaySuccessPayload);
+          break;
+        case "RAZORPAY_DISMISSED":
+          onDismiss();
+          break;
+        case "RAZORPAY_FAILED":
+          setLoading(false);
+          const errMsg = msg.error || "Payment failed. Please try again.";
+          onFailed?.(errMsg, msg.details);
+          break;
       }
     } catch {
       // ignore parse errors
     }
-  }
+  }, [onSuccess, onDismiss, onFailed]);
+
+  const handleError = useCallback((syntheticEvent: any) => {
+    const { nativeEvent } = syntheticEvent;
+    console.error("[RazorpaySheet] WebView error:", nativeEvent);
+    onFailed?.("WebView failed to load. Check internet connection.", nativeEvent?.description);
+  }, [onFailed]);
 
   return (
     <Modal
@@ -229,18 +394,32 @@ export default function RazorpaySheet({
             </View>
           )}
           <WebView
+            key={webViewKey}
             ref={webViewRef}
             source={{ html, baseUrl: "https://checkout.razorpay.com" }}
             originWhitelist={["*"]}
             javaScriptEnabled
             domStorageEnabled
-            onLoad={() => setLoading(false)}
             onMessage={handleMessage}
+            onError={handleError}
+            onHttpError={(e) => {
+              console.warn("[RazorpaySheet] HTTP Error:", e.nativeEvent.statusCode, e.nativeEvent.url);
+            }}
+            onLoadEnd={() => {
+              // Fallback: if RAZORPAY_READY doesn't come in 8s, hide loader
+              setTimeout(() => setLoading(false), 8000);
+            }}
             style={styles.webView}
-            // Allow all mixed content for Razorpay
             mixedContentMode="always"
-            // Android pe hardware acceleration
             androidHardwareAccelerationDisabled={false}
+            // Allow third-party cookies needed by Razorpay
+            thirdPartyCookiesEnabled
+            // Allow all URLs (needed for Razorpay redirects like UPI deep links)
+            setSupportMultipleWindows={false}
+            onShouldStartLoadWithRequest={(req) => {
+              // Allow Razorpay URLs and deep links
+              return true;
+            }}
           />
         </View>
 

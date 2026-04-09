@@ -3317,6 +3317,7 @@ import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { apiFetch } from "../../lib/apiFetch";
 import PhotosManagerModal from "../../components/profile/PhotosManagerModal";
+import HistorySummaryModal from "../../components/profile/HistorySummaryModal";
 
 // ─── Screen geometry ──────────────────────────────────────────────────────────
 const { width: SW } = Dimensions.get("window");
@@ -4454,6 +4455,7 @@ function MyEventsSection({ userId, router }: { userId?: string | null; router: a
   const [allGoing,   setAllGoing]   = useState<MyEventDoc[]>([]);
   const [loading,    setLoading]    = useState(false);
   const [err,        setErr]        = useState<string | null>(null);
+  const [summaryEvent, setSummaryEvent] = useState<MyEventDoc | null>(null);
 
   const headers = useMemo(() => ({
     "Content-Type": "application/json",
@@ -4539,10 +4541,14 @@ function MyEventsSection({ userId, router }: { userId?: string | null; router: a
   const hasMore     = currentList.length > 2 && !showAll;
 
   const onPressEvent = (ev: MyEventDoc) => {
-    router.push({
-      pathname: "/event-interest/[eventId]",
-      params: { eventId: ev._id, kind: ev.kind, title: ev.title, emoji: ev.emoji || "📍" },
-    });
+    if (evState(ev) === "past" && ev._role === "created") {
+      setSummaryEvent(ev);
+    } else {
+      router.push({
+        pathname: "/event-interest/[eventId]",
+        params: { eventId: ev._id, kind: ev.kind, title: ev.title, emoji: ev.emoji || "📍" },
+      });
+    }
   };
 
   return (
@@ -4676,6 +4682,12 @@ function MyEventsSection({ userId, router }: { userId?: string | null; router: a
           </>
         )}
       </View>
+
+      <HistorySummaryModal
+        visible={!!summaryEvent}
+        onClose={() => setSummaryEvent(null)}
+        event={summaryEvent as any}
+      />
     </View>
   );
 }

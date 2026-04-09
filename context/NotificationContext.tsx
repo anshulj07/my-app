@@ -15,6 +15,7 @@ export type NotifItem = {
   userImageUrl: string;
   message: string;
   timestamp: string;
+  paid?: boolean; // ✅ Added for payment tracking
 };
 
 type NotificationContextType = {

@@ -1566,7 +1566,7 @@ export default function PersonBookingSheet({
                   <Ionicons name="chevron-forward" size={14} color={C.hint} />
                 </TouchableOpacity>
 
-                {D.capacity && (
+                {!!D.capacity && (
                   <View style={{ paddingHorizontal: 16, marginTop: 10 }}>
                     <View style={S.barTrack}>
                       <View style={[S.barFill, {
@@ -1586,7 +1586,7 @@ export default function PersonBookingSheet({
             )}
 
             {/* ── MAP ── */}
-            {(D?.venueLine || D?.cityLine) && (
+            {!!(D?.venueLine || D?.cityLine) && (
               <View style={S.section}>
                 <View style={S.mapCard}>
                   {staticMapUrl ? (
@@ -1674,9 +1674,13 @@ export default function PersonBookingSheet({
                   kind={kind as any}
                   priceCents={priceCents}
                   eventTitle={String((person as any)?.title || "Event")}
+                  eventLocation={D?.address || "-"}
                   joinPolicy={((person as any)?.joinPolicy || "open") as any}
                   onJoined={() => close()}
                   disabled={kind === "service" && statusLocal.toLowerCase() === "paused"}
+                  creatorClerkId={creatorClerkId}
+                  startDate={(person as any)?.startDate}
+                  endDate={(person as any)?.endDate}
                 />
               </>
             )}

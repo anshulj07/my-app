@@ -18,6 +18,7 @@ import { Image } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
+import { formatEventDateTime } from "../../lib/dateUtils";
 import { TripEvent } from "./trip";
 
 // ─────────────────────────────────────────────────────────────
@@ -175,7 +176,9 @@ function EventCard({ ev, idx, wished, onWish, onPress }: {
             {!!(ev.time || ev.date) && (
               <View style={EC.chip}>
                 <Ionicons name="time-outline" size={12} color={C.muted} />
-                <Text style={EC.chipTxt}>{ev.time || ev.date}</Text>
+                <Text style={EC.chipTxt}>
+                  {formatEventDateTime(ev.date, ev.time)}
+                </Text>
               </View>
             )}
             <View style={EC.chip}>

@@ -14,13 +14,17 @@ type Props = {
   onRetry:    () => void;
   errorMsg?:  string;
   eventTitle?: string;
+  details?:   string;
 };
 
 export default function PaymentFailureModal({
-  visible, onClose, onRetry, errorMsg, eventTitle,
+  visible, onClose, onRetry, errorMsg, eventTitle, details,
 }: Props) {
   const scale   = useRef(new Animated.Value(0.75)).current;
   const opacity = useRef(new Animated.Value(0)).current;
+
+  // Detect if this is a test mode step-unknown error
+  const isTestModeError = details?.includes("STEP_UNKNOWN") || details?.includes("unknown");
 
   useEffect(() => {
     if (visible) {
@@ -60,19 +64,51 @@ export default function PaymentFailureModal({
             </Text>
           </View>
 
-          {/* Tips */}
-          <View style={s.tipsList}>
-            {[
-              "Check your UPI / card details",
-              "Ensure sufficient balance",
-              "Try a different payment method",
-            ].map((tip) => (
-              <View key={tip} style={s.tipRow}>
-                <Ionicons name="checkmark-circle-outline" size={14} color="rgba(255,255,255,0.35)" />
-                <Text style={s.tipText}>{tip}</Text>
+          {/* Test mode hint — shown when it's a test card error */}
+          {!!isTestModeError && (
+            <View style={s.testBox}>
+              <Text style={s.testTitle}>🧪 Test Mode — Inhe Use Karo:</Text>
+              <View style={s.testRow}>
+                <Text style={s.testLabel}>Easy UPI</Text>
+                <Text style={s.testVal}>success@razorpay</Text>
               </View>
-            ))}
-          </View>
+              <View style={[s.testRow, { marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: "rgba(14,165,233,0.15)" }]}>
+                <Text style={[s.testLabel, { color: "rgba(255,255,255,0.35)" }]}>— ya card —</Text>
+              </View>
+              <View style={s.testRow}>
+                <Text style={s.testLabel}>Card</Text>
+                <Text style={s.testVal}>4111 1111 1111 1111</Text>
+              </View>
+              <View style={s.testRow}>
+                <Text style={s.testLabel}>Expiry</Text>
+                <Text style={s.testVal}>12/28 (ya koi future)</Text>
+              </View>
+              <View style={s.testRow}>
+                <Text style={s.testLabel}>CVV</Text>
+                <Text style={s.testVal}>123</Text>
+              </View>
+              <View style={s.testRow}>
+                <Text style={s.testLabel}>OTP</Text>
+                <Text style={s.testVal}>1234</Text>
+              </View>
+            </View>
+          )}
+
+          {/* Tips */}
+          {!isTestModeError && (
+            <View style={s.tipsList}>
+              {[
+                "Check your UPI / card details",
+                "Ensure sufficient balance",
+                "Try a different payment method",
+              ].map((tip) => (
+                <View key={tip} style={s.tipRow}>
+                  <Ionicons name="checkmark-circle-outline" size={14} color="rgba(255,255,255,0.35)" />
+                  <Text style={s.tipText}>{tip}</Text>
+                </View>
+              ))}
+            </View>
+          )}
 
           {/* CTAs */}
           <TouchableOpacity onPress={onRetry} style={s.retryBtn} activeOpacity={0.85}>
@@ -146,4 +182,30 @@ const s = StyleSheet.create({
     alignItems: "center", justifyContent: "center", width: "100%",
   },
   cancelText: { color: "rgba(255,255,255,0.35)", fontSize: 14, fontWeight: "800" },
+
+  // Test mode section
+  testBox: {
+    width: "100%",
+    backgroundColor: "rgba(14,165,233,0.08)",
+    borderWidth: 1, borderColor: "rgba(14,165,233,0.25)",
+    borderRadius: 14, padding: 14, marginBottom: 20, gap: 6,
+  },
+  testTitle: {
+    color: "#38BDF8", fontSize: 12, fontWeight: "800",
+    marginBottom: 6,
+  },
+  testRow: {
+    flexDirection: "row", justifyContent: "space-between", gap: 8,
+  },
+  testLabel: {
+    color: "rgba(255,255,255,0.45)", fontSize: 11, fontWeight: "700", minWidth: 50,
+  },
+  testVal: {
+    color: "#fff", fontSize: 11, fontWeight: "800", flex: 1, textAlign: "right",
+  },
+  testNote: {
+    color: "rgba(56,189,248,0.70)", fontSize: 11, fontWeight: "700",
+    marginTop: 4, textAlign: "center",
+  },
 });
+

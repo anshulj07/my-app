@@ -122,7 +122,7 @@ export default function PaymentSuccessModal({
           )}
 
           {/* Payment ID (small) */}
-          {paymentId && (
+          {!!paymentId && (
             <Text style={styles.paymentId}>
               Ref: {paymentId.slice(-12)}
             </Text>

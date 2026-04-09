@@ -826,15 +826,35 @@ export default function MyBookingsScreen() {
   }, [API_BASE, headers, userId]);
 
   const onPressEvent = useCallback((item: EventDoc) => {
+    const state = getEventState(item);
+    if (state === "past") {
+      router.push({
+        pathname: "/past-event/[eventId]",
+        params: { eventId: item._id }
+      });
+      return;
+    }
+
+    // If coming from "Going" tab, go to detail page first
+    if (tab === "going") {
+      router.push({
+        pathname: "/newApp/event-detail",
+        params: { eventId: item._id, kind: item.kind, title: item.title, emoji: item.emoji || "📍" },
+      });
+      return;
+    }
+
+    // Default (Created tab) goes to dashboard
     router.push({
       pathname: "/event-interest/[eventId]",
       params: { eventId: item._id, kind: item.kind, title: item.title, emoji: item.emoji || "📍" },
     });
-  }, [router]);
+  }, [router, tab]);
 
   const TOP_PAD = (Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0) + 40;
 
   return (
+    <>
     <View style={[S.screen, { paddingTop: TOP_PAD }]}>
 
       {/* ── HEADER ── */}
@@ -928,11 +948,11 @@ export default function MyBookingsScreen() {
           toggleBusyById={toggleBusy}
           onToggleServiceEnabled={patchServiceEnabled}
           onPressEvent={onPressEvent}
-          isOngoing={false}
-          onEndEvent={undefined}
+          onEndEvent={endEvent}
         />
       )}
     </View>
+    </>
   );
 }
 
@@ -1001,7 +1021,14 @@ function NotificationsPanel({
                       <Text style={N.nameNormal}> wants to join </Text>
                       <Text style={N.nameEvent}>{item.eventEmoji} {item.eventTitle}</Text>
                     </Text>
-                    <Text style={N.timeText}>{timeAgo(item.timestamp)}</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 }}>
+                      <Text style={N.timeText}>{timeAgo(item.timestamp)}</Text>
+                      {item.paid && (
+                        <View style={[N.countBadge, { backgroundColor: C.greenBg, borderColor: C.green + "44", paddingVertical: 1 }]}>
+                          <Text style={[N.countBadgeText, { color: C.greenText, fontSize: 8 }]}>💰 PAID</Text>
+                        </View>
+                      )}
+                    </View>
                   </View>
                 </View>
 

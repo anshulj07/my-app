@@ -120,7 +120,7 @@
 //     setLoading(true);
 //     try {
 //       const range  = getDateRange(dateFilter);
-//       const params = new URLSearchParams({ limit: "100", upcomingOnly: "true" });
+//       const params = new URLSearchParams({ limit: "100", upcomingOnly: "1" });
 //       if (range) { params.set("dateFrom", range.from); params.set("dateTo", range.to); }
 //       const res  = await apiFetch(`${API_BASE}/api/events/get-events?${params}`, { method: "GET", headers });
 //       const json = await res.json().catch(() => ({}));
@@ -560,6 +560,7 @@ import * as Location from "expo-location";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { apiFetch } from "../../lib/apiFetch";
+import { formatEventDateTime } from "../../lib/dateUtils";
 
 // ─────────────────────────────────────────────────────────────
 //  TOKENS
@@ -672,7 +673,7 @@ export default function TripScreen() {
     setLoading(true);
     try {
       const range  = getDateRange(dateFilter);
-      const params = new URLSearchParams({ limit: "100", upcomingOnly: "true" });
+      const params = new URLSearchParams({ limit: "100", upcomingOnly: "1" });
       if (range) { params.set("dateFrom", range.from); params.set("dateTo", range.to); }
       const res  = await apiFetch(`${API_BASE}/api/events/get-events?${params}`, { method: "GET", headers });
       const json = await res.json().catch(() => ({}));
@@ -919,8 +920,10 @@ function GridCard({ ev, paletteIdx, wished, onWish, onPress }: {
             )}
             {!!(ev.time || ev.date) && (
               <View style={G.metaRow}>
-                <Ionicons name="time-outline" size={9} color={C.muted} />
-                <Text style={G.metaText} numberOfLines={1}>{ev.time || ev.date}</Text>
+                <Ionicons name="time-outline" size={10} color={C.muted} />
+                <Text style={G.metaText} numberOfLines={1}>
+                  {formatEventDateTime(ev.date, ev.time)}
+                </Text>
               </View>
             )}
           </View>

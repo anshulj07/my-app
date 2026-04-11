@@ -15,6 +15,7 @@ import { useRouter } from "expo-router";
 import { useUser } from "@clerk/clerk-expo";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import Constants from "expo-constants";
+import { apiFetch } from "../../lib/apiFetch";
 
 export default function NameScreen() {
   const router = useRouter();
@@ -47,9 +48,10 @@ export default function NameScreen() {
         clerkUserId: user.id,
         firstName: firstName.trim(),
         lastName: lastName.trim(),
+        email: user.primaryEmailAddress?.emailAddress ?? "",
       };
 
-      const res = await fetch(`${API_BASE}/api/onboarding/name`, {
+      const res = await apiFetch(`${API_BASE}/api/onboarding/name`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -68,7 +70,7 @@ export default function NameScreen() {
         throw new Error(msg);
       }
 
-      router.push("/(onboarding)/dateOfBirth");
+      router.push("/(onboarding)/username");
     } catch (e: any) {
       setErr(e?.message || "Failed to save name.");
     } finally {
@@ -88,7 +90,7 @@ export default function NameScreen() {
             <View style={styles.heroTop}>
               <View style={styles.pill}>
                 <View style={styles.pillDot} />
-                <Text style={styles.pillText}>Step 1 of 4</Text>
+                <Text style={styles.pillText}>Step 1 of 7</Text>
               </View>
 
               <View style={styles.spark}>

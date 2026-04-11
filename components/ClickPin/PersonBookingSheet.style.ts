@@ -210,4 +210,118 @@ export const styles = StyleSheet.create({
   },
   ctaGhostPressed: { backgroundColor: "rgba(255,255,255,0.07)" },
   ctaGhostText: { color: "rgba(226,232,240,0.85)", fontWeight: "900" },
+
+  ctaDelete: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "rgba(248,113,113,0.07)",
+    borderColor: "rgba(248,113,113,0.25)",
+  },
+  ctaDeleteText: { color: "#F87171", fontWeight: "900" as any },
+  
+  // Capacity Dashboard Styles
+  capacityCard: {
+    marginTop: 12,
+    padding: 16,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.12)",
+  },
+  capacityHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  capacityLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  capacityStatus: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: "rgba(34,197,94,0.12)",
+  },
+  capacityStatusText: {
+    color: "#22C55E",
+    fontSize: 10,
+    fontWeight: "900",
+  },
+  capacityStatusFull: {
+    backgroundColor: "rgba(248,113,113,0.12)",
+  },
+  capacityStatusFullText: {
+    color: "#F87171",
+  },
+  // ✅ Approval required badge styles
+  capacityStatusApproval: {
+    backgroundColor: "rgba(245,158,11,0.12)",
+  },
+  capacityStatusApprovalText: {
+    color: "#F59E0B",
+  },
+  progressBarContainer: {
+    height: 8,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderRadius: 4,
+    overflow: "hidden",
+    marginBottom: 10,
+  },
+  progressBar: {
+    height: "100%",
+    backgroundColor: "#0A84FF",
+    borderRadius: 4,
+  },
+  capacityInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  capacityJoinedText: {
+    color: "#E2E8F0",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  capacityRemainingText: {
+    color: "rgba(226,232,240,0.5)",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  
+  // Pending Approval Banner
+  pendingBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 14,
+    padding: 14,
+    borderRadius: 20,
+    backgroundColor: "rgba(245,158,11,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(245,158,11,0.22)",
+  },
+  pendingIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: "rgba(245,158,11,0.12)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pendingBannerTitle: {
+    color: "#F59E0B",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  pendingBannerSub: {
+    color: "rgba(245,158,11,0.7)",
+    fontSize: 11,
+    fontWeight: "700",
+    marginTop: 2,
+  },
 });

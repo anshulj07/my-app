@@ -96,10 +96,10 @@ export const styles = StyleSheet.create({
 
   cardRow: {
     marginTop: 18,
-    marginHorizontal: 16,
+    marginHorizontal: 12,
     backgroundColor: COLORS.card,
     borderRadius: 18,
-    padding: 16,
+    padding: 12,
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
@@ -125,10 +125,10 @@ export const styles = StyleSheet.create({
 
   sectionCard: {
     marginTop: 14,
-    marginHorizontal: 16,
+    marginHorizontal: 12,
     backgroundColor: COLORS.card,
     borderRadius: 18,
-    padding: 16,
+    padding: 12,
     borderWidth: 1,
     borderColor: "#F3F4F6",
     shadowColor: "#000",
@@ -215,5 +215,73 @@ export const styles = StyleSheet.create({
     top: 60,
     right: 20,
     padding: 10,
+    zIndex: 10,
+  },
+  previewEdit: {
+    position: "absolute",
+    bottom: 60,
+    right: 20,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: COLORS.brand,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+  },
+
+  // Action Menu
+  menuOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+  },
+  menuContent: {
+    backgroundColor: COLORS.card,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: 40,
+  },
+  menuTitle: {
+    fontSize: 18,
+    fontWeight: "900",
+    color: COLORS.text,
+    marginBottom: 20,
+    textAlign: "center",
+  },
+  menuItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+  },
+  menuItemLast: {
+    borderBottomWidth: 0,
+  },
+  menuLabel: {
+    marginLeft: 14,
+    fontSize: 16,
+    fontWeight: "700",
+    color: COLORS.text,
+  },
+  menuLabelDelete: {
+    color: COLORS.danger,
+  },
+  menuCancel: {
+    marginTop: 12,
+    paddingVertical: 16,
+    alignItems: "center",
+    borderRadius: 16,
+    backgroundColor: "#F3F4F6",
+  },
+  menuCancelTxt: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: COLORS.muted,
   },
 });

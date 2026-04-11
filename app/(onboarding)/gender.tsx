@@ -12,6 +12,7 @@ import { useRouter } from "expo-router";
 import { useUser } from "@clerk/clerk-expo";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import Constants from "expo-constants";
+import { apiFetch } from "../../lib/apiFetch";
 
 const OPTIONS = ["Male", "Female", "Non-binary", "Prefer not to say", "Other"] as const;
 type GenderOption = (typeof OPTIONS)[number];
@@ -50,7 +51,7 @@ export default function GenderScreen() {
       try {
         if (!API_BASE) throw new Error("Missing API base URL (extra.apiBaseUrl).");
 
-        const res = await fetch(
+        const res = await apiFetch(
           `${API_BASE.replace(/\/$/, "")}/api/onboarding/gender?clerkUserId=${encodeURIComponent(
             user.id
           )}`,
@@ -105,7 +106,7 @@ export default function GenderScreen() {
       if (!selected) throw new Error("Please select a gender.");
 
       const apiBase = API_BASE.replace(/\/$/, "");
-      const res = await fetch(`${apiBase}/api/onboarding/gender`, {
+      const res = await apiFetch(`${apiBase}/api/onboarding/gender`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -138,9 +139,23 @@ export default function GenderScreen() {
         {/* Hero */}
         <View style={styles.hero}>
           <View style={styles.heroTop}>
+            <TouchableOpacity
+              onPress={() => {
+                if (router.canGoBack()) {
+                  router.back();
+                } else {
+                  router.push("/(onboarding)/dateOfBirth");
+                }
+              }}
+              activeOpacity={0.7}
+              style={styles.backBtn}
+            >
+              <Ionicons name="chevron-back" size={20} color={COLORS.ink} />
+            </TouchableOpacity>
+
             <View style={styles.pill}>
               <View style={styles.pillDot} />
-              <Text style={styles.pillText}>Step 2 of 4</Text>
+              <Text style={styles.pillText}>Step 4 of 7</Text>
             </View>
 
             <View style={styles.spark}>
@@ -257,7 +272,23 @@ const styles = StyleSheet.create({
   },
 
   hero: { paddingHorizontal: 2, gap: 10 },
-  heroTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  heroTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 4,
+  },
+
+  backBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
 
   pill: {
     flexDirection: "row",
@@ -415,3 +446,4 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 });
+

@@ -55,6 +55,13 @@ export function buildMapHtml(args: {
       animation:livePulse 1.2s ease-in-out infinite;
       flex-shrink:0;
     }
+    /* ══ PAUSED state ══ */
+    .ep.paused{
+      opacity:0.65;
+      filter:grayscale(1);
+      border-left:3px solid #64748b;
+    }
+    .ep.paused .et{color:#64748b;}
     @keyframes liveGlow{
       0%,100%{box-shadow:0 2px 10px rgba(239,68,68,0.25),0 0 0 0 rgba(239,68,68,0.35)}
       50%{box-shadow:0 2px 16px rgba(239,68,68,0.45),0 0 0 5px rgba(239,68,68,0)}
@@ -216,13 +223,15 @@ export function buildMapHtml(args: {
       clearTimeout(toastTimer);
       toastTimer=setTimeout(function(){el.classList.remove('show');},2200);
     }
-    function kindClass(k,isLive){
-      if(isLive)return'live';
-      if(!k)return'';
-      if(k.indexOf('free')>=0)return'free';
-      if(k.indexOf('paid')>=0)return'paid';
-      if(k==='service')return'service';
-      return'';
+    function kindClass(k,isLive,status){
+      var cls='';
+      if(status==='paused')cls+='paused ';
+      if(isLive)return cls+'live';
+      if(!k)return cls;
+      if(k.indexOf('free')>=0)return cls+'free';
+      if(k.indexOf('paid')>=0)return cls+'paid';
+      if(k==='service')return cls+'service';
+      return cls;
     }
     function kindLabel(k){
       if(!k)return'';
@@ -301,7 +310,7 @@ export function buildMapHtml(args: {
       var ov=new google.maps.OverlayView();
       ov.onAdd=function(){
         var div=document.createElement('div');
-        div.className='ep entering '+(kindClass(ev.kind,live));
+        div.className='ep entering '+(kindClass(ev.kind,live,ev.status));
         var title=ev.title||'';
         var inner=live
           ? '<span class="live-dot"></span><span class="et">LIVE · '+title.slice(0,14)+(title.length>14?'…':'')+'</span>'
@@ -441,8 +450,15 @@ export function buildMapHtml(args: {
     }
 
     /* ══ initMap ══ */
+    window.gm_authFailure = function() {
+      post('log', { msg: 'Google Maps Authentication Failed! Please check if "Maps JavaScript API" is enabled in Cloud Console and billing is active.' });
+    };
+
     function initMap(){
-      if(!window.google||!google.maps)return;
+      if(!window.google||!google.maps){
+        post('log', { msg: 'Google object not found in initMap' });
+        return;
+      }
       map=new google.maps.Map(document.getElementById('map'),{
         center:CENTER,zoom:ZOOM,
         disableDefaultUI:true,clickableIcons:false,gestureHandling:'greedy'
@@ -457,37 +473,52 @@ export function buildMapHtml(args: {
     }
     window.initMap=initMap;
 
-    /* ══ goToLocation ══ */
-    window.addEventListener('message',function(e){
+    /* ══ goToLocation — handles both window & document message events ══ */
+    /* Android WebView sometimes fires on document instead of window */
+    function handleLocationMsg(data){
       try{
-        var msg=JSON.parse(e.data);
-        if(msg&&msg.type==='goToLocation'&&map){
-          var lat=Number(msg.lat),lng=Number(msg.lng);
-          map.panTo({lat:lat,lng:lng});
-          if(map.getZoom()<14)map.setZoom(14);
-          if(window._locOv){window._locOv.setMap(null);window._locOv=null;}
-          if(!document.getElementById('lpStyle')){
-            var st=document.createElement('style');st.id='lpStyle';
-            st.textContent='@keyframes lp{0%,100%{box-shadow:0 0 0 0 rgba(10,132,255,0.5)}60%{box-shadow:0 0 0 10px rgba(10,132,255,0)}}';
-            document.head.appendChild(st);
-          }
-          var lOv=new google.maps.OverlayView();
-          lOv._pos=new google.maps.LatLng(lat,lng);
-          lOv.onAdd=function(){
-            var o=document.createElement('div');
-            o.style.cssText='position:absolute;width:22px;height:22px;border-radius:50%;background:rgba(10,132,255,.18);border:2.5px solid rgba(10,132,255,.55);display:flex;align-items:center;justify-content:center;transform:translate(-50%,-50%);pointer-events:none;animation:lp 1.8s ease-out infinite;';
-            var inn=document.createElement('div');
-            inn.style.cssText='width:11px;height:11px;border-radius:50%;background:#0A84FF;border:2.5px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.3);';
-            o.appendChild(inn);this._div=o;
-            this.getPanes().overlayMouseTarget.appendChild(o);
-          };
-          lOv.draw=function(){var pr=this.getProjection();if(!pr||!this._div)return;var pt=pr.fromLatLngToDivPixel(this._pos);if(!pt)return;this._div.style.left=pt.x+'px';this._div.style.top=pt.y+'px';};
-          lOv.onRemove=function(){if(this._div&&this._div.parentNode){this._div.parentNode.removeChild(this._div);this._div=null;}};
-          lOv.setMap(map);window._locOv=lOv;
-          showToast('📍 Current location');
+        var msg=JSON.parse(data);
+        if(!msg||msg.type!=='goToLocation')return;
+        var lat=Number(msg.lat),lng=Number(msg.lng);
+        if(!isFinite(lat)||!isFinite(lng))return;
+
+        /* If map not ready yet, retry after 500ms */
+        if(!map){setTimeout(function(){handleLocationMsg(data);},500);return;}
+
+        map.panTo({lat:lat,lng:lng});
+        map.setZoom(Math.max(map.getZoom()||0,15));
+
+        /* Remove old location dot */
+        if(window._locOv){window._locOv.setMap(null);window._locOv=null;}
+
+        /* Inject pulse keyframe once */
+        if(!document.getElementById('lpStyle')){
+          var st=document.createElement('style');st.id='lpStyle';
+          st.textContent='@keyframes lp{0%,100%{box-shadow:0 0 0 0 rgba(10,132,255,0.5)}60%{box-shadow:0 0 0 10px rgba(10,132,255,0)}}';
+          document.head.appendChild(st);
         }
+
+        /* Draw blue dot at current location */
+        var lOv=new google.maps.OverlayView();
+        lOv._pos=new google.maps.LatLng(lat,lng);
+        lOv.onAdd=function(){
+          var o=document.createElement('div');
+          o.style.cssText='position:absolute;width:22px;height:22px;border-radius:50%;background:rgba(10,132,255,.18);border:2.5px solid rgba(10,132,255,.55);display:flex;align-items:center;justify-content:center;transform:translate(-50%,-50%);pointer-events:none;animation:lp 1.8s ease-out infinite;';
+          var inn=document.createElement('div');
+          inn.style.cssText='width:11px;height:11px;border-radius:50%;background:#0A84FF;border:2.5px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.3);';
+          o.appendChild(inn);this._div=o;
+          this.getPanes().overlayMouseTarget.appendChild(o);
+        };
+        lOv.draw=function(){var pr=this.getProjection();if(!pr||!this._div)return;var pt=pr.fromLatLngToDivPixel(this._pos);if(!pt)return;this._div.style.left=pt.x+'px';this._div.style.top=pt.y+'px';};
+        lOv.onRemove=function(){if(this._div&&this._div.parentNode){this._div.parentNode.removeChild(this._div);this._div=null;}};
+        lOv.setMap(map);window._locOv=lOv;
+        showToast('📍 Current location');
       }catch(ex){}
-    });
+    }
+
+    /* Listen on BOTH window and document — covers all WebView versions */
+    window.addEventListener('message',function(e){handleLocationMsg(e.data);});
+    document.addEventListener('message',function(e){handleLocationMsg(e.data);});
     window.addEventListener('error',function(e){post('log',{msg:'JS error: '+(e.message||'?')});});
   })();
   </script>

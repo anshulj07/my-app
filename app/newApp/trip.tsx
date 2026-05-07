@@ -1,588 +1,37 @@
-// // app/newApp/trip.tsx
-// import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-// import {
-//   View, Text, ScrollView, TouchableOpacity, TextInput,
-//   RefreshControl, StyleSheet, Platform, StatusBar,
-//   Animated, Dimensions,
-// } from "react-native";
-// import Ionicons from "@expo/vector-icons/Ionicons";
-// import Constants from "expo-constants";
-// import * as Location from "expo-location";
-// import { useSafeAreaInsets } from "react-native-safe-area-context";
-// import { useRouter } from "expo-router";
-// import { apiFetch } from "../../lib/apiFetch";
-
-// // ─────────────────────────────────────────────────────────────
-// //  TOKENS
-// // ─────────────────────────────────────────────────────────────
-// const { width: SW } = Dimensions.get("window");
-// const CARD_W   = Math.round(SW * 0.58);
-// const CARD_IMG = 130;
-// // Body height: title(1 line 18) + loc(16) + time(16) + gap + footer(34) + padding(24) = ~120
-// const CARD_BODY = 120;
-
-// const C = {
-//   bg:      "#F7F8F4",
-//   white:   "#FFFFFF",
-//   green:   "#22C55E",
-//   greenLt: "#E6F5EE",
-//   ink:     "#191919",
-//   ink2:    "#3A3A3A",
-//   muted:   "#888888",
-//   hint:    "#C0C0C0",
-//   border:  "#DEDEDE",   // slightly darker so pill border is visible like Image 2
-//   red:     "#FF4B6E",
-// };
-
-// const PALETTES = [
-//   { bg: "#D3E9DE" }, { bg: "#D4E5F7" }, { bg: "#F5DDD3" },
-//   { bg: "#EAD9F5" }, { bg: "#F5EAD1" }, { bg: "#D3EDF5" },
-// ];
-
-// const SECTION_META = [
-//   { key: "s1", title: "Morning Rituals",  sub: "Start your day right" },
-//   { key: "s2", title: "Culinary Trails",  sub: "Savour every moment"  },
-//   { key: "s3", title: "Wellness Escapes", sub: "Rejuvenate your mind"  },
-// ];
-
-// const CATS = ["All", "Fitness", "Wellness", "Food", "Active", "Nightlife"] as const;
-// type CatFilter  = typeof CATS[number];
-// type DateFilter = "today" | "tomorrow" | "weekend";
-
-// type Event = {
-//   _id: string; emoji?: string; title: string;
-//   kind: "free" | "paid" | "service";
-//   priceCents?: number; date?: string; time?: string;
-//   joinPolicy?: "open" | "approval"; attendance?: number; attendees?: any[];
-//   location?: { formattedAddress?: string; city?: string; admin1?: string; admin1Code?: string };
-//   creatorName?: string;
-// };
-
-// function getDateRange(f: DateFilter) {
-//   const now = new Date();
-//   const p   = (n: number) => String(n).padStart(2, "0");
-//   const fmt = (d: Date) => `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-//   if (f === "today") { const s = fmt(now); return { from: s, to: s }; }
-//   if (f === "tomorrow") {
-//     const t = new Date(now); t.setDate(t.getDate() + 1);
-//     return { from: fmt(t), to: fmt(t) };
-//   }
-//   const day = now.getDay(), dSat = day === 0 ? 6 : 6 - day;
-//   const sat = new Date(now); sat.setDate(now.getDate() + dSat);
-//   const sun = new Date(sat); sun.setDate(sat.getDate() + 1);
-//   return { from: fmt(sat), to: fmt(sun) };
-// }
-
-// // ─────────────────────────────────────────────────────────────
-// //  SCREEN
-// // ─────────────────────────────────────────────────────────────
-// export default function TripScreen() {
-//   const insets = useSafeAreaInsets();
-//   const router = useRouter();
-
-//   const API_BASE      = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
-//   const EVENT_API_KEY = (Constants.expoConfig?.extra as any)?.eventApiKey as string | undefined;
-
-//   const [catFilter,  setCatFilter]  = useState<CatFilter>("All");
-//   const [dateFilter, setDateFilter] = useState<DateFilter>("today");
-//   const [search,     setSearch]     = useState("");
-//   const [events,     setEvents]     = useState<Event[]>([]);
-//   const [loading,    setLoading]    = useState(false);
-//   const [refreshing, setRefreshing] = useState(false);
-//   const [city,       setCity]       = useState("Nearby");
-//   const [wishlist,   setWishlist]   = useState<Set<string>>(new Set());
-
-//   const fade = useRef(new Animated.Value(0)).current;
-//   useEffect(() => {
-//     Animated.timing(fade, { toValue: 1, duration: 380, useNativeDriver: true }).start();
-//   }, []);
-
-//   useEffect(() => {
-//     (async () => {
-//       try {
-//         const { status } = await Location.requestForegroundPermissionsAsync();
-//         if (status !== "granted") return;
-//         const cur = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-//         const rev = await Location.reverseGeocodeAsync({ latitude: cur.coords.latitude, longitude: cur.coords.longitude });
-//         const c = (rev?.[0]?.city || "").trim();
-//         if (c) setCity(c);
-//       } catch {}
-//     })();
-//   }, []);
-
-//   const headers = useMemo(() => ({
-//     "Content-Type": "application/json",
-//     ...(EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {}),
-//   }), [EVENT_API_KEY]);
-
-//   const load = useCallback(async () => {
-//     if (!API_BASE) return;
-//     setLoading(true);
-//     try {
-//       const range  = getDateRange(dateFilter);
-//       const params = new URLSearchParams({ limit: "100", upcomingOnly: "1" });
-//       if (range) { params.set("dateFrom", range.from); params.set("dateTo", range.to); }
-//       const res  = await apiFetch(`${API_BASE}/api/events/get-events?${params}`, { method: "GET", headers });
-//       const json = await res.json().catch(() => ({}));
-//       setEvents(Array.isArray(json?.events) ? json.events : []);
-//     } catch { setEvents([]); }
-//     finally  { setLoading(false); setRefreshing(false); }
-//   }, [API_BASE, headers, dateFilter]);
-
-//   useEffect(() => { load(); }, [load]);
-//   const onRefresh = useCallback(() => { setRefreshing(true); load(); }, [load]);
-
-//   const toggleWish = useCallback((id: string) => {
-//     setWishlist(prev => {
-//       const n = new Set(prev);
-//       n.has(id) ? n.delete(id) : n.add(id);
-//       return n;
-//     });
-//   }, []);
-
-//   const filtered = useMemo(() => {
-//     if (!search.trim()) return events;
-//     const q = search.toLowerCase();
-//     return events.filter(e =>
-//       e.title.toLowerCase().includes(q) ||
-//       (e.location?.city ?? "").toLowerCase().includes(q) ||
-//       (e.creatorName ?? "").toLowerCase().includes(q),
-//     );
-//   }, [events, search]);
-
-//   const sections = useMemo(() => {
-//     if (!filtered.length) return [];
-//     const chunk = Math.ceil(filtered.length / SECTION_META.length);
-//     return SECTION_META
-//       .map((m, i) => ({ ...m, events: filtered.slice(i * chunk, i * chunk + chunk).slice(0, 8) }))
-//       .filter(s => s.events.length > 0);
-//   }, [filtered]);
-
-//   const TOP = (Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0) + insets.top;
-
-//   return (
-//     <Animated.View style={[S.screen, { paddingTop: TOP, opacity: fade }]}>
-
-//       {/* ── HEADER ── */}
-//       <View style={S.header}>
-//         <View>
-//           <Text style={S.headerTitle}>Trip</Text>
-//           <Text style={S.headerSub}>Explore the world</Text>
-//         </View>
-//         <TouchableOpacity style={S.locationPill} activeOpacity={0.85}>
-//           <Ionicons name="location-sharp" size={13} color="#fff" />
-//           <Text style={S.locationText} numberOfLines={1}>{city}</Text>
-//           <Ionicons name="chevron-down" size={11} color="rgba(255,255,255,0.75)" />
-//         </TouchableOpacity>
-//       </View>
-
-//       {/* ── SEARCH + FILTER ── */}
-//       <View style={S.searchRow}>
-//         <View style={S.searchShell}>
-//           <Ionicons name="search-outline" size={17} color={C.hint} />
-//           <TextInput
-//             value={search} onChangeText={setSearch}
-//             placeholder="Search Events or Locations"
-//             placeholderTextColor={C.hint}
-//             style={S.searchInput}
-//             returnKeyType="search"
-//           />
-//           {!!search && (
-//             <TouchableOpacity onPress={() => setSearch("")} hitSlop={12}>
-//               <Ionicons name="close-circle" size={16} color={C.hint} />
-//             </TouchableOpacity>
-//           )}
-//         </View>
-//         <TouchableOpacity
-//           style={S.filterBtn}
-//           activeOpacity={0.85}
-//           onPress={() => router.push("/newApp/filters" as any)}
-//         >
-//           <Ionicons name="options-outline" size={20} color="#fff" />
-//         </TouchableOpacity>
-//       </View>
-
-//       {/* ── CATEGORY PILLS — exactly like Image 2 ── */}
-//       <View style={S.catWrapper}>
-//         <ScrollView
-//           horizontal
-//           showsHorizontalScrollIndicator={false}
-//           contentContainerStyle={S.catRow}
-//           bounces={true}
-//         >
-//           {CATS.map(cat => {
-//             const active = catFilter === cat;
-//             return (
-//               <TouchableOpacity
-//                 key={cat}
-//                 onPress={() => setCatFilter(cat)}
-//                 style={[S.catPill, active && S.catPillActive]}
-//                 activeOpacity={0.75}
-//               >
-//                 <Text style={[S.catText, active && S.catTextActive]}>{cat}</Text>
-//               </TouchableOpacity>
-//             );
-//           })}
-//         </ScrollView>
-//       </View>
-
-//       {/* ── MAIN SCROLL ── */}
-//       <ScrollView
-//         showsVerticalScrollIndicator={false}
-//         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.green} />}
-//         contentContainerStyle={{ paddingBottom: 100 }}
-//       >
-//         {loading && !refreshing ? (
-//           <View style={S.center}>
-//             <View style={S.loadingBox}><Text style={{ fontSize: 36 }}>🔍</Text></View>
-//             <Text style={S.loadingTitle}>Finding events…</Text>
-//             <Text style={S.loadingSub}>Looking around {city}</Text>
-//           </View>
-//         ) : sections.length === 0 ? (
-//           <View style={S.empty}>
-//             <Text style={{ fontSize: 50, marginBottom: 14 }}>🗓️</Text>
-//             <Text style={S.emptyTitle}>{search ? `No results for "${search}"` : "No events found"}</Text>
-//             <Text style={S.emptySub}>
-//               {search ? "Try a different keyword." : "Pull to refresh or adjust filters."}
-//             </Text>
-//             {!!search && (
-//               <TouchableOpacity onPress={() => setSearch("")} style={S.emptyBtn}>
-//                 <Text style={S.emptyBtnText}>Clear search</Text>
-//               </TouchableOpacity>
-//             )}
-//           </View>
-//         ) : (
-//           sections.map(sec => (
-//             <View key={sec.key} style={S.section}>
-//               <View style={S.sectionHead}>
-//                 <View>
-//                   <Text style={S.sectionTitle}>{sec.title}</Text>
-//                   <Text style={S.sectionSub}>{sec.sub}</Text>
-//                 </View>
-//                 {/* ── VIEW ALL — works ── */}
-//                 <TouchableOpacity
-//                   activeOpacity={0.75}
-//                   onPress={() =>
-//                     router.push({
-//                       pathname: "/newApp/explore" as any,
-//                       params: { section: sec.title },
-//                     })
-//                   }
-//                 >
-//                   <Text style={S.viewAll}>View All</Text>
-//                 </TouchableOpacity>
-//               </View>
-
-//               <ScrollView horizontal showsHorizontalScrollIndicator={false}
-//                 contentContainerStyle={S.cardStrip}>
-//                 {sec.events.map((ev, i) => (
-//                   <EventCard
-//                     key={ev._id} ev={ev} index={i}
-//                     wished={wishlist.has(ev._id)}
-//                     onWish={() => toggleWish(ev._id)}
-//                     onPress={() => router.push({
-//                       pathname: "/event-interest/[eventId]" as any,
-//                       params: { eventId: ev._id, kind: ev.kind, title: ev.title, emoji: ev.emoji || "📍" },
-//                     })}
-//                   />
-//                 ))}
-//               </ScrollView>
-//             </View>
-//           ))
-//         )}
-//       </ScrollView>
-//     </Animated.View>
-//   );
-// }
-
-// // ─────────────────────────────────────────────────────────────
-// //  EVENT CARD
-// //  Key fix: cardTop (flex:1, overflow hidden) + cardFooter (fixed at bottom)
-// //  → no matter how long title/location is, Free+Book never moves
-// // ─────────────────────────────────────────────────────────────
-// function EventCard({ ev, index, wished, onWish, onPress }: {
-//   ev: Event; index: number; wished: boolean; onWish: () => void; onPress: () => void;
-// }) {
-//   const op         = useRef(new Animated.Value(0)).current;
-//   const slide      = useRef(new Animated.Value(16)).current;
-//   const heartScale = useRef(new Animated.Value(1)).current;
-
-//   useEffect(() => {
-//     Animated.parallel([
-//       Animated.timing(op,    { toValue: 1, duration: 280, delay: Math.min(index * 55, 220), useNativeDriver: true }),
-//       Animated.timing(slide, { toValue: 0, duration: 280, delay: Math.min(index * 55, 220), useNativeDriver: true }),
-//     ]).start();
-//   }, []);
-
-//   const handleWish = () => {
-//     Animated.sequence([
-//       Animated.timing(heartScale, { toValue: 1.45, duration: 100, useNativeDriver: true }),
-//       Animated.timing(heartScale, { toValue: 1,    duration: 100, useNativeDriver: true }),
-//     ]).start();
-//     onWish();
-//   };
-
-//   const pal    = PALETTES[index % PALETTES.length];
-//   const isPaid = ev.kind === "paid";
-//   const price  = isPaid ? `₹${((ev.priceCents ?? 0) / 100).toFixed(0)}` : "Free";
-//   const loc    = ev.location?.city
-//     ? [ev.location.city, ev.location.admin1 || ev.location.admin1Code].filter(Boolean).join(", ")
-//     : ev.location?.formattedAddress ?? "";
-
-//   return (
-//     <Animated.View style={{ opacity: op, transform: [{ translateY: slide }] }}>
-//       <TouchableOpacity style={[S.card, { width: CARD_W }]} onPress={onPress} activeOpacity={0.88}>
-
-//         {/* ── Image area ── */}
-//         <View style={[S.cardImg, { backgroundColor: pal.bg }]}>
-//           <Text style={S.cardEmoji}>{ev.emoji || "📍"}</Text>
-//           <TouchableOpacity style={S.heartBtn} onPress={handleWish} activeOpacity={0.8} hitSlop={10}>
-//             <Animated.View style={{ transform: [{ scale: heartScale }] }}>
-//               <Ionicons name={wished ? "heart" : "heart-outline"} size={17} color={wished ? C.red : C.ink2} />
-//             </Animated.View>
-//           </TouchableOpacity>
-//         </View>
-
-//         {/* ── Body: fixed total height, footer always pinned to bottom ── */}
-//         <View style={S.cardBody}>
-
-//           {/* Top section — clips gracefully if content is long */}
-//           <View style={S.cardTop}>
-//             {/* Title: max 1 line → never overflows */}
-//             <Text style={S.cardTitle} numberOfLines={1}>{ev.title}</Text>
-
-//             {!!loc && (
-//               <View style={S.metaRow}>
-//                 <Ionicons name="location-sharp" size={10} color={C.green} />
-//                 <Text style={S.metaText} numberOfLines={1}>{loc}</Text>
-//               </View>
-//             )}
-//             {!!(ev.time || ev.date) && (
-//               <View style={S.metaRow}>
-//                 <Ionicons name="time-outline" size={10} color={C.muted} />
-//                 <Text style={S.metaText} numberOfLines={1}>{ev.time || ev.date}</Text>
-//               </View>
-//             )}
-//           </View>
-
-//           {/* Footer always static at bottom — never moves */}
-//           <View style={S.cardFooter}>
-//             <Text style={[S.cardPrice, { color: isPaid ? C.ink : C.green }]}>{price}</Text>
-//             <TouchableOpacity style={S.bookBtn} onPress={onPress} activeOpacity={0.85}>
-//               <Text style={S.bookBtnText}>Book</Text>
-//             </TouchableOpacity>
-//           </View>
-
-//         </View>
-//       </TouchableOpacity>
-//     </Animated.View>
-//   );
-// }
-
-// // ─────────────────────────────────────────────────────────────
-// //  STYLES
-// // ─────────────────────────────────────────────────────────────
-// const S = StyleSheet.create({
-//   screen: { flex: 1, backgroundColor: C.bg },
-
-//   /* Header */
-//   header: {
-//     flexDirection: "row", alignItems: "flex-start",
-//     justifyContent: "space-between",
-//     paddingHorizontal: 20, paddingTop: 14, paddingBottom: 6,
-//   },
-//   headerTitle: { fontSize: 28, fontWeight: "900", color: C.ink, letterSpacing: -0.6 },
-//   headerSub:   { fontSize: 13, color: C.muted, fontWeight: "600", marginTop: 1 },
-//   locationPill: {
-//     flexDirection: "row", alignItems: "center", gap: 5,
-//     backgroundColor: C.green, borderRadius: 22,
-//     paddingHorizontal: 12, paddingVertical: 9, maxWidth: 140,
-//     shadowColor: C.green, shadowOffset: { width: 0, height: 4 },
-//     shadowOpacity: 0.30, shadowRadius: 8, elevation: 5,
-//   },
-//   locationText: { color: "#fff", fontSize: 12, fontWeight: "800", flex: 1 },
-
-//   /* Search */
-//   searchRow: {
-//     flexDirection: "row", alignItems: "center", gap: 10,
-//     paddingHorizontal: 20, paddingVertical: 10,
-//   },
-//   searchShell: {
-//     flex: 1, flexDirection: "row", alignItems: "center", gap: 10,
-//     backgroundColor: C.white, borderRadius: 14,
-//     borderWidth: 1.5, borderColor: C.border,
-//     paddingHorizontal: 14, paddingVertical: 11,
-//     shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
-//     shadowOpacity: 0.05, shadowRadius: 6, elevation: 2,
-//   },
-//   searchInput: { flex: 1, fontSize: 14, fontWeight: "600", color: C.ink },
-//   filterBtn: {
-//     width: 46, height: 46, borderRadius: 14,
-//     backgroundColor: C.green, alignItems: "center", justifyContent: "center",
-//     shadowColor: C.green, shadowOffset: { width: 0, height: 4 },
-//     shadowOpacity: 0.30, shadowRadius: 8, elevation: 5,
-//   },
-
-//   /* ── Category pills — matching Image 2 exactly ──
-//      White bg, visible border (#DEDEDE), rounded pill, proper padding.
-//      Active = solid green fill, white text.
-//   */
-//   catWrapper: {
-//     height: 52,                    // fixed row height — no clipping
-//     justifyContent: "center",
-//     marginBottom: 4,
-//   },
-//   catRow: {
-//     paddingHorizontal: 20,
-//     paddingVertical: 6,            // vertical breathing room
-//     gap: 8,
-//     flexDirection: "row",
-//     alignItems: "center",
-//   },
-//   catPill: {
-//     height: 36,
-//     paddingHorizontal: 16,
-//     borderRadius: 999,
-//     backgroundColor: C.white,
-//     borderWidth: 1.5,
-//     borderColor: C.border,         // visible grey outline
-//     alignItems: "center",
-//     justifyContent: "center",
-//   },
-//   catPillActive: {
-//     backgroundColor: C.green,
-//     borderColor: C.green,
-//   },
-//   catText: {
-//     fontSize: 13,
-//     fontWeight: "600",
-//     color: C.ink2,                 // darker than muted → readable on white like Image 2
-//     lineHeight: 18,
-//   },
-//   catTextActive: {
-//     color: "#FFFFFF",
-//     fontWeight: "800",
-//   },
-
-//   /* Sections */
-//   section:     { marginTop: 24 },
-//   sectionHead: {
-//     flexDirection: "row", alignItems: "center",
-//     justifyContent: "space-between",
-//     paddingHorizontal: 20, marginBottom: 14,
-//   },
-//   sectionTitle: { fontSize: 20, fontWeight: "900", color: C.ink, letterSpacing: -0.4 },
-//   sectionSub:   { fontSize: 12, color: C.muted, fontWeight: "600", marginTop: 2 },
-//   viewAll:      { fontSize: 13, fontWeight: "800", color: C.green },
-//   cardStrip:    { paddingHorizontal: 20, gap: 12 },
-
-//   /* ── Card ── */
-//   card: {
-//     backgroundColor: C.white, borderRadius: 18, overflow: "hidden",
-//     shadowColor: "#000", shadowOffset: { width: 0, height: 4 },
-//     shadowOpacity: 0.08, shadowRadius: 12, elevation: 4,
-//   },
-//   cardImg: {
-//     width: "100%", height: CARD_IMG,
-//     alignItems: "center", justifyContent: "center",
-//   },
-//   cardEmoji: { fontSize: 48 },
-//   heartBtn: {
-//     position: "absolute", top: 10, right: 10,
-//     width: 32, height: 32, borderRadius: 10,
-//     backgroundColor: "rgba(255,255,255,0.92)",
-//     alignItems: "center", justifyContent: "center",
-//     shadowColor: "#000", shadowOffset: { width: 0, height: 1 },
-//     shadowOpacity: 0.10, shadowRadius: 3, elevation: 2,
-//   },
-
-//   /* Fixed-height body: top section clips, footer always at bottom */
-//   cardBody: {
-//     height: CARD_BODY,
-//     paddingHorizontal: 12, paddingTop: 10, paddingBottom: 10,
-//     justifyContent: "space-between",   // ← pushes footer to bottom always
-//   },
-//   /* Top text section: flex + overflow hidden so it never overflows into footer */
-//   cardTop: {
-//     flex: 1,
-//     overflow: "hidden",
-//     marginBottom: 6,
-//   },
-//   cardTitle: {
-//     fontSize: 13, fontWeight: "900", color: C.ink,
-//     letterSpacing: -0.2, lineHeight: 18,
-//     marginBottom: 4,
-//   },
-//   metaRow:  { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 },
-//   metaText: { fontSize: 10, fontWeight: "600", color: C.muted, flex: 1 },
-
-//   /* Footer — always at bottom, never pushed down by long text */
-//   cardFooter: {
-//     flexDirection: "row", alignItems: "center",
-//     justifyContent: "space-between",
-//     flexShrink: 0,                     // ← never shrinks
-//   },
-//   cardPrice:   { fontSize: 14, fontWeight: "900" },
-//   bookBtn: {
-//     backgroundColor: C.green, borderRadius: 10,
-//     paddingHorizontal: 14, paddingVertical: 6,
-//   },
-//   bookBtnText: { color: "#fff", fontSize: 11, fontWeight: "900" },
-
-//   /* States */
-//   center:      { alignItems: "center", paddingTop: 80 },
-//   loadingBox: {
-//     width: 84, height: 84, borderRadius: 24, backgroundColor: C.greenLt,
-//     borderWidth: 1.5, borderColor: C.green + "44",
-//     alignItems: "center", justifyContent: "center", marginBottom: 16,
-//   },
-//   loadingTitle: { fontSize: 16, fontWeight: "900", color: C.ink, marginBottom: 4 },
-//   loadingSub:   { fontSize: 13, fontWeight: "600", color: C.muted },
-//   empty:        { alignItems: "center", paddingTop: 80 },
-//   emptyTitle:   { fontSize: 18, fontWeight: "900", color: C.ink, marginBottom: 8, textAlign: "center" },
-//   emptySub:     { fontSize: 13, color: C.muted, fontWeight: "600", textAlign: "center", paddingHorizontal: 28, lineHeight: 20 },
-//   emptyBtn:     { marginTop: 18, paddingHorizontal: 24, paddingVertical: 11, borderRadius: 99, backgroundColor: C.green },
-//   emptyBtnText: { color: "#fff", fontSize: 14, fontWeight: "900" },
-// });
 // app/newApp/trip.tsx
-// Shows 2 events per section in a 2-column grid (like Image 2).
-// "View All" → section-events.tsx with full list.
-
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  View, Text, ScrollView, TouchableOpacity, TextInput,
-  RefreshControl, StyleSheet, Platform, StatusBar,
-  Animated, Dimensions, Image,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  TextInput, Image, Animated, Dimensions, Platform,
+  StatusBar, RefreshControl, ActivityIndicator,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import Constants from "expo-constants";
 import * as Location from "expo-location";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
-import { apiFetch } from "../../lib/apiFetch";
+import { useAuth } from "@clerk/clerk-expo";
 import { formatEventDateTime } from "../../lib/dateUtils";
+import FilterSheet from "../../components/Filter/FilterSheet";
+import PersonBookingSheet from "../../components/ClickPin/PersonBookingSheet";
+import type { EventPin } from "../../components/Map/MapView";
 
-// ─────────────────────────────────────────────────────────────
-//  TOKENS
-// ─────────────────────────────────────────────────────────────
+// ─── Design tokens ─────────────────────────────────────────────
 const { width: SW } = Dimensions.get("window");
-const GRID_PAD  = 20;          // horizontal padding on screen
-const GRID_GAP  = 12;          // gap between 2 cards
-const CARD_W    = Math.floor((SW - GRID_PAD * 2 - GRID_GAP) / 2);
-const CARD_IMG  = 130;         // image area height
-const CARD_BODY = 106;         // body area height — always same
+const PAD = 20;
 
 const C = {
-  bg:      "#F7F8F4",
-  white:   "#FFFFFF",
-  green:   "#22C55E",
-  greenLt: "#E6F5EE",
-  ink:     "#191919",
-  ink2:    "#3A3A3A",
-  muted:   "#888888",
-  hint:    "#C0C0C0",
-  border:  "#DEDEDE",
-  red:     "#FF4B6E",
+  bg:          "#F7F8F4",
+  white:       "#FFFFFF",
+  card:        "#FFFFFF",
+  cardBorder:  "#EEEEEE",
+  ink:         "#191919",
+  ink2:        "#3A3A3A",
+  muted:       "#888888",
+  hint:        "#C0C0C0",
+  border:      "#DEDEDE",
+  green:       "#22C55E",
+  red:         "#FF4B6E",
 };
 
 const PALETTES = [
@@ -590,76 +39,137 @@ const PALETTES = [
   "#EAD9F5", "#F5EAD1", "#D3EDF5",
 ];
 
-export const SECTION_META = [
-  { key: "s1", title: "Morning Rituals",  sub: "Start your day right",  subTitle: "Start Your Day Right"  },
-  { key: "s2", title: "Culinary Trails",  sub: "Savour every moment",   subTitle: "Savour Every Moment"   },
-  { key: "s3", title: "Wellness Escapes", sub: "Rejuvenate your mind",  subTitle: "Rejuvenate Your Mind"  },
-];
-
-const CATS = ["All", "Fitness", "Wellness", "Food", "Active", "Nightlife"] as const;
-type CatFilter  = typeof CATS[number];
-type DateFilter = "today" | "tomorrow" | "weekend";
-
-export type TripEvent = {
-  _id: string; emoji?: string; title: string;
-  kind: "free" | "paid" | "service";
-  priceCents?: number; date?: string; time?: string;
-  description?: string;
-  joinPolicy?: "open" | "approval"; attendance?: number; attendees?: any[];
-  location?: { formattedAddress?: string; city?: string; admin1?: string; admin1Code?: string };
-  creatorName?: string;
+// ─── Types ──────────────────────────────────────────────────────
+type TripEvent = {
+  _id: string;
+  title: string;
+  emoji?: string;
   bannerUri?: string;
+  kind?: string;
+  priceCents?: number;
+  date?: string;
+  time?: string;
+  location?: {
+    city?: string;
+    admin1?: string;
+    admin1Code?: string;
+    formattedAddress?: string;
+    address?: string;
+  };
+  creatorName?: string;
 };
 
-function getDateRange(f: DateFilter) {
-  const now = new Date();
-  const p   = (n: number) => String(n).padStart(2, "0");
-  const fmt = (d: Date) => `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-  if (f === "today")    { const s = fmt(now); return { from: s, to: s }; }
-  if (f === "tomorrow") {
-    const t = new Date(now); t.setDate(t.getDate() + 1);
-    return { from: fmt(t), to: fmt(t) };
-  }
-  const day = now.getDay(), dSat = day === 0 ? 6 : 6 - day;
-  const sat = new Date(now); sat.setDate(now.getDate() + dSat);
-  const sun = new Date(sat); sun.setDate(sat.getDate() + 1);
-  return { from: fmt(sat), to: fmt(sun) };
+// ─── Helpers ────────────────────────────────────────────────────
+async function apiFetch(url: string, opts: any) {
+  return fetch(url, { ...opts, headers: { ...opts.headers, "ngrok-skip-browser-warning": "1" } });
 }
 
-// ─────────────────────────────────────────────────────────────
-//  SCREEN
-// ─────────────────────────────────────────────────────────────
+const CATS = ["All", "Fitness", "Wellness", "Food", "Activity"];
+
+// ─── Premium Card Component ─────────────────────────────────────
+function TripCard({ ev, horizontal = false, wished, onWish, onPress }: {
+  ev: TripEvent; horizontal?: boolean; wished?: boolean; onWish?: () => void; onPress?: () => void;
+}) {
+  const heartScale = useRef(new Animated.Value(1)).current;
+  const cardW = horizontal ? SW * 0.72 : (SW - (PAD * 2));
+  
+  const handleWish = () => {
+    Animated.sequence([
+      Animated.timing(heartScale, { toValue: 1.4, duration: 100, useNativeDriver: true }),
+      Animated.timing(heartScale, { toValue: 1, duration: 100, useNativeDriver: true }),
+    ]).start();
+    onWish?.();
+  };
+
+  const isPaid = ev.kind === "paid" || ev.kind === "service";
+  const isService = ev.kind === "service";
+  const price = isPaid ? `₹${((ev.priceCents ?? 0) / 100).toFixed(0)}${isService ? "/hr" : ""}` : "Free";
+  const loc = ev.location?.city || ev.location?.address || ev.location?.formattedAddress || "";
+  const imgUri = ev.bannerUri || (ev as any).bannerImage || (ev as any).banner;
+
+  return (
+    <TouchableOpacity 
+      style={[S.card, { width: cardW }, horizontal && { marginRight: 14 }]} 
+      onPress={onPress} 
+      activeOpacity={0.9}
+    >
+      <View style={[S.cardImgArea, { backgroundColor: PALETTES[Math.abs(ev._id.length) % PALETTES.length] }]}>
+        {imgUri ? (
+          <Image source={{ uri: imgUri }} style={S.cardImg} resizeMode="cover" />
+        ) : (
+          <Text style={S.cardEmoji}>{ev.emoji || "📍"}</Text>
+        )}
+        <TouchableOpacity style={S.heartBtn} onPress={handleWish} activeOpacity={0.8}>
+          <Animated.View style={{ transform: [{ scale: heartScale }] }}>
+            <Ionicons name={wished ? "heart" : "heart-outline"} size={18} color={wished ? C.red : C.ink2} />
+          </Animated.View>
+        </TouchableOpacity>
+      </View>
+      
+      <View style={S.cardBody}>
+        <Text style={S.cardTitle} numberOfLines={1}>{ev.title}</Text>
+        {!!loc && (
+          <View style={S.cardMeta}>
+            <Ionicons name="location-sharp" size={12} color={C.green} />
+            <Text style={S.cardMetaTxt} numberOfLines={1}>{loc}</Text>
+          </View>
+        )}
+        <View style={S.cardMeta}>
+          <Ionicons name="time-outline" size={12} color={C.muted} />
+          <Text style={S.cardMetaTxt} numberOfLines={1}>
+            {formatEventDateTime(ev.date, ev.time) || "Upcoming"}
+          </Text>
+        </View>
+        
+        <View style={S.cardFooter}>
+          <Text style={[S.cardPrice, { color: isPaid ? C.ink : C.green }]}>{price}</Text>
+          <TouchableOpacity style={S.bookBtn} onPress={onPress}>
+            <Text style={S.bookBtnTxt}>Book</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+// ─── Main Screen ───────────────────────────────────────────────
 export default function TripScreen() {
+  const { userId } = useAuth();
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
-  const API_BASE      = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
-  const EVENT_API_KEY = (Constants.expoConfig?.extra as any)?.eventApiKey as string | undefined;
-
-  const [catFilter,  setCatFilter]  = useState<CatFilter>("All");
-  const [dateFilter]                = useState<DateFilter>("today");
-  const [search,     setSearch]     = useState("");
-  const [events,     setEvents]     = useState<TripEvent[]>([]);
-  const [loading,    setLoading]    = useState(false);
+  const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [city,       setCity]       = useState("Nearby");
+  const [events,     setEvents]     = useState<TripEvent[]>([]);
+  const [search,     setSearch]     = useState("");
+  const [catFilter,  setCatFilter]  = useState("All");
   const [wishlist,   setWishlist]   = useState<Set<string>>(new Set());
+  const [city,       setCity]       = useState("Nearby");
+  const [showFilters, setShowFilters] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<EventPin | null>(null);
+  const [sheetVisible, setSheetVisible] = useState(false);
+  const [page, setPage] = useState(0);
+  const pageSize = 10;
 
   const fade = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.timing(fade, { toValue: 1, duration: 360, useNativeDriver: true }).start();
-  }, []);
+
+  const API_BASE      = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string;
+  const EVENT_API_KEY = (Constants.expoConfig?.extra as any)?.eventApiKey as string;
 
   useEffect(() => {
+    Animated.timing(fade, { toValue: 1, duration: 360, useNativeDriver: true }).start();
     (async () => {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== "granted") return;
-        const cur = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        const cur = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
         const rev = await Location.reverseGeocodeAsync({ latitude: cur.coords.latitude, longitude: cur.coords.longitude });
-        const c = (rev?.[0]?.city || "").trim();
+        const c = (rev?.[0]?.city || rev?.[0]?.district || rev?.[0]?.subregion || rev?.[0]?.name || "").trim();
+        console.log("[Trip] Detected location info:", rev?.[0]);
         if (c) setCity(c);
-      } catch {}
+      } catch (err) {
+        console.log("[Trip] Location error:", err);
+      }
     })();
   }, []);
 
@@ -672,15 +182,17 @@ export default function TripScreen() {
     if (!API_BASE) return;
     setLoading(true);
     try {
-      const range  = getDateRange(dateFilter);
-      const params = new URLSearchParams({ limit: "100", upcomingOnly: "1" });
-      if (range) { params.set("dateFrom", range.from); params.set("dateTo", range.to); }
-      const res  = await apiFetch(`${API_BASE}/api/events/get-events?${params}`, { method: "GET", headers });
+      const res = await apiFetch(`${API_BASE}/api/events/get-events?limit=200`, { method: "GET", headers });
       const json = await res.json().catch(() => ({}));
-      setEvents(Array.isArray(json?.events) ? json.events : []);
-    } catch { setEvents([]); }
+      const evs = Array.isArray(json?.events) ? json.events : [];
+      console.log("[Trip] Loaded events count:", evs.length);
+      setEvents(evs);
+    } catch (err) { 
+      console.log("[Trip] Load error:", err);
+      setEvents([]); 
+    }
     finally  { setLoading(false); setRefreshing(false); }
-  }, [API_BASE, headers, dateFilter]);
+  }, [API_BASE, headers]);
 
   useEffect(() => { load(); }, [load]);
   const onRefresh = useCallback(() => { setRefreshing(true); load(); }, [load]);
@@ -690,73 +202,96 @@ export default function TripScreen() {
   }, []);
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return events;
-    const q = search.toLowerCase();
-    return events.filter(e =>
-      e.title.toLowerCase().includes(q) ||
-      (e.location?.city ?? "").toLowerCase().includes(q) ||
-      (e.creatorName ?? "").toLowerCase().includes(q),
-    );
-  }, [events, search]);
+    // ✅ Hide paused pins for non-owners
+    let list = events.filter(e => {
+      const st = String((e as any).status || "active").toLowerCase();
+      const isMine = userId && String((e as any).creatorClerkId) === userId;
+      return st === "active" || st === "live" || (st === "paused" && isMine);
+    });
 
-  // Split into sections — each section gets up to ALL events, but we display only 2 in grid.
-  // We pass ALL section events to section-events screen via router param.
-  const sections = useMemo(() => {
-    if (!filtered.length) return [];
-    const chunk = Math.ceil(filtered.length / SECTION_META.length);
-    return SECTION_META
-      .map((m, i) => ({
-        ...m,
-        events: filtered.slice(i * chunk, i * chunk + chunk), // ALL events for this section
-      }))
-      .filter(s => s.events.length > 0);
-  }, [filtered]);
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(e =>
+        e.title.toLowerCase().includes(q) ||
+        (e.location?.city ?? "").toLowerCase().includes(q) ||
+        (e.location?.address ?? "").toLowerCase().includes(q) ||
+        (e.creatorName ?? "").toLowerCase().includes(q),
+      );
+    }
+    if (catFilter !== "All") {
+      const f = catFilter.toLowerCase();
+      list = list.filter(e => {
+        const title = e.title.toLowerCase();
+        if (f === "fitness") return title.includes("fit");
+        if (f === "wellness") return title.includes("well");
+        if (f === "food") return title.includes("food");
+        return true;
+      });
+    }
+    return list;
+  }, [events, search, catFilter, userId]);
 
-  const TOP = (Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0) + insets.top;
+  const nearbyCityEvents = useMemo(() => {
+    if (!city || city === "Nearby") return [];
+    const q = city.toLowerCase();
+    // LOG ALL EVENTS DATA FOR DEBUGGING
+    console.log("[Trip] Total filtered events:", filtered.length);
+    filtered.forEach((e, idx) => {
+       console.log(`[Trip] Event ${idx} FULL:`, JSON.stringify(e));
+    });
+
+    const matches = filtered.filter(e => {
+      const c = (e.location?.city || e.location?.address || e.location?.formattedAddress || "").toLowerCase();
+      return c.includes(q) || q.includes(c); // Bidirectional check
+    });
+    console.log("[Trip] Nearby matches for", q, ":", matches.length);
+    return matches;
+  }, [filtered, city]);
+
+  const allEvents = useMemo(() => {
+    return filtered.slice(page * pageSize, (page + 1) * pageSize);
+  }, [filtered, page]);
+
+  const totalPages = Math.ceil(filtered.length / pageSize);
+
+  const TOP = (Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0) + 4;
 
   return (
     <Animated.View style={[S.screen, { paddingTop: TOP, opacity: fade }]}>
+      <StatusBar barStyle="dark-content" />
 
       {/* ── HEADER ── */}
-      <View style={S.header}>
+      <View style={S.headerInner}>
         <View>
           <Text style={S.headerTitle}>Trip</Text>
           <Text style={S.headerSub}>Explore the world</Text>
         </View>
         <TouchableOpacity style={S.locationPill} activeOpacity={0.85}>
-          <Ionicons name="location-sharp" size={13} color="#fff" />
+          <Ionicons name="location-sharp" size={14} color="#fff" />
           <Text style={S.locationText} numberOfLines={1}>{city}</Text>
-          <Ionicons name="chevron-down" size={11} color="rgba(255,255,255,0.75)" />
+          <Ionicons name="chevron-down" size={12} color="rgba(255,255,255,0.8)" />
         </TouchableOpacity>
       </View>
 
-      {/* ── SEARCH + FILTER ── */}
+      {/* ── SEARCH ── */}
       <View style={S.searchRow}>
         <View style={S.searchShell}>
-          <Ionicons name="search-outline" size={17} color={C.hint} />
+          <Ionicons name="search-outline" size={18} color={C.hint} />
           <TextInput
             value={search} onChangeText={setSearch}
             placeholder="Search Events or Locations"
             placeholderTextColor={C.hint}
             style={S.searchInput}
-            returnKeyType="search"
           />
-          {!!search && (
-            <TouchableOpacity onPress={() => setSearch("")} hitSlop={12}>
-              <Ionicons name="close-circle" size={16} color={C.hint} />
-            </TouchableOpacity>
-          )}
         </View>
-        <TouchableOpacity
-          style={S.filterBtn}
-          activeOpacity={0.85}
-          onPress={() => router.push("/newApp/filters" as any)}
-        >
+        <TouchableOpacity style={S.filterBtn} activeOpacity={0.8} onPress={() => setShowFilters(true)}>
           <Ionicons name="options-outline" size={20} color="#fff" />
         </TouchableOpacity>
       </View>
 
-      {/* ── CATEGORY PILLS ── */}
+      <FilterSheet visible={showFilters} onClose={() => setShowFilters(false)} />
+
+      {/* ── CATEGORIES ── */}
       <View style={S.catWrapper}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={S.catRow}>
           {CATS.map(cat => {
@@ -771,7 +306,7 @@ export default function TripScreen() {
         </ScrollView>
       </View>
 
-      {/* ── MAIN SCROLL ── */}
+      {/* ── CONTENT ── */}
       <ScrollView
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.green} />}
@@ -779,282 +314,259 @@ export default function TripScreen() {
       >
         {loading && !refreshing ? (
           <View style={S.center}>
-            <View style={S.loadingBox}><Text style={{ fontSize: 36 }}>🔍</Text></View>
+            <ActivityIndicator size="large" color={C.green} />
             <Text style={S.loadingTitle}>Finding events…</Text>
-            <Text style={S.loadingSub}>Looking around {city}</Text>
           </View>
-        ) : sections.length === 0 ? (
+        ) : filtered.length === 0 ? (
           <View style={S.empty}>
             <Text style={{ fontSize: 50, marginBottom: 14 }}>🗓️</Text>
             <Text style={S.emptyTitle}>{search ? `No results for "${search}"` : "No events found"}</Text>
-            <Text style={S.emptySub}>
-              {search ? "Try a different keyword." : "Pull to refresh or adjust filters."}
-            </Text>
-            {!!search && (
-              <TouchableOpacity onPress={() => setSearch("")} style={S.emptyBtn}>
-                <Text style={S.emptyBtnText}>Clear search</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        ) : (
-          sections.map(sec => {
-            // Only show first 2 events in the grid preview
-            const preview = sec.events.slice(0, 2);
-            return (
-              <View key={sec.key} style={S.section}>
-                {/* Section header */}
-                <View style={S.sectionHead}>
-                  <View>
-                    <Text style={S.sectionTitle}>{sec.title}</Text>
-                    <Text style={S.sectionSub}>{sec.sub}</Text>
-                  </View>
-                  {/* VIEW ALL — navigates to section-events screen */}
-                  <TouchableOpacity
-                    activeOpacity={0.75}
-                    style={S.viewAllBtn}
-                    onPress={() =>
-                      router.push({
-                        pathname: "/newApp/section-events" as any,
-                        params: {
-                          sectionKey:   sec.key,
-                          sectionTitle: sec.title,
-                          sectionSub:   sec.sub,
-                          subTitle:     sec.subTitle,
-                          // Pass serialized events to avoid re-fetch on simple nav
-                          eventsJson:   JSON.stringify(sec.events),
-                        },
-                      })
-                    }
-                  >
-                    <Text style={S.viewAllText}>View All</Text>
-                  </TouchableOpacity>
-                </View>
-
-                {/* ── 2-column grid (only 2 cards) ── */}
-                <View style={S.gridRow}>
-                  {preview.map((ev, i) => (
-                    <GridCard
-                      key={ev._id}
-                      ev={ev}
-                      paletteIdx={i}
-                      wished={wishlist.has(ev._id)}
-                      onWish={() => toggleWish(ev._id)}
-                      onPress={() =>
-                        router.push({
-                          pathname: "/newApp/event-detail" as any,
-                          params: { eventId: ev._id, kind: ev.kind, title: ev.title, emoji: ev.emoji || "📍" },
-                        })
-                      }
-                    />
-                  ))}
-                </View>
-              </View>
-            );
-          })
-        )}
-      </ScrollView>
-    </Animated.View>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────
-//  GRID CARD — 2-column, fixed dimensions
-// ─────────────────────────────────────────────────────────────
-function GridCard({ ev, paletteIdx, wished, onWish, onPress }: {
-  ev: TripEvent; paletteIdx: number;
-  wished: boolean; onWish: () => void; onPress: () => void;
-}) {
-  const op         = useRef(new Animated.Value(0)).current;
-  const heartScale = useRef(new Animated.Value(1)).current;
-
-  useEffect(() => {
-    Animated.timing(op, { toValue: 1, duration: 300, delay: paletteIdx * 80, useNativeDriver: true }).start();
-  }, []);
-
-  const handleWish = () => {
-    Animated.sequence([
-      Animated.timing(heartScale, { toValue: 1.45, duration: 100, useNativeDriver: true }),
-      Animated.timing(heartScale, { toValue: 1,    duration: 100, useNativeDriver: true }),
-    ]).start();
-    onWish();
-  };
-
-  const isPaid = ev.kind === "paid";
-  const price  = isPaid ? `$${((ev.priceCents ?? 0) / 100).toFixed(0)}` : "Free";
-  const loc    = ev.location?.city
-    ? [ev.location.city, ev.location.admin1 || ev.location.admin1Code].filter(Boolean).join(", ")
-    : ev.location?.formattedAddress ?? "";
-
-  return (
-    <Animated.View style={{ opacity: op }}>
-      <TouchableOpacity style={[G.card, { width: CARD_W }]} onPress={onPress} activeOpacity={0.88}>
-
-        {/* Image area */}
-        <View style={[G.imgArea, !ev.bannerUri && { backgroundColor: PALETTES[paletteIdx % PALETTES.length] }]}>
-          {ev.bannerUri ? (
-            <Image 
-              source={{ uri: ev.bannerUri }} 
-              style={StyleSheet.absoluteFill} 
-              resizeMode="cover" 
-            />
-          ) : (
-            <Text style={G.emoji}>{ev.emoji || "📍"}</Text>
-          )}
-          {/* Heart */}
-          <TouchableOpacity style={G.heartBtn} onPress={handleWish} hitSlop={10} activeOpacity={0.8}>
-            <Animated.View style={{ transform: [{ scale: heartScale }] }}>
-              <Ionicons name={wished ? "heart" : "heart-outline"} size={15} color={wished ? C.red : "#555"} />
-            </Animated.View>
-          </TouchableOpacity>
-        </View>
-
-        {/* Body — fixed height, footer always at bottom */}
-        <View style={G.body}>
-          <View style={G.bodyTop}>
-            <Text style={G.title} numberOfLines={1}>{ev.title}</Text>
-            {!!loc && (
-              <View style={G.metaRow}>
-                <Ionicons name="location-sharp" size={9} color={C.green} />
-                <Text style={G.metaText} numberOfLines={1}>{loc}</Text>
-              </View>
-            )}
-            {!!(ev.time || ev.date) && (
-              <View style={G.metaRow}>
-                <Ionicons name="time-outline" size={10} color={C.muted} />
-                <Text style={G.metaText} numberOfLines={1}>
-                  {formatEventDateTime(ev.date, ev.time)}
-                </Text>
-              </View>
-            )}
-          </View>
-          {/* Footer always at bottom */}
-          <View style={G.footer}>
-            <Text style={[G.price, { color: isPaid ? C.ink : C.green }]}>{price}</Text>
-            <TouchableOpacity style={G.bookBtn} onPress={onPress} activeOpacity={0.85}>
-              <Text style={G.bookTxt}>Book</Text>
+            <TouchableOpacity onPress={() => setSearch("")} style={S.emptyBtn}>
+              <Text style={S.emptyBtnText}>Clear search</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        ) : (
+          <>
+            {/* Nearby Section */}
+            <View style={S.section}>
+              <View style={S.sectionHead}>
+                <View>
+                  <Text style={S.sectionTitle}>Nearby in {city}</Text>
+                  <Text style={S.sectionSub}>Events happening in your city</Text>
+                </View>
+              </View>
+              {nearbyCityEvents.length > 0 ? (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={S.horizontalList}>
+                  {nearbyCityEvents.map(ev => (
+                    <TripCard 
+                      key={ev._id} 
+                      ev={ev} 
+                      horizontal 
+                      wished={wishlist.has(ev._id)} 
+                      onWish={() => toggleWish(ev._id)}
+                      onPress={() => {
+                        setSelectedEvent(ev as any);
+                        setSheetVisible(true);
+                      }}
+                    />
+                  ))}
+                </ScrollView>
+              ) : (
+                <View style={S.emptyCityBox}>
+                  <Ionicons name="location-outline" size={24} color={C.muted} />
+                  <Text style={S.emptyCityTxt}>No events found in {city} yet.</Text>
+                </View>
+              )}
+            </View>
 
-      </TouchableOpacity>
+            {/* All Events Section */}
+            <View style={[S.section, { marginTop: 24 }]}>
+              <View style={S.sectionHead}>
+                <Text style={S.sectionTitle}>All Events</Text>
+                <Text style={S.sectionSub}>Discover more experiences</Text>
+              </View>
+              <View style={S.verticalList}>
+                {allEvents.length > 0 ? (
+                  allEvents.map(ev => (
+                    <TripCard 
+                      key={ev._id} 
+                      ev={ev} 
+                      wished={wishlist.has(ev._id)} 
+                      onWish={() => toggleWish(ev._id)}
+                      onPress={() => {
+                        setSelectedEvent(ev as any);
+                        setSheetVisible(true);
+                      }}
+                    />
+                  ))
+                ) : (
+                  <Text style={S.emptyTxt}>No events available.</Text>
+                )}
+              </View>
+
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <View style={S.paginationRow}>
+                  <TouchableOpacity 
+                    style={[S.pageBtn, page === 0 && S.pageBtnDisabled]} 
+                    disabled={page === 0}
+                    onPress={() => setPage(p => Math.max(0, p - 1))}
+                  >
+                    <Ionicons name="chevron-back" size={24} color={page === 0 ? C.hint : "#fff"} />
+                  </TouchableOpacity>
+                  
+                  <View style={S.pageIndicator}>
+                    <Text style={S.pageIndicatorTxt}>{page + 1} / {totalPages}</Text>
+                  </View>
+
+                  <TouchableOpacity 
+                    style={[S.pageBtn, page >= totalPages - 1 && S.pageBtnDisabled]} 
+                    disabled={page >= totalPages - 1}
+                    onPress={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+                  >
+                    <Ionicons name="chevron-forward" size={24} color={page >= totalPages - 1 ? C.hint : "#fff"} />
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          </>
+        )}
+      </ScrollView>
+
+      <PersonBookingSheet
+        visible={sheetVisible}
+        onClose={() => setSheetVisible(false)}
+        person={selectedEvent}
+      />
     </Animated.View>
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-//  STYLES
-// ─────────────────────────────────────────────────────────────
+// ─── Styles ───────────────────────────────────────────────────
 const S = StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.bg },
-  header: {
-    flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between",
-    paddingHorizontal: GRID_PAD, paddingTop: 14, paddingBottom: 6,
-  },
-  headerTitle: { fontSize: 28, fontWeight: "900", color: C.ink, letterSpacing: -0.6 },
-  headerSub:   { fontSize: 13, color: C.muted, fontWeight: "600", marginTop: 1 },
+  header: { paddingHorizontal: PAD, paddingBottom: 12 },
+  headerInner: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingTop: 8, paddingBottom: 10, paddingHorizontal: PAD },
+  headerTitle: { fontSize: 32, fontWeight: "900", color: C.ink, letterSpacing: -0.8 },
+  headerSub:   { fontSize: 14, color: C.muted, fontWeight: "600", marginTop: -2 },
   locationPill: {
-    flexDirection: "row", alignItems: "center", gap: 5,
-    backgroundColor: C.green, borderRadius: 22,
-    paddingHorizontal: 12, paddingVertical: 9, maxWidth: 140,
-    shadowColor: C.green, shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.30, shadowRadius: 8, elevation: 5,
+    flexDirection: "row", alignItems: "center", gap: 6,
+    backgroundColor: C.green, borderRadius: 20,
+    paddingHorizontal: 12, paddingVertical: 8,
+    shadowColor: C.green, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4,
   },
-  locationText: { color: "#fff", fontSize: 12, fontWeight: "800", flex: 1 },
+  locationText: { color: "#fff", fontSize: 13, fontWeight: "800", maxWidth: 100 },
 
   searchRow: {
-    flexDirection: "row", alignItems: "center", gap: 10,
-    paddingHorizontal: GRID_PAD, paddingVertical: 10,
+    flexDirection: "row", alignItems: "center", gap: 12,
+    paddingHorizontal: PAD, marginVertical: 15,
   },
   searchShell: {
     flex: 1, flexDirection: "row", alignItems: "center", gap: 10,
-    backgroundColor: C.white, borderRadius: 14,
-    borderWidth: 1.5, borderColor: C.border,
-    paddingHorizontal: 14, paddingVertical: 11,
-    shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05, shadowRadius: 6, elevation: 2,
+    backgroundColor: C.white, borderRadius: 16,
+    paddingHorizontal: 15, height: 54,
+    borderWidth: 1, borderColor: C.cardBorder,
+    shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 10, elevation: 2,
   },
-  searchInput: { flex: 1, fontSize: 14, fontWeight: "600", color: C.ink },
+  searchInput: { flex: 1, fontSize: 15, fontWeight: "600", color: C.ink },
   filterBtn: {
-    width: 46, height: 46, borderRadius: 14,
+    width: 54, height: 54, borderRadius: 16,
     backgroundColor: C.green, alignItems: "center", justifyContent: "center",
-    shadowColor: C.green, shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.30, shadowRadius: 8, elevation: 5,
+    shadowColor: C.green, shadowOpacity: 0.3, shadowRadius: 10, elevation: 4,
   },
 
-  catWrapper: { height: 52, justifyContent: "center", marginBottom: 4 },
-  catRow:     { paddingHorizontal: GRID_PAD, paddingVertical: 6, gap: 8, flexDirection: "row", alignItems: "center" },
+  catWrapper: { marginBottom: 10 },
+  catRow:     { paddingHorizontal: PAD, gap: 10 },
   catPill: {
-    height: 36, paddingHorizontal: 16, borderRadius: 999,
-    backgroundColor: C.white, borderWidth: 1.5, borderColor: C.border,
+    paddingHorizontal: 20, height: 40, borderRadius: 12,
+    backgroundColor: C.white, borderWidth: 1, borderColor: C.cardBorder,
     alignItems: "center", justifyContent: "center",
   },
   catPillActive: { backgroundColor: C.green, borderColor: C.green },
-  catText:       { fontSize: 13, fontWeight: "600", color: C.ink2, lineHeight: 18 },
-  catTextActive: { color: "#fff", fontWeight: "800" },
+  catText:       { fontSize: 14, fontWeight: "700", color: C.ink2 },
+  catTextActive: { color: "#fff" },
 
-  section:     { marginTop: 24 },
+  section:     { marginTop: 10 },
   sectionHead: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    paddingHorizontal: GRID_PAD, marginBottom: 14,
+    paddingHorizontal: PAD, marginBottom: 15,
   },
-  sectionTitle: { fontSize: 20, fontWeight: "900", color: C.ink, letterSpacing: -0.4 },
-  sectionSub:   { fontSize: 12, color: C.muted, fontWeight: "600", marginTop: 2 },
-  viewAllBtn:   { paddingVertical: 4, paddingLeft: 12 },
-  viewAllText:  { fontSize: 13, fontWeight: "800", color: C.green },
+  sectionTitle: { fontSize: 22, fontWeight: "900", color: C.ink, letterSpacing: -0.5 },
+  sectionSub:   { fontSize: 13, color: C.muted, fontWeight: "600", marginTop: 2 },
 
-  // 2-column grid row
-  gridRow: {
-    flexDirection: "row",
-    paddingHorizontal: GRID_PAD,
-    gap: GRID_GAP,
-  },
+  horizontalList: { paddingLeft: PAD, paddingBottom: 10 },
+  verticalList:   { paddingHorizontal: PAD, gap: 16 },
 
-  center:      { alignItems: "center", paddingTop: 80 },
-  loadingBox: {
-    width: 84, height: 84, borderRadius: 24, backgroundColor: C.greenLt,
-    borderWidth: 1.5, borderColor: C.green + "44",
-    alignItems: "center", justifyContent: "center", marginBottom: 16,
-  },
-  loadingTitle: { fontSize: 16, fontWeight: "900", color: C.ink, marginBottom: 4 },
-  loadingSub:   { fontSize: 13, fontWeight: "600", color: C.muted },
-  empty:        { alignItems: "center", paddingTop: 80 },
-  emptyTitle:   { fontSize: 18, fontWeight: "900", color: C.ink, marginBottom: 8, textAlign: "center" },
-  emptySub:     { fontSize: 13, color: C.muted, fontWeight: "600", textAlign: "center", paddingHorizontal: 28, lineHeight: 20 },
-  emptyBtn:     { marginTop: 18, paddingHorizontal: 24, paddingVertical: 11, borderRadius: 99, backgroundColor: C.green },
-  emptyBtnText: { color: "#fff", fontSize: 14, fontWeight: "900" },
-});
-
-// Grid card styles
-const G = StyleSheet.create({
   card: {
-    backgroundColor: C.white, borderRadius: 16, overflow: "hidden",
-    shadowColor: "#000", shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.07, shadowRadius: 10, elevation: 3,
+    backgroundColor: C.white, borderRadius: 24, overflow: "hidden",
+    borderWidth: 1, borderColor: C.cardBorder,
+    shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 15, elevation: 3,
   },
-  imgArea: {
-    width: "100%", height: CARD_IMG,
-    alignItems: "center", justifyContent: "center",
-  },
-  emoji: { fontSize: 42 },
+  cardImgArea: { width: "100%", height: 160, alignItems: "center", justifyContent: "center" },
+  cardImg: { width: "100%", height: "100%" },
+  cardEmoji: { fontSize: 50 },
   heartBtn: {
-    position: "absolute", top: 8, right: 8,
-    width: 28, height: 28, borderRadius: 8,
-    backgroundColor: "rgba(255,255,255,0.92)",
+    position: "absolute", top: 12, right: 12,
+    width: 36, height: 36, borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.9)",
     alignItems: "center", justifyContent: "center",
-    shadowColor: "#000", shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.10, shadowRadius: 2, elevation: 2,
   },
-  body: {
-    height: CARD_BODY,
-    paddingHorizontal: 10, paddingTop: 9, paddingBottom: 9,
-    justifyContent: "space-between",
+  cardBody: { padding: 16 },
+  cardTitle: { fontSize: 18, fontWeight: "800", color: C.ink, marginBottom: 6 },
+  cardMeta:  { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 },
+  cardMetaTxt: { fontSize: 13, color: C.muted, fontWeight: "600" },
+  cardFooter: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: "#F0F0F0",
   },
-  bodyTop: { flex: 1, overflow: "hidden" },
-  title: { fontSize: 12, fontWeight: "900", color: C.ink, letterSpacing: -0.2, marginBottom: 4, lineHeight: 16 },
-  metaRow:  { flexDirection: "row", alignItems: "center", gap: 3, marginTop: 2 },
-  metaText: { fontSize: 9, fontWeight: "600", color: C.muted, flex: 1 },
-  footer:   { flexDirection: "row", alignItems: "center", justifyContent: "space-between", flexShrink: 0 },
-  price:    { fontSize: 13, fontWeight: "900" },
-  bookBtn:  { backgroundColor: C.green, borderRadius: 8, paddingHorizontal: 11, paddingVertical: 5 },
-  bookTxt:  { color: "#fff", fontSize: 10, fontWeight: "900" },
+  cardPrice: { fontSize: 18, fontWeight: "900" },
+  bookBtn: {
+    backgroundColor: C.green, borderRadius: 12,
+    paddingHorizontal: 20, paddingVertical: 10,
+  },
+  bookBtnTxt: { color: "#fff", fontSize: 14, fontWeight: "800" },
+
+  center: { flex: 1, alignItems: "center", justifyContent: "center", marginTop: 100 },
+  loadingTitle: { fontSize: 16, fontWeight: "700", color: C.muted, marginTop: 12 },
+  empty: { flex: 1, alignItems: "center", justifyContent: "center", marginTop: 80 },
+  emptyTitle: { fontSize: 16, fontWeight: "700", color: C.muted, marginBottom: 15 },
+  emptyBtn: { backgroundColor: C.green, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10 },
+  emptyBtnText: { color: "#fff", fontWeight: "700" },
+  emptyTxt: { textAlign: "center", color: C.muted, marginTop: 10, fontWeight: "600" },
+
+  emptyCityBox: {
+    marginHorizontal: PAD,
+    height: 120,
+    backgroundColor: C.white,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: C.cardBorder,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderStyle: "dashed",
+  },
+  emptyCityTxt: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: C.muted,
+  },
+  
+  paginationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 24,
+    gap: 20,
+  },
+  pageBtn: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: C.green,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: C.green,
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  pageBtnDisabled: {
+    backgroundColor: "#F0F0F0",
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  pageIndicator: {
+    backgroundColor: C.white,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: C.cardBorder,
+  },
+  pageIndicatorTxt: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: C.ink,
+  },
 });

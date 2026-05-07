@@ -1,514 +1,5 @@
-// // components/EventsListModal.tsx
-// import React, { useMemo, useState } from "react";
-// import {
-//   Modal,
-//   Pressable,
-//   ScrollView,
-//   StyleSheet,
-//   Text,
-//   TextInput,
-//   TouchableOpacity,
-//   View,
-//   Platform,
-// } from "react-native";
-
-// import Ionicons from "@expo/vector-icons/Ionicons";
-
-
-// type EventPin = {
-//   title: string;
-//   lat: number;
-//   lng: number;
-//   emoji: string;
-//   when?: string;
-//   address?: string;
-// };
-
-// function parseDateKey(when?: string) {
-//   const d = (when || "").split("·")[0]?.trim();
-//   return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : "No date";
-// }
-
-// function groupByDate(list: EventPin[]) {
-//   const m = new Map<string, EventPin[]>();
-//   for (const e of list) {
-//     const k = parseDateKey(e.when);
-//     if (!m.has(k)) m.set(k, []);
-//     m.get(k)!.push(e);
-//   }
-//   const keys = Array.from(m.keys()).sort((a, b) => {
-//     if (a === "No date") return 1;
-//     if (b === "No date") return -1;
-//     return a.localeCompare(b);
-//   });
-//   return keys.map((k) => ({ date: k, items: m.get(k)! }));
-// }
-
-// function splitParts(address?: string) {
-//   return (address || "")
-//     .split(",")
-//     .map((p) => p.trim())
-//     .filter(Boolean);
-// }
-
-// function isStreetLike(s: string) {
-//   const x = (s || "").toLowerCase();
-//   return (
-//     /\d/.test(x) ||
-//     /\b(st|street|ave|avenue|rd|road|blvd|boulevard|dr|drive|ln|lane|ct|court|hwy|highway|suite|ste|apt|unit|#)\b/.test(
-//       x
-//     )
-//   );
-// }
-
-// function extractCityState(address?: string) {
-//   const parts = splitParts(address);
-//   if (parts.length === 0) return { city: "", state: "" };
-//   if (parts.length === 1) return { city: parts[0], state: "" };
-
-//   const p0 = parts[0];
-//   const hasStreet = isStreetLike(p0);
-
-//   const city = hasStreet ? parts[1] || "" : parts[0] || "";
-//   const statePart = hasStreet ? parts[2] || "" : parts[1] || "";
-//   const state = (statePart.split(" ")[0] || "").trim();
-
-//   return { city: city.trim(), state: state.trim() };
-// }
-
-// function normalizeCity(s: string) {
-//   const x = (s || "").trim().toLowerCase();
-//   if (!x) return "";
-//   const cleaned = x.replace(/\./g, "").replace(/\s+/g, " ");
-//   if (cleaned === "nyc" || cleaned === "new york city" || cleaned === "manhattan") return "new york";
-//   return cleaned;
-// }
-
-// function normalizeQuery(s: string) {
-//   return (s || "")
-//     .trim()
-//     .toLowerCase()
-//     .replace(/\./g, "")
-//     .replace(/\s+/g, " ");
-// }
-
-// function formatHeaderCity(myCity: string) {
-//   const c = (myCity || "").trim();
-//   return c ? c : "Unknown";
-// }
-
-// function niceDateLabel(key: string) {
-//   if (key === "No date") return "No date";
-//   // keep it simple: show YYYY-MM-DD as-is (fast + predictable)
-//   return key;
-// }
-
-// export default function EventsListModal({
-//   visible,
-//   onClose,
-//   events,
-//   myCity,
-// }: {
-//   visible: boolean;
-//   onClose: () => void;
-//   events: EventPin[];
-//   myCity: string;
-// }) {
-//   const [tab, setTab] = useState<"my" | "other">("my");
-//   const [q, setQ] = useState("");
-
-//   const myCityKey = useMemo(() => normalizeCity(myCity), [myCity]);
-
-//   const myCityEvents = useMemo(() => {
-//     const base = (events || []).filter((e) => (e.address || "").trim().length > 0);
-//     if (!myCityKey) return [];
-//     return base.filter((e) => normalizeCity(extractCityState(e.address).city) === myCityKey);
-//   }, [events, myCityKey]);
-
-//   const otherCityEvents = useMemo(() => {
-//     const base = (events || []).filter((e) => (e.address || "").trim().length > 0);
-//     const query = normalizeCity(q);
-//     if (!query) return [];
-//     return base.filter((e) => {
-//       const { city, state } = extractCityState(e.address);
-//       const cityKey = normalizeCity(city);
-//       const fullKey = normalizeQuery(e.address || "");
-//       const cityStateKey = normalizeQuery([city, state].filter(Boolean).join(" "));
-//       return cityKey.includes(query) || cityStateKey.includes(query) || fullKey.includes(query);
-//     });
-//   }, [events, q]);
-
-//   const groupedMy = useMemo(() => groupByDate(myCityEvents), [myCityEvents]);
-//   const groupedOther = useMemo(() => groupByDate(otherCityEvents), [otherCityEvents]);
-//   const showing = tab === "my" ? groupedMy : groupedOther;
-
-//   const headerPillText = tab === "my" ? `📍 ${formatHeaderCity(myCity)}` : "🌎 Explore";
-
-//   return (
-//     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-//       <View style={styles.root}>
-//         {/* Backdrop */}
-//         <Pressable style={styles.backdrop} onPress={onClose} />
-
-//         {/* Sheet */}
-//         <View style={styles.sheet}>
-//           {/* Grabber */}
-//           <View style={styles.grabberWrap}>
-//             <View style={styles.grabber} />
-//           </View>
-
-//           {/* Top header */}
-//           <View style={styles.top}>
-//             <View style={{ flex: 1 }}>
-//               <Text style={styles.hTitle}>Events</Text>
-//               <View style={styles.pillRow}>
-//                 <View style={styles.headerPill}>
-//                   <Text style={styles.headerPillText}>{headerPillText}</Text>
-//                 </View>
-
-//                 <View style={styles.countPill}>
-//                   <Text style={styles.countPillText}>
-//                     {tab === "my" ? myCityEvents.length : otherCityEvents.length}
-//                   </Text>
-//                 </View>
-//               </View>
-//             </View>
-
-//             <TouchableOpacity onPress={onClose} style={styles.closeBtn} activeOpacity={0.9}>
-//               <Text style={styles.closeText}>✕</Text>
-//             </TouchableOpacity>
-//           </View>
-
-//           {/* Tabs (segmented control) */}
-//           <View style={styles.segmentWrap}>
-//             <View style={styles.segment}>
-//               <TouchableOpacity
-//                 activeOpacity={0.9}
-//                 onPress={() => setTab("my")}
-//                 style={[styles.segmentBtn, tab === "my" && styles.segmentBtnActive]}
-//               >
-//                 <Text style={[styles.segmentText, tab === "my" && styles.segmentTextActive]}>
-//                   Your city
-//                 </Text>
-//               </TouchableOpacity>
-
-//               <TouchableOpacity
-//                 activeOpacity={0.9}
-//                 onPress={() => setTab("other")}
-//                 style={[styles.segmentBtn, tab === "other" && styles.segmentBtnActive]}
-//               >
-//                 <Text style={[styles.segmentText, tab === "other" && styles.segmentTextActive]}>
-//                   Other city
-//                 </Text>
-//               </TouchableOpacity>
-//             </View>
-//           </View>
-
-//           {/* Search (Other) */}
-//           {tab === "other" && (
-//             <View style={styles.searchCard}>
-//               <Text style={styles.searchLabel}>Search city</Text>
-//               <View style={styles.searchRow}>
-//                 <Ionicons name="search-outline" size={18} color="rgba(255,255,255,0.75)" />
-
-//                 <TextInput
-//                   value={q}
-//                   onChangeText={setQ}
-//                   placeholder="New York, Boston, Potsdam…"
-//                   placeholderTextColor="rgba(255,255,255,0.55)"
-//                   style={styles.searchInput}
-//                   autoCorrect={false}
-//                   autoCapitalize="words"
-//                   returnKeyType="search"
-//                 />
-
-//                 {!!q && (
-//                   <TouchableOpacity onPress={() => setQ("")} style={styles.xBtn} activeOpacity={0.9}>
-//                     <Text style={styles.xBtnText}>×</Text>
-//                   </TouchableOpacity>
-//                 )}
-//               </View>
-
-//               <Text style={styles.searchHint}>
-//                 Tip: “NYC” and “New York” both work.
-//               </Text>
-//             </View>
-//           )}
-
-//           {/* Content */}
-//           <ScrollView
-//             showsVerticalScrollIndicator={false}
-//             contentContainerStyle={{ paddingBottom: 24 }}
-//           >
-//             {tab === "other" && !q.trim() ? (
-//               <View style={styles.emptyWrap}>
-//                 <Text style={styles.emptyEmoji}>🗺️</Text>
-//                 <Text style={styles.emptyTitle}>Find events anywhere</Text>
-//                 <Text style={styles.emptySub}>Search a city to see events grouped by date.</Text>
-//               </View>
-//             ) : showing.length === 0 ? (
-//               <View style={styles.emptyWrap}>
-//                 <Text style={styles.emptyEmoji}>{tab === "my" ? "🎈" : "🔎"}</Text>
-//                 <Text style={styles.emptyTitle}>No events found</Text>
-//                 <Text style={styles.emptySub}>
-//                   {tab === "my"
-//                     ? myCityKey
-//                       ? "Nothing in your city yet."
-//                       : "Location is unavailable."
-//                     : "Try a different city name."}
-//                 </Text>
-//               </View>
-//             ) : (
-//               showing.map((g) => (
-//                 <View key={g.date} style={styles.section}>
-//                   <View style={styles.sectionHeader}>
-//                     <Text style={styles.sectionTitle}>{niceDateLabel(g.date)}</Text>
-//                     <View style={styles.sectionLine} />
-//                     <Text style={styles.sectionCount}>{g.items.length}</Text>
-//                   </View>
-
-//                   {g.items.map((e, idx) => {
-//                     const { city, state } = extractCityState(e.address);
-//                     const cityText = [city, state].filter(Boolean).join(", ") || "Unknown city";
-
-//                     return (
-//                       <View key={`${e.title}-${e.lat}-${e.lng}-${idx}`} style={styles.card}>
-//                         <View style={styles.cardLeft}>
-//                           <View style={styles.emojiBubble}>
-//                             <Text style={styles.emojiText}>{e.emoji ?? "📍"}</Text>
-//                           </View>
-//                         </View>
-
-//                         <View style={styles.cardMid}>
-//                           <Text numberOfLines={1} style={styles.cardTitle}>
-//                             {e.title}
-//                           </Text>
-//                           <Text numberOfLines={1} style={styles.cardMeta}>
-//                             {cityText}
-//                             {e.when ? `  •  ${e.when}` : ""}
-//                           </Text>
-//                         </View>
-
-//                         <View style={styles.cardRight}>
-//                           <View style={styles.chevron}>
-//                             <Text style={styles.chevronText}>›</Text>
-//                           </View>
-//                         </View>
-//                       </View>
-//                     );
-//                   })}
-//                 </View>
-//               ))
-//             )}
-//           </ScrollView>
-//         </View>
-//       </View>
-//     </Modal>
-//   );
-// }
-
-// const styles = StyleSheet.create({
-//   root: { flex: 1, justifyContent: "flex-end" },
-//   backdrop: {
-//     ...StyleSheet.absoluteFillObject,
-//     backgroundColor: "rgba(2,6,23,0.60)",
-//   },
-
-//   sheet: {
-//     backgroundColor: "#0B1220",
-//     borderTopLeftRadius: 26,
-//     borderTopRightRadius: 26,
-//     minHeight: "86%",
-//     maxHeight: "96%",
-//     overflow: "hidden",
-//     shadowColor: "#000",
-//     shadowOpacity: 0.35,
-//     shadowRadius: 24,
-//     shadowOffset: { width: 0, height: -12 },
-//   },
-
-//   grabberWrap: { alignItems: "center", paddingTop: 10, paddingBottom: 6 },
-//   grabber: { width: 54, height: 5, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.22)" },
-
-//   top: {
-//     paddingHorizontal: 16,
-//     paddingTop: 8,
-//     paddingBottom: 10,
-//     flexDirection: "row",
-//     alignItems: "center",
-//     gap: 12,
-//   },
-//   hTitle: {
-//     color: "#fff",
-//     fontSize: 22,
-//     fontWeight: "900",
-//     letterSpacing: 0.2,
-//   },
-
-//   pillRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 8 },
-//   headerPill: {
-//     paddingHorizontal: 12,
-//     paddingVertical: 8,
-//     borderRadius: 999,
-//     backgroundColor: "rgba(255,255,255,0.10)",
-//     borderWidth: StyleSheet.hairlineWidth,
-//     borderColor: "rgba(255,255,255,0.10)",
-//   },
-//   headerPillText: { color: "rgba(255,255,255,0.92)", fontWeight: "900", fontSize: 12 },
-
-//   countPill: {
-//     minWidth: 34,
-//     alignItems: "center",
-//     justifyContent: "center",
-//     paddingHorizontal: 10,
-//     paddingVertical: 8,
-//     borderRadius: 999,
-//     backgroundColor: "rgba(10,132,255,0.22)",
-//     borderWidth: StyleSheet.hairlineWidth,
-//     borderColor: "rgba(10,132,255,0.35)",
-//   },
-//   countPillText: { color: "#fff", fontWeight: "900", fontSize: 12 },
-
-//   closeBtn: {
-//     width: 42,
-//     height: 42,
-//     borderRadius: 14,
-//     alignItems: "center",
-//     justifyContent: "center",
-//     backgroundColor: "rgba(255,255,255,0.10)",
-//     borderWidth: StyleSheet.hairlineWidth,
-//     borderColor: "rgba(255,255,255,0.12)",
-//   },
-//   closeText: { color: "#fff", fontSize: 16, fontWeight: "900" },
-
-//   segmentWrap: { paddingHorizontal: 16, paddingBottom: 10 },
-//   segment: {
-//     flexDirection: "row",
-//     backgroundColor: "rgba(255,255,255,0.08)",
-//     borderRadius: 999,
-//     padding: 4,
-//     borderWidth: StyleSheet.hairlineWidth,
-//     borderColor: "rgba(255,255,255,0.10)",
-//   },
-//   segmentBtn: { flex: 1, paddingVertical: 10, borderRadius: 999, alignItems: "center" },
-//   segmentBtnActive: {
-//     backgroundColor: "rgba(10,132,255,0.95)",
-//     shadowColor: "#0A84FF",
-//     shadowOpacity: 0.35,
-//     shadowRadius: 14,
-//     shadowOffset: { width: 0, height: 10 },
-//   },
-//   segmentText: { color: "rgba(255,255,255,0.80)", fontWeight: "900" },
-//   segmentTextActive: { color: "#fff" },
-
-//   searchCard: {
-//     marginHorizontal: 16,
-//     borderRadius: 18,
-//     padding: 14,
-//     backgroundColor: "rgba(255,255,255,0.08)",
-//     borderWidth: StyleSheet.hairlineWidth,
-//     borderColor: "rgba(255,255,255,0.10)",
-//     marginBottom: 10,
-//   },
-//   searchLabel: { color: "rgba(255,255,255,0.85)", fontWeight: "900", fontSize: 12, marginBottom: 10 },
-//   searchRow: {
-//     flexDirection: "row",
-//     alignItems: "center",
-//     borderRadius: 14,
-//     paddingHorizontal: 12,
-//     paddingVertical: Platform.OS === "ios" ? 12 : 10,
-//     backgroundColor: "rgba(2,6,23,0.55)",
-//     borderWidth: StyleSheet.hairlineWidth,
-//     borderColor: "rgba(255,255,255,0.10)",
-//     gap: 8,
-//   },
-//   searchIcon: { color: "rgba(255,255,255,0.75)", fontWeight: "900" },
-//   searchInput: { flex: 1, color: "#fff", fontWeight: "900" },
-//   xBtn: {
-//     width: 30,
-//     height: 30,
-//     borderRadius: 12,
-//     alignItems: "center",
-//     justifyContent: "center",
-//     backgroundColor: "rgba(255,255,255,0.12)",
-//   },
-//   xBtnText: { color: "#fff", fontSize: 18, fontWeight: "900", lineHeight: 18 },
-//   searchHint: { marginTop: 10, color: "rgba(255,255,255,0.55)", fontWeight: "700", fontSize: 12 },
-
-//   section: { paddingHorizontal: 16, paddingTop: 12 },
-//   sectionHeader: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 },
-//   sectionTitle: { color: "rgba(255,255,255,0.92)", fontWeight: "900", fontSize: 13 },
-//   sectionLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: "rgba(255,255,255,0.10)" },
-//   sectionCount: { color: "rgba(255,255,255,0.60)", fontWeight: "900", fontSize: 12 },
-
-//   card: {
-//     flexDirection: "row",
-//     alignItems: "center",
-//     gap: 12,
-//     padding: 14,
-//     borderRadius: 18,
-//     backgroundColor: "rgba(255,255,255,0.08)",
-//     borderWidth: StyleSheet.hairlineWidth,
-//     borderColor: "rgba(255,255,255,0.10)",
-//     marginBottom: 10,
-//   },
-//   cardLeft: {},
-//   emojiBubble: {
-//     width: 44,
-//     height: 44,
-//     borderRadius: 16,
-//     alignItems: "center",
-//     justifyContent: "center",
-//     backgroundColor: "rgba(10,132,255,0.18)",
-//     borderWidth: StyleSheet.hairlineWidth,
-//     borderColor: "rgba(10,132,255,0.30)",
-//   },
-//   emojiText: { fontSize: 20 },
-
-//   cardMid: { flex: 1 },
-//   cardTitle: { color: "#fff", fontWeight: "900", fontSize: 14 },
-//   cardMeta: { marginTop: 4, color: "rgba(255,255,255,0.65)", fontWeight: "800", fontSize: 12 },
-
-//   cardRight: {},
-//   chevron: {
-//     width: 34,
-//     height: 34,
-//     borderRadius: 14,
-//     alignItems: "center",
-//     justifyContent: "center",
-//     backgroundColor: "rgba(255,255,255,0.08)",
-//     borderWidth: StyleSheet.hairlineWidth,
-//     borderColor: "rgba(255,255,255,0.10)",
-//   },
-//   chevronText: { color: "rgba(255,255,255,0.85)", fontSize: 22, fontWeight: "900", marginTop: -2 },
-
-//   emptyWrap: { paddingHorizontal: 16, paddingTop: 32, paddingBottom: 22, alignItems: "center" },
-//   emptyEmoji: { fontSize: 34, marginBottom: 10 },
-//   emptyTitle: { color: "#fff", fontWeight: "900", fontSize: 18, textAlign: "center" },
-//   emptySub: {
-//     marginTop: 8,
-//     color: "rgba(255,255,255,0.65)",
-//     fontWeight: "700",
-//     textAlign: "center",
-//     lineHeight: 18,
-//   },
-// });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // components/List/EventsListModal.tsx
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import {
   Modal,
   Pressable,
@@ -519,9 +10,15 @@ import {
   TouchableOpacity,
   View,
   Platform,
+  Dimensions,
 } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useRouter } from "expo-router";
+import { useAuth } from "@clerk/clerk-expo";
+import { BlurView } from "expo-blur";
+import { LinearGradient } from "expo-linear-gradient";
+
+const { width: W } = Dimensions.get("window");
 
 type EventPin = {
   _id?: string;
@@ -545,412 +42,496 @@ type EventPin = {
   };
 };
 
-// ✅ Get city from event — tries location.city first, then parses formattedAddress
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
 function getEventCity(e: EventPin): string {
   const locCity = (e?.location?.city || "").trim();
   if (locCity) return locCity;
-
   const addr = (e?.location?.formattedAddress || e?.address || "").trim();
   if (!addr) return "";
-
-  // "Kalani Nagar, Indore, Madhya Pradesh 452005, India" → parts[1] = "Indore"
   const parts = addr.split(",").map((p) => p.trim()).filter(Boolean);
   if (parts.length >= 2) return parts[1];
   return parts[0] || "";
 }
 
-function normalizeCity(s: string) {
+function normalize(s: string) {
   return (s || "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-function parseDateKey(e: EventPin) {
-  if (e.date && /^\d{4}-\d{2}-\d{2}$/.test(e.date)) return e.date;
-  const d = (e.when || "").split("·")[0]?.trim();
-  return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : "No date";
+// Haversine distance in km
+function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
 }
 
-function groupByDate(list: EventPin[]) {
-  const m = new Map<string, EventPin[]>();
-  for (const e of list) {
-    const k = parseDateKey(e);
-    if (!m.has(k)) m.set(k, []);
-    m.get(k)!.push(e);
-  }
-  const keys = Array.from(m.keys()).sort((a, b) => {
-    if (a === "No date") return 1;
-    if (b === "No date") return -1;
-    return a.localeCompare(b);
-  });
-  return keys.map((k) => ({ date: k, items: m.get(k)! }));
-}
-
-function niceDateLabel(key: string) {
-  if (key === "No date") return "No date";
+function getDayLabel(dateStr: string) {
+  if (!dateStr || dateStr === "No date") return "Upcoming";
   try {
-    const d = new Date(key + "T12:00:00");
-    return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const target = new Date(dateStr + "T12:00:00");
+    target.setHours(0, 0, 0, 0);
+
+    const diff = (target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24);
+    if (diff === 0) return "Today";
+    if (diff === 1) return "Tomorrow";
+    if (diff > 1 && diff < 7) {
+      return target.toLocaleDateString("en-IN", { weekday: "long" });
+    }
+    return target.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
   } catch {
-    return key;
+    return dateStr;
   }
 }
 
 function getKindBadge(kind?: string, priceCents?: number | string | null) {
   const k = (kind || "free").toLowerCase();
   if (k === "service")
-    return { label: "BOOK", bg: "rgba(139,92,246,0.22)", border: "rgba(139,92,246,0.45)", text: "#C084FC" };
+    return { label: "BOOK", color: "#C084FC", bg: "rgba(139,92,246,0.15)" };
   if (k === "paid" || k === "event_paid") {
     const price = priceCents ? `₹${Math.round(Number(priceCents) / 100)}` : "PAID";
-    return { label: price, bg: "rgba(234,179,8,0.18)", border: "rgba(234,179,8,0.40)", text: "#FACC15" };
+    return { label: price, color: "#FACC15", bg: "rgba(234,179,8,0.15)" };
   }
-  return { label: "FREE", bg: "rgba(34,197,94,0.15)", border: "rgba(34,197,94,0.35)", text: "#4ADE80" };
+  return { label: "FREE", color: "#4ADE80", bg: "rgba(34,197,94,0.12)" };
 }
 
 type KindFilter = "all" | "free" | "paid" | "service";
+
+// ─── Component ──────────────────────────────────────────────────────────────
 
 export default function EventsListModal({
   visible,
   onClose,
   events,
   myCity,
+  myLoc,
+  onPinPress,
 }: {
   visible: boolean;
   onClose: () => void;
   events: EventPin[];
   myCity: string;
+  myLoc: { lat: number; lng: number } | null;
+  onPinPress?: (pin: EventPin) => void;
 }) {
+  const { userId } = useAuth();
   const router = useRouter();
-  const [tab, setTab] = useState<"my" | "other">("my");
   const [q, setQ] = useState("");
   const [kindFilter, setKindFilter] = useState<KindFilter>("all");
+  const [scopeFilter, setScopeFilter] = useState<"city" | "other">("city");
+  const [showFilterOptions, setShowFilterOptions] = useState(false);
 
-  const myCityKey = useMemo(() => normalizeCity(myCity), [myCity]);
-
-  // ✅ Kind filter
-  const kindFiltered = useMemo(() => {
-    if (kindFilter === "all") return events || [];
-    return (events || []).filter((e) => {
-      const k = (e.kind || "free").toLowerCase();
-      if (kindFilter === "free") return k === "free" || k === "event_free";
-      if (kindFilter === "paid") return k === "paid" || k === "event_paid";
-      if (kindFilter === "service") return k === "service";
-      return true;
+  const processedEvents = useMemo(() => {
+    let list = (events || []).filter(e => {
+      const st = String((e as any).status || "active").toLowerCase();
+      const isMine = userId && String((e as any).creatorClerkId) === userId;
+      return st === "active" || st === "live" || (st === "paused" && isMine);
     });
-  }, [events, kindFilter]);
 
-  // ✅ Your city — uses location.city, not address parsing
-  const myCityEvents = useMemo(() => {
-    if (!myCityKey) return kindFiltered;
-    return kindFiltered.filter((e) => {
-      const evCity = normalizeCity(getEventCity(e));
-      return evCity.includes(myCityKey);
+    // 1. Kind Filter
+    if (kindFilter !== "all") {
+      list = list.filter(e => {
+        const k = (e.kind || "free").toLowerCase();
+        if (kindFilter === "free") return k === "free" || k === "event_free";
+        if (kindFilter === "paid") return k === "paid" || k === "event_paid";
+        if (kindFilter === "service") return k === "service";
+        return true;
+      });
+    }
+
+    // 2. Location Scope Filter (City vs All)
+    const myCityNorm = normalize(myCity);
+    if (myCityNorm && !q) {
+      if (scopeFilter === "city") {
+        list = list.filter(e => normalize(getEventCity(e)).includes(myCityNorm));
+      }
+      // If scopeFilter is "other" (renamed to "all" internally for clarity), show everything.
+    }
+
+    // 3. Search Filter (Overrides location scope)
+    const query = normalize(q);
+    if (query) {
+      list = list.filter(e => {
+        const city = normalize(getEventCity(e));
+        const addr = normalize(e?.location?.formattedAddress || e?.address || "");
+        const title = normalize(e.title);
+        return city.includes(query) || addr.includes(query) || title.includes(query);
+      });
+    }
+
+    // 4. Attach metadata (Distance)
+    const withMeta = list.map(e => {
+      let dist = 0;
+      if (myLoc) dist = getDistance(myLoc.lat, myLoc.lng, e.lat, e.lng);
+      return { ...e, _distance: dist };
     });
-  }, [kindFiltered, myCityKey]);
 
-  // ✅ Other city search
-  const otherCityEvents = useMemo(() => {
-    const query = (q || "").trim().toLowerCase();
-    if (!query) return [];
-    return kindFiltered.filter((e) => {
-      const evCity = normalizeCity(getEventCity(e));
-      const fullAddr = (e?.location?.formattedAddress || e?.address || "").toLowerCase();
-      return evCity.includes(query) || fullAddr.includes(query);
+    // 5. Sort by date, then distance
+    withMeta.sort((a, b) => {
+      const da = a.date || "9999";
+      const db = b.date || "9999";
+      if (da !== db) return da.localeCompare(db);
+      return a._distance - b._distance;
     });
-  }, [kindFiltered, q]);
 
-  const groupedMy = useMemo(() => groupByDate(myCityEvents), [myCityEvents]);
-  const groupedOther = useMemo(() => groupByDate(otherCityEvents), [otherCityEvents]);
-  const showing = tab === "my" ? groupedMy : groupedOther;
-  const count = tab === "my" ? myCityEvents.length : otherCityEvents.length;
+    // 6. Group by Day Label
+    const groups: { label: string; items: any[] }[] = [];
+    withMeta.forEach(e => {
+      const label = getDayLabel(e.date || "");
+      let g = groups.find(x => x.label === label);
+      if (!g) {
+        g = { label, items: [] };
+        groups.push(g);
+      }
+      g.items.push(e);
+    });
+
+    return groups;
+  }, [events, kindFilter, scopeFilter, q, myLoc, myCity]);
 
   const kindPills: { key: KindFilter; label: string; color: string }[] = [
-    { key: "all",     label: "All",       color: "#fff"    },
-    { key: "free",    label: "⚪ Free",   color: "#4ADE80" },
-    { key: "paid",    label: "🟡 Paid",   color: "#FACC15" },
-    { key: "service", label: "🟣 Service",color: "#C084FC" },
+    { key: "all",     label: "All",       color: "#FFFFFF" },
+    { key: "free",    label: "Free",      color: "#4ADE80" },
+    { key: "paid",    label: "Paid",      color: "#FACC15" },
+    { key: "service", label: "Service",   color: "#C084FC" },
   ];
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.root}>
-        <Pressable style={styles.backdrop} onPress={onClose} />
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={S.root}>
+        <Pressable style={S.backdrop} onPress={onClose} />
 
-        <View style={styles.sheet}>
-          <View style={styles.grabberWrap}>
-            <View style={styles.grabber} />
-          </View>
+        <BlurView intensity={Platform.OS === "ios" ? 80 : 100} tint="dark" style={S.sheet}>
+          <LinearGradient colors={["rgba(20,20,20,0.4)", "rgba(10,10,10,0.8)"]} style={S.gradient}>
+            
+            {/* Grabber */}
+            <View style={S.grabberWrap}>
+              <View style={S.grabber} />
+            </View>
 
-          {/* Header */}
-          <View style={styles.top}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.hTitle}>Events Nearby</Text>
-              <View style={styles.pillRow}>
-                <View style={styles.headerPill}>
-                  <Text style={styles.headerPillText}>
-                    {tab === "my" ? `📍 ${(myCity || "Your city").trim()}` : "🌎 Explore"}
-                  </Text>
-                </View>
-                <View style={styles.countPill}>
-                  <Text style={styles.countPillText}>{count}</Text>
-                </View>
+            {/* Header */}
+            <View style={S.header}>
+              <View>
+                <Text style={S.title}>Events Nearby</Text>
+                <Text style={S.subtitle}>
+                  {q ? `Searching for "${q}"` : `Discover what's happening in ${myCity || "your city"}`}
+                </Text>
               </View>
-            </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn} activeOpacity={0.9}>
-              <Text style={styles.closeText}>✕</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* ✅ Kind filter pills */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.kindRow}
-            style={{ maxHeight: 44 }}
-          >
-            {kindPills.map((p) => (
-              <TouchableOpacity
-                key={p.key}
-                onPress={() => setKindFilter(p.key)}
-                activeOpacity={0.8}
-                style={[
-                  styles.kindPill,
-                  kindFilter === p.key && { borderColor: p.color, backgroundColor: `${p.color}22` },
-                ]}
-              >
-                <Text style={[styles.kindPillText, kindFilter === p.key && { color: p.color }]}>
-                  {p.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-
-          {/* Your city / Other city tabs */}
-          <View style={styles.segmentWrap}>
-            <View style={styles.segment}>
-              <TouchableOpacity
-                activeOpacity={0.9}
-                onPress={() => setTab("my")}
-                style={[styles.segmentBtn, tab === "my" && styles.segmentBtnActive]}
-              >
-                <Text style={[styles.segmentText, tab === "my" && styles.segmentTextActive]}>
-                  Your city
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                activeOpacity={0.9}
-                onPress={() => setTab("other")}
-                style={[styles.segmentBtn, tab === "other" && styles.segmentBtnActive]}
-              >
-                <Text style={[styles.segmentText, tab === "other" && styles.segmentTextActive]}>
-                  Other city
-                </Text>
+              <TouchableOpacity onPress={onClose} style={S.closeBtn}>
+                <Ionicons name="close" size={20} color="#888" />
               </TouchableOpacity>
             </View>
-          </View>
 
-          {/* Search — Other city only */}
-          {tab === "other" && (
-            <View style={styles.searchCard}>
-              <Text style={styles.searchLabel}>Search city</Text>
-              <View style={styles.searchRow}>
-                <Ionicons name="search-outline" size={18} color="rgba(255,255,255,0.75)" />
+            {/* Search Bar */}
+            <View style={S.searchBox}>
+              <View style={S.searchInner}>
+                <Ionicons name="search" size={18} color="#666" />
                 <TextInput
                   value={q}
                   onChangeText={setQ}
-                  placeholder="Indore, Delhi, Mumbai…"
-                  placeholderTextColor="rgba(255,255,255,0.55)"
-                  style={styles.searchInput}
+                  placeholder="Search events, cities, venues..."
+                  placeholderTextColor="#555"
+                  style={S.searchInput}
                   autoCorrect={false}
-                  autoCapitalize="words"
-                  returnKeyType="search"
+                  clearButtonMode="while-editing"
                 />
-                {!!q && (
-                  <TouchableOpacity onPress={() => setQ("")} style={styles.xBtn} activeOpacity={0.9}>
-                    <Text style={styles.xBtnText}>×</Text>
+                {!!q && Platform.OS !== "ios" && (
+                  <TouchableOpacity onPress={() => setQ("")}>
+                    <Ionicons name="close-circle" size={18} color="#666" />
                   </TouchableOpacity>
                 )}
               </View>
             </View>
-          )}
 
-          {/* Events list */}
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 32 }}>
-            {tab === "other" && !q.trim() ? (
-              <View style={styles.emptyWrap}>
-                <Text style={styles.emptyEmoji}>🗺️</Text>
-                <Text style={styles.emptyTitle}>Find events anywhere</Text>
-                <Text style={styles.emptySub}>Search a city to see events.</Text>
-              </View>
-            ) : showing.length === 0 ? (
-              <View style={styles.emptyWrap}>
-                <Text style={styles.emptyEmoji}>{tab === "my" ? "📍" : "🔎"}</Text>
-                <Text style={styles.emptyTitle}>No events found</Text>
-                <Text style={styles.emptySub}>
-                  {tab === "my"
-                    ? myCityKey ? "Nothing in your city yet." : "Location unavailable."
-                    : "Try a different city name."}
-                </Text>
-              </View>
-            ) : (
-              showing.map((g) => (
-                <View key={g.date} style={styles.section}>
-                  <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>{niceDateLabel(g.date)}</Text>
-                    <View style={styles.sectionLine} />
-                    <Text style={styles.sectionCount}>{g.items.length}</Text>
-                  </View>
-
-                  {g.items.map((e, idx) => {
-                    const cityText = getEventCity(e) || "Unknown city";
-                    const badge = getKindBadge(e.kind, e.priceCents);
-                    const whenText = e.when || (e.date ? `${e.date}${e.time ? " · " + e.time : ""}` : "");
-
-                    return (
-                      <TouchableOpacity
-                        key={`${e._id ?? e.title}-${idx}`}
-                        style={styles.card}
-                        activeOpacity={0.85}
-                        onPress={() => {
-                          onClose();
-                          router.push({
-                            pathname: "/newApp/event-detail" as any,
-                            params: {
-                              eventId: e._id || "",
-                              kind: e.kind || "free",
-                              title: e.title || "Event",
-                              emoji: e.emoji || "📍",
-                            },
-                          });
-                        }}
-                      >
-                        <View style={styles.emojiBubble}>
-                          <Text style={styles.emojiText}>{e.emoji ?? "📍"}</Text>
-                        </View>
-
-                        <View style={styles.cardMid}>
-                          <Text numberOfLines={1} style={styles.cardTitle}>{e.title}</Text>
-                          <Text numberOfLines={1} style={styles.cardMeta}>
-                            {cityText}{whenText ? `  •  ${whenText}` : ""}
-                          </Text>
-                        </View>
-
-                        <View style={[styles.kindBadge, { backgroundColor: badge.bg, borderColor: badge.border }]}>
-                          <Text style={[styles.kindBadgeText, { color: badge.text }]}>{badge.label}</Text>
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })}
+            {/* Scope & Kind Filter */}
+            <View style={S.actionRow}>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false} 
+                contentContainerStyle={S.filterScroll}
+                style={{ flexGrow: 0 }}
+              >
+                {/* City vs All Toggle */}
+                <View style={S.scopeContainer}>
+                  <TouchableOpacity
+                    onPress={() => setScopeFilter("city")}
+                    style={[S.scopeBtn, scopeFilter === "city" && S.scopeBtnActive]}
+                  >
+                    <Ionicons name="navigate" size={14} color={scopeFilter === "city" ? "#FFF" : "#666"} />
+                    <Text style={[S.scopeBtnText, scopeFilter === "city" && S.scopeBtnActiveText]}>
+                      {myCity || "Nearby"}
+                    </Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity
+                    onPress={() => setScopeFilter("other")}
+                    style={[S.scopeBtn, scopeFilter === "other" && S.scopeBtnActive]}
+                  >
+                    <Ionicons name="planet" size={14} color={scopeFilter === "other" ? "#FFF" : "#666"} />
+                    <Text style={[S.scopeBtnText, scopeFilter === "other" && S.scopeBtnActiveText]}>
+                      All Cities
+                    </Text>
+                  </TouchableOpacity>
                 </View>
-              ))
+
+                <View style={S.vDivider} />
+
+                {/* Filter Icon */}
+                <TouchableOpacity 
+                  style={[S.filterIconBtn, showFilterOptions && S.filterIconBtnActive]} 
+                  onPress={() => setShowFilterOptions(!showFilterOptions)}
+                >
+                  <Ionicons name="options" size={18} color={showFilterOptions ? "#00E676" : "#888"} />
+                  {kindFilter !== "all" && <View style={S.filterBadge} />}
+                </TouchableOpacity>
+              </ScrollView>
+            </View>
+
+            {/* Kind Filter Row (Appears below) */}
+            {showFilterOptions && (
+              <View style={S.filterOptionsRow}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 20 }}>
+                  {kindPills.map(p => (
+                    <TouchableOpacity
+                      key={p.key}
+                      onPress={() => { setKindFilter(p.key); }}
+                      style={[
+                        S.filterPill,
+                        kindFilter === p.key && { backgroundColor: p.color + "20", borderColor: p.color + "60" }
+                      ]}
+                    >
+                      <View style={[S.pillDot, { backgroundColor: p.color }]} />
+                      <Text style={[S.filterPillText, kindFilter === p.key && { color: p.color }]}>
+                        {p.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
             )}
-          </ScrollView>
-        </View>
+
+            {/* List */}
+            <ScrollView 
+              showsVerticalScrollIndicator={false} 
+              contentContainerStyle={S.listContent}
+            >
+              {processedEvents.length === 0 ? (
+                <View style={S.empty}>
+                  <View style={S.emptyIcon}>
+                    <Ionicons name="calendar-outline" size={40} color="#333" />
+                  </View>
+                  <Text style={S.emptyTitle}>No events found</Text>
+                  <Text style={S.emptySub}>
+                    Try adjusting your search or filters to find more events.
+                  </Text>
+                  {q && (
+                    <TouchableOpacity style={S.clearBtn} onPress={() => setQ("")}>
+                      <Text style={S.clearBtnText}>Clear Search</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ) : (
+                processedEvents.map(group => (
+                  <View key={group.label} style={S.section}>
+                    <View style={S.sectionHeader}>
+                      <Text style={S.sectionLabel}>{group.label}</Text>
+                      <View style={S.sectionLine} />
+                    </View>
+
+                    {group.items.map((e, idx) => {
+                      const badge = getKindBadge(e.kind, e.priceCents);
+                      const city = getEventCity(e);
+                      const time = e.time || "";
+                      const dist = e._distance < 1 ? `${(e._distance * 1000).toFixed(0)}m` : `${e._distance.toFixed(1)}km`;
+
+                      return (
+                        <TouchableOpacity
+                          key={`${e._id ?? e.title}-${idx}`}
+                          style={S.card}
+                          activeOpacity={0.7}
+                          onPress={() => {
+                            if (onPinPress) {
+                              onPinPress(e);
+                            } else {
+                              onClose();
+                              router.push({
+                                pathname: "/newApp/event-detail" as any,
+                                params: { eventId: e._id || "", kind: e.kind || "free", title: e.title || "Event", emoji: e.emoji || "📍" },
+                              });
+                            }
+                          }}
+                        >
+                          {/* Emoji / Icon */}
+                          <View style={S.cardEmojiWrap}>
+                            <Text style={S.cardEmoji}>{e.emoji || "📍"}</Text>
+                            <View style={S.emojiGlow} />
+                          </View>
+
+                          {/* Info */}
+                          <View style={S.cardInfo}>
+                            <Text numberOfLines={1} style={S.cardTitle}>{e.title}</Text>
+                            <View style={S.cardMeta}>
+                              <Text style={S.metaText}>{city}</Text>
+                              {time && (
+                                <>
+                                  <View style={S.dot} />
+                                  <Text style={S.metaText}>{time}</Text>
+                                </>
+                              )}
+                              <View style={S.dot} />
+                              <Text style={S.metaText}>{dist} away</Text>
+                            </View>
+                          </View>
+
+                          {/* Badge */}
+                          <View style={[S.badge, { backgroundColor: badge.bg, borderColor: badge.color + "30" }]}>
+                            <Text style={[S.badgeText, { color: badge.color }]}>{badge.label}</Text>
+                          </View>
+                          
+                          <Ionicons name="chevron-forward" size={14} color="#444" style={{ marginLeft: 8 }} />
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                ))
+              )}
+            </ScrollView>
+
+          </LinearGradient>
+        </BlurView>
       </View>
     </Modal>
   );
 }
 
-const styles = StyleSheet.create({
+const S = StyleSheet.create({
   root: { flex: 1, justifyContent: "flex-end" },
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(2,6,23,0.60)" },
+  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.6)" },
   sheet: {
-    backgroundColor: "#0B1220",
-    borderTopLeftRadius: 26, borderTopRightRadius: 26,
-    minHeight: "86%", maxHeight: "96%", overflow: "hidden",
-    shadowColor: "#000", shadowOpacity: 0.35, shadowRadius: 24,
-    shadowOffset: { width: 0, height: -12 },
+    height: "90%",
+    borderTopLeftRadius: 36, borderTopRightRadius: 36,
+    overflow: "hidden",
+    backgroundColor: "#000",
   },
-  grabberWrap: { alignItems: "center", paddingTop: 10, paddingBottom: 4 },
-  grabber: { width: 54, height: 5, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.22)" },
-  top: {
-    paddingHorizontal: 16, paddingTop: 8, paddingBottom: 10,
-    flexDirection: "row", alignItems: "center", gap: 12,
+  gradient: { flex: 1 },
+  grabberWrap: { alignItems: "center", paddingTop: 12, paddingBottom: 8 },
+  grabber: { width: 40, height: 4, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.15)" },
+  
+  header: {
+    flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start",
+    paddingHorizontal: 24, paddingTop: 10, paddingBottom: 20,
   },
-  hTitle: { color: "#fff", fontSize: 22, fontWeight: "900" },
-  pillRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 8 },
-  headerPill: {
-    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.10)",
-    borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(255,255,255,0.10)",
-  },
-  headerPillText: { color: "rgba(255,255,255,0.92)", fontWeight: "900", fontSize: 12 },
-  countPill: {
-    minWidth: 34, alignItems: "center", justifyContent: "center",
-    paddingHorizontal: 10, paddingVertical: 8, borderRadius: 999,
-    backgroundColor: "rgba(10,132,255,0.22)",
-    borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(10,132,255,0.35)",
-  },
-  countPillText: { color: "#fff", fontWeight: "900", fontSize: 12 },
+  title: { fontSize: 24, fontWeight: "900", color: "#FFF", letterSpacing: -0.5 },
+  subtitle: { fontSize: 13, color: "#888", marginTop: 4 },
   closeBtn: {
-    width: 42, height: 42, borderRadius: 14,
-    alignItems: "center", justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.10)",
-    borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(255,255,255,0.12)",
-  },
-  closeText: { color: "#fff", fontSize: 16, fontWeight: "900" },
-  kindRow: { paddingHorizontal: 16, gap: 8, flexDirection: "row", alignItems: "center", paddingBottom: 10 },
-  kindPill: {
-    paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.07)",
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.12)",
-  },
-  kindPillText: { color: "rgba(255,255,255,0.75)", fontWeight: "800", fontSize: 12 },
-  segmentWrap: { paddingHorizontal: 16, paddingBottom: 10 },
-  segment: {
-    flexDirection: "row", backgroundColor: "rgba(255,255,255,0.08)",
-    borderRadius: 999, padding: 4,
-    borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(255,255,255,0.10)",
-  },
-  segmentBtn: { flex: 1, paddingVertical: 10, borderRadius: 999, alignItems: "center" },
-  segmentBtnActive: {
-    backgroundColor: "rgba(10,132,255,0.95)",
-    shadowColor: "#0A84FF", shadowOpacity: 0.35, shadowRadius: 14,
-    shadowOffset: { width: 0, height: 10 },
-  },
-  segmentText: { color: "rgba(255,255,255,0.80)", fontWeight: "900" },
-  segmentTextActive: { color: "#fff" },
-  searchCard: {
-    marginHorizontal: 16, borderRadius: 18, padding: 14,
+    width: 32, height: 32, borderRadius: 16,
     backgroundColor: "rgba(255,255,255,0.08)",
-    borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(255,255,255,0.10)", marginBottom: 10,
-  },
-  searchLabel: { color: "rgba(255,255,255,0.85)", fontWeight: "900", fontSize: 12, marginBottom: 10 },
-  searchRow: {
-    flexDirection: "row", alignItems: "center", borderRadius: 14,
-    paddingHorizontal: 12, paddingVertical: Platform.OS === "ios" ? 12 : 10,
-    backgroundColor: "rgba(2,6,23,0.55)",
-    borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(255,255,255,0.10)", gap: 8,
-  },
-  searchInput: { flex: 1, color: "#fff", fontWeight: "900" },
-  xBtn: {
-    width: 30, height: 30, borderRadius: 12,
     alignItems: "center", justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.12)",
   },
-  xBtnText: { color: "#fff", fontSize: 18, fontWeight: "900", lineHeight: 18 },
-  section: { paddingHorizontal: 16, paddingTop: 12 },
-  sectionHeader: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 },
-  sectionTitle: { color: "rgba(255,255,255,0.92)", fontWeight: "900", fontSize: 13 },
-  sectionLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: "rgba(255,255,255,0.10)" },
-  sectionCount: { color: "rgba(255,255,255,0.60)", fontWeight: "900", fontSize: 12 },
+
+  searchBox: { paddingHorizontal: 20, marginBottom: 16 },
+  searchInner: {
+    flexDirection: "row", alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderRadius: 16, paddingHorizontal: 16, paddingVertical: Platform.OS === "ios" ? 14 : 10,
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.1)",
+  },
+  searchInput: { flex: 1, marginLeft: 12, color: "#FFF", fontSize: 15, fontWeight: "600" },
+
+  filterScroll: { paddingHorizontal: 20, gap: 10, paddingBottom: 15 },
+  filterPill: {
+    flexDirection: "row", alignItems: "center",
+    paddingHorizontal: 16, paddingVertical: 10, borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.08)",
+  },
+  pillDot: { width: 6, height: 6, borderRadius: 3, marginRight: 8 },
+  filterPillText: { fontSize: 13, fontWeight: "800", color: "#888" },
+  vDivider: { width: 1, height: 28, backgroundColor: "rgba(255,255,255,0.1)", alignSelf: "center", marginHorizontal: 8 },
+  
+  scopeContainer: { 
+    flexDirection: "row", backgroundColor: "rgba(255,255,255,0.06)", 
+    borderRadius: 14, padding: 4, gap: 4,
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.08)" 
+  },
+  scopeBtn: { 
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 
+  },
+  scopeBtnActive: { backgroundColor: "rgba(255,255,255,0.1)" },
+  scopeBtnText: { fontSize: 13, fontWeight: "800", color: "#666" },
+  scopeBtnActiveText: { color: "#FFF" },
+
+  filterIconBtn: {
+    width: 44, height: 44, borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    alignItems: "center", justifyContent: "center",
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.1)"
+  },
+  filterIconBtnActive: { borderColor: "rgba(0,230,118,0.4)", backgroundColor: "rgba(0,230,118,0.05)" },
+  filterBadge: { 
+    position: "absolute", top: 10, right: 10, width: 6, height: 6, 
+    borderRadius: 3, backgroundColor: "#00E676", borderWidth: 1, borderColor: "#000" 
+  },
+  kindOptions: { flexDirection: "row", gap: 8, marginLeft: 8 },
+  actionRow: { marginBottom: 12 },
+  filterOptionsRow: { 
+    paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.05)",
+    marginBottom: 12
+  },
+
+  listContent: { paddingHorizontal: 20, paddingBottom: 40 },
+  section: { marginBottom: 24 },
+  sectionHeader: { flexDirection: "row", alignItems: "center", marginBottom: 16, gap: 12 },
+  sectionLabel: { fontSize: 13, fontWeight: "900", color: "#555", textTransform: "uppercase", letterSpacing: 1 },
+  sectionLine: { flex: 1, height: 1, backgroundColor: "rgba(255,255,255,0.05)" },
+
   card: {
-    flexDirection: "row", alignItems: "center", gap: 12, padding: 14,
-    borderRadius: 18, backgroundColor: "rgba(255,255,255,0.08)",
-    borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(255,255,255,0.10)", marginBottom: 10,
+    flexDirection: "row", alignItems: "center",
+    padding: 14, borderRadius: 24,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.06)",
+    marginBottom: 12,
   },
-  emojiBubble: {
-    width: 44, height: 44, borderRadius: 16,
+  cardEmojiWrap: {
+    width: 52, height: 52, borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.05)",
     alignItems: "center", justifyContent: "center",
-    backgroundColor: "rgba(10,132,255,0.18)",
-    borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(10,132,255,0.30)",
+    marginRight: 14,
   },
-  emojiText: { fontSize: 20 },
-  cardMid: { flex: 1 },
-  cardTitle: { color: "#fff", fontWeight: "900", fontSize: 14 },
-  cardMeta: { marginTop: 4, color: "rgba(255,255,255,0.65)", fontWeight: "800", fontSize: 12 },
-  kindBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 1 },
-  kindBadgeText: { fontSize: 10, fontWeight: "900" },
-  emptyWrap: { paddingHorizontal: 16, paddingTop: 40, paddingBottom: 22, alignItems: "center" },
-  emptyEmoji: { fontSize: 34, marginBottom: 10 },
-  emptyTitle: { color: "#fff", fontWeight: "900", fontSize: 18, textAlign: "center" },
-  emptySub: { marginTop: 8, color: "rgba(255,255,255,0.65)", fontWeight: "700", textAlign: "center", lineHeight: 18 },
+  emojiGlow: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 18, backgroundColor: "rgba(255,255,255,0.05)",
+    transform: [{ scale: 1.1 }],
+  },
+  cardEmoji: { fontSize: 24, zIndex: 1 },
+  cardInfo: { flex: 1 },
+  cardTitle: { fontSize: 16, fontWeight: "800", color: "#FFF", marginBottom: 4 },
+  cardMeta: { flexDirection: "row", alignItems: "center" },
+  metaText: { fontSize: 12, fontWeight: "600", color: "#666" },
+  dot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: "#333", marginHorizontal: 6 },
+  
+  badge: {
+    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10,
+    borderWidth: 1,
+  },
+  badgeText: { fontSize: 11, fontWeight: "900" },
+
+  empty: { alignItems: "center", marginTop: 60, paddingHorizontal: 40 },
+  emptyIcon: { 
+    width: 80, height: 80, borderRadius: 40, 
+    backgroundColor: "rgba(255,255,255,0.03)", 
+    alignItems: "center", justifyContent: "center", marginBottom: 20 
+  },
+  emptyTitle: { fontSize: 20, fontWeight: "900", color: "#FFF", marginBottom: 8 },
+  emptySub: { fontSize: 14, color: "#666", textAlign: "center", lineHeight: 20 },
+  clearBtn: { marginTop: 24, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.1)" },
+  clearBtnText: { color: "#FFF", fontWeight: "800", fontSize: 14 },
 });

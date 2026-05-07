@@ -26,7 +26,7 @@ import type { Suggestion, ListingKind } from "./types";
 //  DESIGN TOKENS
 // ─────────────────────────────────────────────
 const C = {
-  bg:          "#FFFBF5",
+  bg:          "#FFFFFF",
   card:        "#FFFFFF",
   cardBorder:  "#F0EBE3",
   inputBg:     "#FAF7F2",
@@ -447,6 +447,37 @@ const S = StyleSheet.create({
     shadowOpacity: 0.28, shadowRadius: 14, elevation: 6,
   },
   primaryText: { fontSize: 15, fontWeight: "900", color: "#fff", letterSpacing: 0.1 },
+
+  // Step 1 Premium Vertical Cards
+  step1Card: {
+    backgroundColor: C.card,
+    borderRadius: 24,
+    padding: 20,
+    borderWidth: 2,
+    borderColor: C.cardBorder,
+    marginBottom: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+    shadowColor: "#0B1220",
+    shadowOpacity: 0.05,
+    shadowRadius: 15,
+    shadowOffset: { width: 0, height: 8 },
+  },
+  step1CardActiveGreen: { borderColor: C.green, backgroundColor: C.greenBg },
+  step1CardActiveAmber: { borderColor: C.amber, backgroundColor: C.amberBg },
+  step1IconBox: {
+    width: 56, height: 56, borderRadius: 18,
+    backgroundColor: C.inputBg,
+    alignItems: "center", justifyContent: "center",
+  },
+  step1TextContent: { flex: 1 },
+  step1Name: { fontSize: 17, fontWeight: "900", color: C.ink },
+  step1Sub: { fontSize: 13, color: C.muted, fontWeight: "600", marginTop: 4, lineHeight: 18 },
+  step1Check: {
+    width: 24, height: 24, borderRadius: 12,
+    alignItems: "center", justifyContent: "center",
+  },
 });
 
 // ─────────────────────────────────────────────
@@ -516,9 +547,14 @@ type Props = {
   showWhen: boolean; setShowWhen: (v: boolean) => void;
   dateISO: string; setDateISO: (v: string) => void;
   time24: string; setTime24: (v: string) => void;
+  endDateISO: string; setEndDateISO: (v: string) => void;
+  endTime24: string; setEndTime24: (v: string) => void;
   dateLabel: string; timeLabel: string;
+  endDateLabel: string; endTimeLabel: string;
   dateOpen: boolean; setDateOpen: (v: boolean) => void;
   timeOpen: boolean; setTimeOpen: (v: boolean) => void;
+  endDateOpen: boolean; setEndDateOpen: (v: boolean) => void;
+  endTimeOpen: boolean; setEndTimeOpen: (v: boolean) => void;
   query: string; setQuery: (v: string) => void;
   suggestions: Suggestion[]; loadingSug: boolean;
   onPickSuggestion: (s: Suggestion) => void; clearQuery: () => void;
@@ -547,7 +583,10 @@ function BannerImageSection({
   const [overlayVisible, setOverlayVisible] = useState(false);
 
   const { openImagePicker, isUploading } = useImageUploader("bannerImage", {
-    headers: EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : undefined,
+    headers: {
+      ...(EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {}),
+      "ngrok-skip-browser-warning": "1",
+    },
     onUploadBegin(fileName) { console.log("🟦 [UT][banner] Upload begin:", fileName); },
     onClientUploadComplete(res) {
       console.log("🟩 [UT][banner] Upload complete:", res);
@@ -650,7 +689,7 @@ function WizardHeader({
       <View style={S.headerInner}>
         {showBack ? (
           <Pressable onPress={onBack} hitSlop={16} style={S.backBtn}>
-            <Ionicons name="arrow-back" size={18} color={C.muted} />
+            <Ionicons name="arrow-back" size={18} color={C.ink} />
           </Pressable>
         ) : null}
         <View style={{ flex: 1 }}>
@@ -658,9 +697,9 @@ function WizardHeader({
           <Text style={S.headerTitle}>{title}</Text>
           <Text style={S.headerSub}>{sub}</Text>
         </View>
-        <Pressable onPress={onClose} hitSlop={16} style={S.closeBtn}>
-          <Ionicons name="close" size={18} color={C.muted} />
-        </Pressable>
+        <TouchableOpacity onPress={onClose} hitSlop={16} style={S.closeBtn}>
+          <Ionicons name="close" size={20} color={C.muted} />
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -700,7 +739,10 @@ export default function AddEventFields(props: Props) {
     limitEnabled, setLimitEnabled, capacityText, setCapacityText, capacityOk,
     slots, setSlots, slotDuration, setSlotDuration,
     showWhen, setShowWhen, dateISO, setDateISO, time24, setTime24,
-    dateLabel, timeLabel, dateOpen, setDateOpen, timeOpen, setTimeOpen,
+    endDateISO, setEndDateISO, endTime24, setEndTime24,
+    dateLabel, timeLabel, endDateLabel, endTimeLabel,
+    dateOpen, setDateOpen, timeOpen, setTimeOpen,
+    endDateOpen, setEndDateOpen, endTimeOpen, setEndTimeOpen,
     query, setQuery, suggestions, loadingSug, onPickSuggestion, clearQuery,
     selectedAddress, locLoading, googleKey, mapRef, mapHtml, onMapMessage,
     err, submitting, canCreate, onCancel, onCreate,
@@ -730,6 +772,9 @@ export default function AddEventFields(props: Props) {
   //  STEP 1 — Event Type
   // ════════════════════════════════════════════
   if (step === 1) {
+    // Import styles from external styles file if needed, but here S is local.
+    // I'll add the new styles to S local in AddEventFields.tsx or use the props.
+    // Wait, S is local to AddEventFields.tsx. I should add the new styles to S in AddEventFields.tsx too.
     return (
       <>
         <WizardHeader
@@ -738,44 +783,61 @@ export default function AddEventFields(props: Props) {
           sub="Choose your event type — it shapes the whole experience."
           onBack={goBack} onClose={onClose} showBack={false}
         />
-        <ScrollView style={{ backgroundColor: C.bg }} contentContainerStyle={{ padding: 16, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+        <ScrollView style={{ backgroundColor: C.bg }} contentContainerStyle={{ padding: 18, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
           {!isServiceMode ? (
-            <View style={S.typeGrid}>
-              {/* Free */}
-              <Pressable onPress={() => setKind("event_free")}
-                style={[S.typeCard, kind === "event_free" && S.typeCardActiveGreen]}>
+            <View style={{ gap: 2 }}>
+              {/* Free Card */}
+              <TouchableOpacity
+                activeOpacity={0.9}
+                onPress={() => setKind("event_free")}
+                style={[S.step1Card, kind === "event_free" && S.step1CardActiveGreen]}
+              >
+                <View style={[S.step1IconBox, kind === "event_free" && { backgroundColor: "#fff" }]}>
+                  <Ionicons name="people" size={28} color={kind === "event_free" ? C.green : C.muted} />
+                </View>
+                <View style={S.step1TextContent}>
+                  <Text style={S.step1Name}>Free Event</Text>
+                  <Text style={S.step1Sub}>Open to everyone. Best for meetups, hangouts, and community vibes.</Text>
+                </View>
                 {kind === "event_free" && (
-                  <View style={[S.typeCheck, { backgroundColor: C.green }]}>
-                    <Ionicons name="checkmark" size={13} color="#fff" />
+                  <View style={[S.step1Check, { backgroundColor: C.green }]}>
+                    <Ionicons name="checkmark" size={14} color="#fff" />
                   </View>
                 )}
-                <View style={[S.typeIconBox, kind === "event_free" && { backgroundColor: C.card }]}>
-                  <Ionicons name="people-outline" size={26} color={kind === "event_free" ? C.green : C.muted} />
+              </TouchableOpacity>
+
+              {/* Paid Card */}
+              <TouchableOpacity
+                activeOpacity={0.9}
+                onPress={() => setKind("event_paid")}
+                style={[S.step1Card, kind === "event_paid" && S.step1CardActiveAmber]}
+              >
+                <View style={[S.step1IconBox, kind === "event_paid" && { backgroundColor: "#fff" }]}>
+                  <Ionicons name="ticket" size={28} color={kind === "event_paid" ? C.amber : C.muted} />
                 </View>
-                <Text style={S.typeName}>Free Event</Text>
-                <Text style={S.typeSub}>Open to everyone. Community vibes, zero cost.</Text>
-              </Pressable>
-              {/* Paid */}
-              <Pressable onPress={() => setKind("event_paid")}
-                style={[S.typeCard, kind === "event_paid" && S.typeCardActiveAmber]}>
+                <View style={S.step1TextContent}>
+                  <Text style={S.step1Name}>Paid Event</Text>
+                  <Text style={S.step1Sub}>Charge a ticket price. Earn from your passion and expertise.</Text>
+                </View>
                 {kind === "event_paid" && (
-                  <View style={[S.typeCheck, { backgroundColor: C.amber }]}>
-                    <Ionicons name="checkmark" size={13} color="#fff" />
+                  <View style={[S.step1Check, { backgroundColor: C.amber }]}>
+                    <Ionicons name="checkmark" size={14} color="#fff" />
                   </View>
                 )}
-                <View style={[S.typeIconBox, kind === "event_paid" && { backgroundColor: C.card }]}>
-                  <Ionicons name="ticket-outline" size={26} color={kind === "event_paid" ? C.amber : C.muted} />
-                </View>
-                <Text style={S.typeName}>Paid Event</Text>
-                <Text style={S.typeSub}>Charge a ticket price. You earn, they experience.</Text>
-              </Pressable>
+              </TouchableOpacity>
             </View>
           ) : (
-            <View style={[S.goodPill, { alignSelf: "flex-start", paddingVertical: 10, paddingHorizontal: 16, marginTop: 8 }]}>
-              <Text style={[S.goodPillText, { fontSize: 13 }]}>Professional Service Mode</Text>
+            <View style={[S.card, { padding: 24, alignItems: "center", backgroundColor: C.purpleBg, borderColor: C.purple + "33" }]}>
+               <Ionicons name="briefcase" size={40} color={C.purple} />
+               <Text style={[S.headerTitle, { marginTop: 16, color: C.purpleText }]}>Professional Service</Text>
+               <Text style={[S.headerSub, { textAlign: "center", color: C.purpleText, opacity: 0.8 }]}>
+                 You are creating a bookable service with time slots and hourly pricing.
+               </Text>
             </View>
           )}
-          <ContinueBtn label="Continue" onPress={goNext} color={accent} />
+          <View style={{ marginTop: 10 }}>
+             <ContinueBtn label="Continue" onPress={goNext} color={accent} />
+          </View>
         </ScrollView>
       </>
     );
@@ -869,22 +931,20 @@ export default function AddEventFields(props: Props) {
                 <Text style={S.toggleTitle}>Date &amp; time</Text>
                 <Text style={S.toggleSub}>{showWhen ? "Tap to hide" : "When does it start?"}</Text>
               </View>
-              <View style={[S.chevPill, showWhen && S.chevPillOpen]}>
-                <Ionicons name={showWhen ? "remove-outline" : "add-outline"} size={14}
-                  color={showWhen ? "#fff" : C.muted} />
-              </View>
+              <Ionicons name={showWhen ? "chevron-up" : "chevron-down"} size={16} color={C.muted} />
             </Pressable>
 
             {showWhen && (
-              <View style={S.toggleContent}>
+              <View style={S.cardInner}>
+                {/* Row 1: Start Date */}
                 <View style={S.whenGrid}>
                   <Pressable
-                    onPress={() => { if (!dateISO) setDateISO(toLocalISODate(new Date())); setDateOpen(true); }}
-                    style={[S.whenTile, dateISO ? { borderColor: C.purple + "88", backgroundColor: C.purpleBg } : {}]}
+                    onPress={() => setDateOpen(true)}
+                    style={[S.whenTile, dateISO ? { borderColor: C.green + "88", backgroundColor: C.greenBg } : {}]}
                   >
                     <View style={S.whenTileTop}>
-                      <View style={[S.whenBadge, S.whenBadgeBlue]}>
-                        <Ionicons name="calendar-outline" size={14} color={C.purple} />
+                      <View style={[S.whenBadge, { backgroundColor: C.greenBg }]}>
+                        <Ionicons name="calendar-outline" size={14} color={C.green} />
                       </View>
                       <Text style={S.whenTileLabel}>Date</Text>
                     </View>
@@ -893,26 +953,46 @@ export default function AddEventFields(props: Props) {
                     </Text>
                     <Text style={S.whenTileHint}>Tap to choose</Text>
                   </Pressable>
+                </View>
 
+                {/* Row 2: Start Time & End Time */}
+                <View style={[S.whenGrid, { marginTop: 12 }]}>
                   <Pressable
                     onPress={() => setTimeOpen(true)}
-                    style={[S.whenTile, time24 ? { borderColor: C.pink + "88", backgroundColor: C.pinkBg } : {}]}
+                    style={[S.whenTile, time24 ? { borderColor: C.amber + "88", backgroundColor: C.amberBg } : {}]}
                   >
                     <View style={S.whenTileTop}>
-                      <View style={[S.whenBadge, S.whenBadgePurple]}>
-                        <Ionicons name="time-outline" size={14} color={C.pink} />
+                      <View style={[S.whenBadge, { backgroundColor: C.amberBg }]}>
+                        <Ionicons name="time-outline" size={14} color={C.amber} />
                       </View>
-                      <Text style={S.whenTileLabel}>Time</Text>
+                      <Text style={S.whenTileLabel}>Start Time</Text>
                     </View>
                     <Text numberOfLines={1} style={[S.whenTileValue, !time24 && S.whenTileValueMuted]}>
                       {time24 ? timeLabel : "Tap to set"}
                     </Text>
                     <Text style={S.whenTileHint}>Tap to choose</Text>
                   </Pressable>
+
+                  <Pressable
+                    onPress={() => setEndTimeOpen(true)}
+                    style={[S.whenTile, endTime24 ? { borderColor: C.pink + "88", backgroundColor: C.pinkBg } : {}]}
+                  >
+                    <View style={S.whenTileTop}>
+                      <View style={[S.whenBadge, { backgroundColor: C.pinkBg }]}>
+                        <Ionicons name="time-outline" size={14} color={C.pink} />
+                      </View>
+                      <Text style={S.whenTileLabel}>End Time</Text>
+                    </View>
+                    <Text numberOfLines={1} style={[S.whenTileValue, !endTime24 && S.whenTileValueMuted]}>
+                      {endTime24 ? endTimeLabel : "Tap to set"}
+                    </Text>
+                    <Text style={S.whenTileHint}>Tap to choose</Text>
+                  </Pressable>
                 </View>
-                {(dateISO || time24) && (
-                  <Pressable hitSlop={10} onPress={() => { setDateISO(""); setTime24(""); }} style={S.clearPill}>
-                    <Text style={S.clearPillText}>Clear date / time</Text>
+
+                {(dateISO || time24 || endTime24) && (
+                  <Pressable hitSlop={10} onPress={() => { setDateISO(""); setTime24(""); setEndTime24(""); }} style={S.clearPill}>
+                    <Text style={S.clearPillText}>Clear all</Text>
                   </Pressable>
                 )}
               </View>
@@ -1012,6 +1092,29 @@ export default function AddEventFields(props: Props) {
                 }}
               />
               <TouchableOpacity style={S.pickerDone} onPress={() => setTimeOpen(false)} activeOpacity={0.9}>
+                <Text style={S.pickerDoneText}>Done</Text>
+              </TouchableOpacity>
+            </Pressable>
+          </Pressable>
+        </Modal>
+
+
+
+        {/* End Time Modal */}
+        <Modal transparent visible={endTimeOpen} animationType="slide" onRequestClose={() => setEndTimeOpen(false)}>
+          <Pressable style={S.pickerOverlay} onPress={() => setEndTimeOpen(false)}>
+            <Pressable style={S.pickerCard} onPress={() => {}}>
+              <Text style={S.pickerTitle}>Pick an end time</Text>
+              <DateTimePicker
+                value={timeToDate(endTime24)} mode="time"
+                display={Platform.OS === "ios" ? "spinner" : "default"} themeVariant="light"
+                onChange={(_, d) => {
+                  if (!d) return;
+                  setEndTime24(`${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`);
+                  if (Platform.OS !== "ios") setEndTimeOpen(false);
+                }}
+              />
+              <TouchableOpacity style={S.pickerDone} onPress={() => setEndTimeOpen(false)} activeOpacity={0.9}>
                 <Text style={S.pickerDoneText}>Done</Text>
               </TouchableOpacity>
             </Pressable>
@@ -1397,11 +1500,25 @@ export default function AddEventFields(props: Props) {
                 <Ionicons name="calendar-outline" size={16} color={C.amber} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={S.previewDetailLabel}>Date & Time</Text>
+                <Text style={S.previewDetailLabel}>Starts At</Text>
                 <Text style={S.previewDetailVal}>{dateISO ? fmtDate(dateISO) : "Date not set"}</Text>
                 <Text style={S.previewDetailSub}>{timeStr}</Text>
               </View>
             </View>
+
+            {/* End time preview */}
+            {(endDateISO || endTime24) && (
+              <View style={S.previewDetailRow}>
+                <View style={[S.previewDetailIcon, { backgroundColor: C.pinkBg }]}>
+                  <Ionicons name="time-outline" size={16} color={C.pink} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={S.previewDetailLabel}>Ends At</Text>
+                  <Text style={S.previewDetailVal}>{endDateISO ? fmtDate(endDateISO) : "Same day"}</Text>
+                  <Text style={S.previewDetailSub}>{endTime24 ? fmtTime(endTime24) : "Time not set"}</Text>
+                </View>
+              </View>
+            )}
 
             {/* Location */}
             <View style={S.previewDetailRow}>

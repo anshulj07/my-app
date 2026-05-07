@@ -497,6 +497,8 @@ export default function ChatDMScreen() {
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [isLocked, setIsLocked] = useState(false);
+  const [lockReason, setLockReason] = useState<string | null>(null);
 
   const flatRef = useRef<FlatList>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -516,7 +518,13 @@ export default function ChatDMScreen() {
         { headers: EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : undefined }
       );
       const json = await res.json().catch(() => null);
-      if (res.ok && Array.isArray(json?.messages)) setMessages(json.messages);
+      if (res.ok && Array.isArray(json?.messages)) {
+        setMessages(json.messages);
+        if (json.chatStatus) {
+          setIsLocked(!!json.chatStatus.isLocked);
+          setLockReason(json.chatStatus.reason || null);
+        }
+      }
     } catch {}
     finally { setLoading(false); }
   }, [API_BASE, EVENT_API_KEY, userId, otherId]);
@@ -632,7 +640,11 @@ export default function ChatDMScreen() {
         </View>
       </Animated.View>
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <KeyboardAvoidingView 
+        style={{ flex: 1 }} 
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
+      >
         {loading ? (
           <View style={S.center}>
             <View style={S.stateIcon}><Text style={{ fontSize: 30 }}>💬</Text></View>
@@ -655,30 +667,47 @@ export default function ChatDMScreen() {
           />
         )}
 
-        {/* Input bar */}
-        <View style={S.inputBar}>
-          <View style={S.inputShell}>
-            <TextInput
-              style={S.input}
-              placeholder={`Message ${otherName}…`}
-              placeholderTextColor={C.hint}
-              value={text}
-              onChangeText={setText}
-              multiline maxLength={1000}
-            />
+        {isLocked ? (
+          <View style={S.lockedBar}>
+            <View style={S.lockedIconCircle}>
+              <Ionicons name="lock-closed" size={20} color={C.muted} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={S.lockedTitle}>Chat Locked</Text>
+              <Text style={S.lockedSub}>
+                {lockReason === "no_confirmed_booking" 
+                  ? "Confirm your booking to start chatting" 
+                  : lockReason === "event_ended"
+                  ? "This event has ended. Communication is closed."
+                  : "This chat has been archived."}
+              </Text>
+            </View>
           </View>
-          <TouchableOpacity
-            onPress={sendMessage}
-            disabled={!text.trim() || sending}
-            style={[S.sendBtn, (!text.trim() || sending) && S.sendBtnOff]}
-            activeOpacity={0.85}
-          >
-            {sending
-              ? <ActivityIndicator color="#fff" size="small" />
-              : <Ionicons name="send" size={17} color="#fff" />
-            }
-          </TouchableOpacity>
-        </View>
+        ) : (
+          <View style={S.inputBar}>
+            <View style={S.inputShell}>
+              <TextInput
+                style={S.input}
+                placeholder={`Message ${otherName}…`}
+                placeholderTextColor={C.hint}
+                value={text}
+                onChangeText={setText}
+                multiline maxLength={1000}
+              />
+            </View>
+            <TouchableOpacity
+              onPress={sendMessage}
+              disabled={!text.trim() || sending}
+              style={[S.sendBtn, (!text.trim() || sending) && S.sendBtnOff]}
+              activeOpacity={0.85}
+            >
+              {sending
+                ? <ActivityIndicator color="#fff" size="small" />
+                : <Ionicons name="send" size={17} color="#fff" />
+              }
+            </TouchableOpacity>
+          </View>
+        )}
       </KeyboardAvoidingView>
     </View>
   );
@@ -738,6 +767,18 @@ const S = StyleSheet.create({
   bubbleTextThem: { color: C.ink, fontWeight: "500" },
   bubbleMeta:     { flexDirection: "row", alignItems: "center", marginTop: 4 },
   bubbleTime:     { fontSize: 10, fontWeight: "700", color: C.muted },
+  
+  lockedBar: {
+    flexDirection: "row", alignItems: "center", gap: 14,
+    paddingHorizontal: 20, paddingVertical: 18,
+    backgroundColor: C.inputBg, borderTopWidth: 1.5, borderTopColor: C.inputBorder,
+  },
+  lockedIconCircle: {
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: C.cardBorder, alignItems: "center", justifyContent: "center",
+  },
+  lockedTitle: { fontSize: 15, fontWeight: "900", color: C.ink, marginBottom: 2 },
+  lockedSub:   { fontSize: 12, fontWeight: "600", color: C.muted, lineHeight: 16 },
 
   inputBar: {
     flexDirection: "row", alignItems: "flex-end", gap: 10,

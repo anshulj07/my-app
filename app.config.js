@@ -7,7 +7,7 @@ export default {
     scheme: "yoag",
     plugins: ["expo-secure-store", "expo-web-browser"],
     extra: {
-      googleMapsKey: process.env.GOOGLE_MAPS_KEY,
+      googleMapsKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_KEY,
       apiBaseUrl: process.env.API_BASE_URL,
       eventApiKey: "super-secret",
       clerkPublishableKey: process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY,

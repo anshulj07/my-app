@@ -27,6 +27,8 @@ export type EditableEvent = {
   priceCents?: number | string | null;
   date?: string;
   time?: string;
+  endDate?: string;
+  endTime?: string;
   timezone?: string;
   creatorClerkId?: string;
   location?: Partial<LocationPayload> & {
@@ -94,6 +96,8 @@ export default function EditEventModal({
 
   const [dateISO, setDateISO] = useState("");
   const [time24, setTime24] = useState("");
+  const [endDateISO, setEndDateISO] = useState("");
+  const [endTime24, setEndTime24] = useState("");
 
   // Places autocomplete
   const [query, setQuery] = useState("");
@@ -145,6 +149,8 @@ export default function EditEventModal({
     setPriceText(eKind === "service" ? ePrice : "");
     setDateISO(eDate);
     setTime24(eTime);
+    setEndDateISO(eEndDate);
+    setEndTime24(eEndTime);
 
     setErr(null);
     setSubmitting(false);
@@ -241,6 +247,8 @@ export default function EditEventModal({
     emoji: string;
     date?: string;
     time?: string;
+    endDate?: string;
+    endTime?: string;
     timezone?: string;
     location: LocationPayload;
     kind: ListingKind;
@@ -257,6 +265,8 @@ export default function EditEventModal({
         emoji: args.emoji,
         date: args.date ?? "",
         time: args.time ?? "",
+        endDate: args.endDate ?? "",
+        endTime: args.endTime ?? "",
         timezone: args.timezone ?? "",
         kind: args.kind,
         priceCents: args.priceCents,
@@ -273,6 +283,8 @@ export default function EditEventModal({
       emoji: args.emoji,
       date: args.date ?? "",
       time: args.time ?? "",
+      endDate: args.endDate ?? "",
+      endTime: args.endTime ?? "",
       timezone: args.timezone ?? "",
       kind: args.kind,
       priceCents: args.priceCents,
@@ -392,6 +404,8 @@ export default function EditEventModal({
         emoji,
         date: dateISO.trim(),
         time: time24.trim(),
+        endDate: endDateISO.trim(),
+        endTime: endTime24.trim(),
         timezone,
         location: locationPayload,
         kind,

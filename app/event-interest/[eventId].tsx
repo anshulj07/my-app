@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState, useRef } from "react"
 import {
   View, Text, ActivityIndicator, Pressable, FlatList, Image,
   SectionList, RefreshControl, StatusBar, Platform, StyleSheet, Dimensions,
-  LayoutAnimation, UIManager, Animated, TouchableOpacity, Modal, ScrollView,
+  LayoutAnimation, UIManager, Animated, TouchableOpacity, Modal, ScrollView, TextInput,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import Constants from "expo-constants";
@@ -201,6 +201,9 @@ export default function EventInterestScreen() {
   const [pendingRequests, setPendingRequests] = useState<AttendeeRow[]>([]);
   const [bookingSections, setBookingSections] = useState<Array<{ title: string; data: BookingRow[] }>>([]);
   const [admitBusy, setAdmitBusy] = useState<Record<string, boolean>>({});
+  const [showOtpModal, setShowOtpModal] = useState(false);
+  const [otpValue, setOtpValue] = useState("");
+  const [verifying, setVerifying] = useState(false);
 
   const load = useCallback(async () => {
     if (!API_BASE) { setErr("Missing API base URL."); setLoading(false); setRefreshing(false); return; }
@@ -321,6 +324,40 @@ export default function EventInterestScreen() {
     }
   };
 
+  const handleVerifyOtp = async () => {
+    if (!otpValue || otpValue.length !== 4) {
+      alert("Please enter a valid 4-digit OTP");
+      return;
+    }
+    if (!API_BASE || !userId || !eventId) return;
+
+    setVerifying(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/events/checkin`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          eventId,
+          creatorClerkId: userId,
+          otp: otpValue,
+        }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(json?.error || "Verification failed");
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      alert(`Verified: ${json.attendee?.name || "Guest"}`);
+      setOtpValue("");
+      setShowOtpModal(false);
+      await load();
+    } catch (e: any) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      alert(e.message);
+    } finally {
+      setVerifying(false);
+    }
+  };
+
   // Calculate percentages based on actual attendance data
   const totalAttendees = attendees.length;
   const checkedInCount = attendees.filter((a) => a.checkedIn).length;
@@ -371,18 +408,28 @@ export default function EventInterestScreen() {
         </View>
 
         {isHost && (
-          <TouchableOpacity 
-            style={sc.notifBtn} 
-            onPress={() => setShowNotifications(true)}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="notifications-outline" size={24} color="#111827" />
-            {pendingRequests.length > 0 && (
-              <View style={sc.notifBadge}>
-                <Text style={sc.notifBadgeText}>{pendingRequests.length}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <TouchableOpacity 
+              style={[sc.notifBtn, { backgroundColor: "#E0E7FF" }]} 
+              onPress={() => setShowOtpModal(true)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="key-outline" size={22} color="#5B63D3" />
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={sc.notifBtn} 
+              onPress={() => setShowNotifications(true)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="notifications-outline" size={24} color="#111827" />
+              {pendingRequests.length > 0 && (
+                <View style={sc.notifBadge}>
+                  <Text style={sc.notifBadgeText}>{pendingRequests.length}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
         )}
       </View>
 
@@ -421,8 +468,21 @@ export default function EventInterestScreen() {
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={sc.cardName}>{item.customerName || "Customer"}</Text>
-                      {(isHost && !!item.customerEmail) && <Text style={sc.cardMeta}>{item.customerEmail}</Text>}
                     </View>
+                    <TouchableOpacity
+                      onPress={() => {
+                        router.push({
+                          pathname: "/newApp/chat/[userId]",
+                          params: {
+                            userId: item.customerClerkId,
+                            name: item.customerName || "Customer",
+                          },
+                        } as any);
+                      }}
+                      style={sc.chatBtnSmall}
+                    >
+                      <Ionicons name="chatbubble-ellipses-outline" size={18} color="#5B63D3" />
+                    </TouchableOpacity>
                   </View>
                   {!!item.whenISO && (
                     <View style={sc.metaRow}>
@@ -536,33 +596,36 @@ export default function EventInterestScreen() {
                         <Text style={sc.checkedInBadgeText}>Verified</Text>
                       </View>
                     ) : (
-                      <View style={sc.pendingBadge}>
-                        <Text style={sc.pendingBadgeText}>Pending</Text>
+                      <View style={sc.joinedBadgeBadge}>
+                        <Ionicons name="people-outline" size={12} color="#6B7280" />
+                        <Text style={sc.joinedBadgeBadgeText}>Joined</Text>
                       </View>
                     )}
+                    
+                    <TouchableOpacity
+                      onPress={() => {
+                        router.push({
+                          pathname: "/newApp/chat/[userId]",
+                          params: {
+                            userId: item.clerkId,
+                            name: item.name || "Guest",
+                            avatarUrl: item.imageUrl || "",
+                          },
+                        } as any);
+                      }}
+                      style={sc.chatBtnSmall}
+                    >
+                      <Ionicons name="chatbubble-ellipses-outline" size={18} color="#5B63D3" />
+                    </TouchableOpacity>
+
                     <Ionicons name="chevron-forward" size={14} color="rgba(148,163,184,0.3)" style={{ marginLeft: 4 }} />
                   </View>
 
-                  {isHost && (
-                    <View style={sc.contactRow}>
-                      {!!item.email && (
-                        <View style={sc.contactChip}>
-                          <Ionicons name="mail" size={12} color="#94A3B8" />
-                          <Text style={sc.contactChipText} numberOfLines={1}>{item.email}</Text>
-                        </View>
-                      )}
-                      {!!item.phone && (
-                        <View style={sc.contactChip}>
-                          <Ionicons name="call" size={12} color="#94A3B8" />
-                          <Text style={sc.contactChipText}>{item.phone}</Text>
-                        </View>
-                      )}
-                    </View>
-                  )}
 
                   {!!item.message && (
                     <View style={sc.notesBox}>
-                      <Text style={sc.notesText}>"{item.message}"</Text>
+                      <Ionicons name="chatbubble-ellipses" size={12} color="#94A3B8" style={{ marginTop: 2 }} />
+                      <Text style={sc.notesText}>{item.message}</Text>
                     </View>
                   )}
                 </Pressable>
@@ -581,6 +644,43 @@ export default function EventInterestScreen() {
             onReject={(id) => handleAdmitReject(id, "reject")}
             admitBusy={admitBusy}
           />
+
+          {/* OTP Verification Modal */}
+          <Modal visible={showOtpModal} animationType="fade" transparent statusBarTranslucent>
+            <View style={sc.modalOverlay}>
+              <View style={sc.otpContent}>
+                <Text style={sc.otpTitle}>Verify Attendee</Text>
+                <Text style={sc.otpSub}>Ask the guest for their 4-digit check-in OTP</Text>
+                
+                <TextInput
+                  style={sc.otpInput}
+                  placeholder="0 0 0 0"
+                  placeholderTextColor="#9CA3AF"
+                  keyboardType="number-pad"
+                  maxLength={4}
+                  value={otpValue}
+                  onChangeText={setOtpValue}
+                  autoFocus
+                />
+
+                <View style={sc.otpBtnRow}>
+                  <TouchableOpacity 
+                    onPress={() => { setShowOtpModal(false); setOtpValue(""); }} 
+                    style={sc.otpCancelBtn}
+                  >
+                    <Text style={sc.otpCancelText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    onPress={handleVerifyOtp} 
+                    disabled={verifying || otpValue.length !== 4}
+                    style={[sc.otpSubmitBtn, (verifying || otpValue.length !== 4) && { opacity: 0.6 }]}
+                  >
+                    {verifying ? <ActivityIndicator color="#fff" size="small" /> : <Text style={sc.otpSubmitText}>Verify</Text>}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
         </View>
       )}
     </View>
@@ -827,7 +927,7 @@ const sc = StyleSheet.create({
 
   notifCard: {
     backgroundColor: "#fff", borderRadius: 20, padding: 20,
-    marginBottom: 16, borderWeight: 1, borderColor: "#E5E7EB",
+    marginBottom: 16, borderWidth: 1, borderColor: "#E5E7EB",
     shadowColor: "#000", shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.03, shadowRadius: 10, elevation: 2,
   },
@@ -902,9 +1002,10 @@ const sc = StyleSheet.create({
   sectionTitle: { color: "#5B63D3", fontWeight: "700", fontSize: 14, textTransform: "uppercase", letterSpacing: 0.5 },
 
   card: {
-    padding: 14, borderRadius: 16,
+    padding: 16, borderRadius: 20,
     backgroundColor: "#fff",
-    borderWidth: 1, borderColor: "#E5E7EB",
+    borderWidth: 1, borderColor: "rgba(0,0,0,0.04)",
+    shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 2,
   },
   cardChecked: {
     backgroundColor: "rgba(46,59,142,0.03)",
@@ -912,9 +1013,9 @@ const sc = StyleSheet.create({
   },
   cardTopRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   avatarBox: {
-    width: 44, height: 44, borderRadius: 12,
-    backgroundColor: "rgba(91,99,211,0.1)",
-    borderWidth: 1.5, borderColor: "rgba(91,99,211,0.2)",
+    width: 48, height: 48, borderRadius: 16,
+    backgroundColor: "rgba(91,99,211,0.07)",
+    borderWidth: 1.5, borderColor: "rgba(91,99,211,0.15)",
     alignItems: "center", justifyContent: "center",
     overflow: "hidden",
   },
@@ -940,6 +1041,43 @@ const sc = StyleSheet.create({
     borderWidth: 1, borderColor: "#E5E7EB",
   },
   pendingBadgeText: { color: "#6B7280", fontSize: 10, fontWeight: "600" },
+  joinedBadgeBadge: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8,
+    backgroundColor: "#F3F4F6",
+    borderWidth: 1, borderColor: "#E5E7EB",
+  },
+  joinedBadgeBadgeText: { color: "#6B7280", fontSize: 10, fontWeight: "700" },
+
+  modalOverlay: {
+    flex: 1, backgroundColor: "rgba(0,0,0,0.5)",
+    alignItems: "center", justifyContent: "center",
+    padding: 24,
+  },
+  otpContent: {
+    width: "100%", backgroundColor: "#fff",
+    borderRadius: 24, padding: 24,
+    alignItems: "center",
+  },
+  otpTitle: { fontSize: 20, fontWeight: "900", color: "#111827", marginBottom: 8 },
+  otpSub: { fontSize: 14, color: "#6B7280", textAlign: "center", marginBottom: 24 },
+  otpInput: {
+    width: "100%", height: 60, backgroundColor: "#F3F4F6",
+    borderRadius: 16, textAlign: "center", fontSize: 32,
+    fontWeight: "900", color: "#111827", letterSpacing: 10,
+    marginBottom: 24,
+  },
+  otpBtnRow: { flexDirection: "row", gap: 12, width: "100%" },
+  otpCancelBtn: {
+    flex: 1, height: 48, borderRadius: 14,
+    backgroundColor: "#F3F4F6", alignItems: "center", justifyContent: "center",
+  },
+  otpCancelText: { color: "#4B5563", fontWeight: "600" },
+  otpSubmitBtn: {
+    flex: 2, height: 48, borderRadius: 14,
+    backgroundColor: "#5B63D3", alignItems: "center", justifyContent: "center",
+  },
+  otpSubmitText: { color: "#fff", fontWeight: "700" },
 
   contactRow: { flexDirection: "row", gap: 8, marginTop: 14, flexWrap: "wrap" },
   contactChip: {
@@ -952,11 +1090,11 @@ const sc = StyleSheet.create({
   contactChipText: { color: "#4B5563", fontSize: 11, fontWeight: "500" },
 
   notesBox: {
-    marginTop: 12, padding: 10, borderRadius: 10,
-    backgroundColor: "#F9FAFB",
-    borderWidth: 1, borderColor: "#E5E7EB",
+    marginTop: 14, padding: 12, borderRadius: 12,
+    backgroundColor: "rgba(0,0,0,0.02)",
+    flexDirection: "row", gap: 8,
   },
-  notesText: { color: "#6B7280", fontSize: 12, fontWeight: "500", fontStyle: "italic", lineHeight: 18 },
+  notesText: { color: "#4B5563", fontSize: 12, fontWeight: "500", lineHeight: 18, flex: 1 },
 
   metaRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 10 },
   cardMeta: { color: "#6B7280", fontSize: 12, fontWeight: "500" },
@@ -1020,5 +1158,10 @@ const sc = StyleSheet.create({
   },
   emptyTitle: { color: "#1F2937", fontWeight: "700", fontSize: 16, marginTop: 12 },
   emptySub: { color: "#6B7280", marginTop: 6, fontWeight: "500", textAlign: "center", paddingHorizontal: 30 },
-
+  chatBtnSmall: {
+    width: 36, height: 36, borderRadius: 10,
+    backgroundColor: "rgba(91,99,211,0.08)",
+    alignItems: "center", justifyContent: "center",
+    marginLeft: 8,
+  },
 });

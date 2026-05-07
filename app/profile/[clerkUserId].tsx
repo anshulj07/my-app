@@ -192,24 +192,6 @@ export default function PublicProfileScreen() {
             </View>
           )}
 
-          {/* Message button — only for other people */}
-          {!isOwnProfile && (
-            <TouchableOpacity
-              style={pub.msgBtn}
-              activeOpacity={0.85}
-              onPress={() => router.push({
-                pathname: "/newApp/chat/[userId]" as any,
-                params: {
-                  userId:    targetId,
-                  name:      profile?.name || "User",
-                  avatarUrl: profile?.avatar || initialAvatar || "",
-                },
-              })}
-            >
-              <Ionicons name="chatbubble-outline" size={16} color="#fff" />
-              <Text style={pub.msgTxt}>Message</Text>
-            </TouchableOpacity>
-          )}
         </View>
 
         {/* ── Services Offered ── */}
@@ -341,25 +323,18 @@ const pub = StyleSheet.create({
 
   statsRow: {
     flexDirection: "row", alignItems: "center",
-    marginTop: 16, marginHorizontal: 16,
+    marginTop: 20, marginHorizontal: 12,
     backgroundColor: "#fff",
-    borderRadius: 18, paddingVertical: 14,
-    borderWidth: 1, borderColor: "#F3F4F6",
-    shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 2,
+    borderRadius: 24, paddingVertical: 18,
+    borderWidth: 1, borderColor: "rgba(0,0,0,0.03)",
+    shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 15, shadowOffset: { width: 0, height: 8 }, elevation: 4,
   },
   statBox:    { alignItems: "center", flex: 1 },
-  statNumRow: { flexDirection: "row", alignItems: "center", marginBottom: 2 },
-  statNum:    { color: COLORS.text, fontWeight: "900", fontSize: 18 },
-  statLab:    { color: COLORS.muted, fontWeight: "700", fontSize: 10, marginTop: 2 },
-  statDivider: { width: 1, height: 32, backgroundColor: "#F3F4F6" },
+  statNumRow: { flexDirection: "row", alignItems: "center", marginBottom: 4 },
+  statNum:    { color: COLORS.text, fontWeight: "900", fontSize: 20 },
+  statLab:    { color: COLORS.muted, fontWeight: "800", fontSize: 10, marginTop: 2, textAlign: "center", textTransform: "uppercase", letterSpacing: 0.4 },
+  statDivider: { width: 1, height: 40, backgroundColor: "rgba(0,0,0,0.05)" },
 
-  msgBtn: {
-    marginTop: 14, flexDirection: "row", alignItems: "center", gap: 8,
-    paddingHorizontal: 28, paddingVertical: 12, borderRadius: 999,
-    backgroundColor: COLORS.brand,
-    shadowColor: COLORS.brand, shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: { width: 0, height: 4 },
-  },
-  msgTxt: { color: "#fff", fontWeight: "900", fontSize: 15 },
 
   grid: { flexDirection: "row", flexWrap: "wrap", gap: PHOTO_GAP, marginTop: 12 },
   gridCell: { overflow: "hidden", borderRadius: 10 },

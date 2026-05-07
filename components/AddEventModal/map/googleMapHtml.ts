@@ -19,7 +19,15 @@ export function makeGoogleMapHtml(key?: string, initial?: { lat: number; lng: nu
   
         function post(msg){ window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify(msg)); }
   
+        window.gm_authFailure = function() {
+          post({ type: 'log', msg: 'Google Maps Authentication Failed! (Places/Geocode Map)' });
+        };
+
         function init() {
+          if(!window.google || !google.maps) {
+            post({ type: 'log', msg: 'Google object not found' });
+            return;
+          }
           map = new google.maps.Map(document.getElementById('map'), {
             center: { lat: ${center.lat}, lng: ${center.lng} },
             zoom: 13,

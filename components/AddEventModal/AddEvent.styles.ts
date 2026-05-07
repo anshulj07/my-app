@@ -6,7 +6,7 @@ export const styles = StyleSheet.create({
   modal: {
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
-    backgroundColor: "#0B1220",
+    backgroundColor: "#FFFFFF",
     overflow: "hidden",
   },
   handle: {
@@ -19,7 +19,7 @@ export const styles = StyleSheet.create({
     marginBottom: 4,
   },
 
-  headerWrap: { backgroundColor: "#0B1220" },
+  headerWrap: { backgroundColor: "#FFFFFF" },
   headerGlow: {
     position: "absolute",
     top: -120,
@@ -65,7 +65,7 @@ export const styles = StyleSheet.create({
   closeText: { color: "#E2E8F0", fontSize: 22, lineHeight: 22, fontWeight: "900" },
 
   body: {
-    backgroundColor: "#F6F7FB",
+    backgroundColor: "#FFFFFF",
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     paddingHorizontal: 14,
@@ -360,4 +360,35 @@ export const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 14 },
   },
   primaryText: { color: "#FFFFFF", fontWeight: "950" as any },
+
+  // Step 1 Premium Vertical Cards
+  step1Card: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    padding: 20,
+    borderWidth: 2,
+    borderColor: "rgba(226,232,240,0.95)",
+    marginBottom: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+    shadowColor: "#0B1220",
+    shadowOpacity: 0.05,
+    shadowRadius: 15,
+    shadowOffset: { width: 0, height: 8 },
+  },
+  step1CardActiveGreen: { borderColor: "#22C55E", backgroundColor: "#F0FDF4" },
+  step1CardActiveAmber: { borderColor: "#F59E0B", backgroundColor: "#FFFBEB" },
+  step1IconBox: {
+    width: 56, height: 56, borderRadius: 18,
+    backgroundColor: "#F8FAFC",
+    alignItems: "center", justifyContent: "center",
+  },
+  step1TextContent: { flex: 1 },
+  step1Name: { fontSize: 17, fontWeight: "900", color: "#0F172A" },
+  step1Sub: { fontSize: 13, color: "#64748B", fontWeight: "600", marginTop: 4, lineHeight: 18 },
+  step1Check: {
+    width: 24, height: 24, borderRadius: 12,
+    alignItems: "center", justifyContent: "center",
+  },
 });

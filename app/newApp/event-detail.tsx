@@ -168,24 +168,8 @@ const IC = StyleSheet.create({
 //  PRICE CHIP (floating over image)
 // ─────────────────────────────────────────────────────────────
 function PriceChip({ ev }: { ev: EventDetail }) {
-  const price = formatPrice(ev);
-  const loc   = formatLocation(ev);
-  const isPaid = ev.kind === "paid";
-
-  return (
-    <View style={PC.wrap}>
-      <View style={PC.inner}>
-        <Text style={PC.name} numberOfLines={1}>{ev.title}</Text>
-        <Text style={[PC.price, { color: isPaid ? C.ink : C.green }]}>{price}</Text>
-      </View>
-      {!!loc && (
-        <View style={PC.locRow}>
-          <Ionicons name="location-sharp" size={10} color={C.muted} />
-          <Text style={PC.locTxt} numberOfLines={1}>{loc}</Text>
-        </View>
-      )}
-    </View>
-  );
+  // We'll remove this in favor of the new layout below the image
+  return null;
 }
 
 const PC = StyleSheet.create({
@@ -435,8 +419,20 @@ export default function EventDetailScreen() {
           />
         </TouchableOpacity>
 
-        {/* Floating price chip */}
-        {ev && <PriceChip ev={ev} />}
+        {/* Floating price chip removed in favor of below-banner info */}
+      </View>
+
+      {/* ── NEW INFO HEADER (Match Page 2) ── */}
+      <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <Text style={{ fontSize: 28, fontWeight: "900", color: C.ink, letterSpacing: -0.6, flex: 1 }} numberOfLines={2}>
+            {title}
+          </Text>
+          <View style={L.ratingBadge}>
+            <Ionicons name="star" size={14} color="#F59E0B" />
+            <Text style={L.ratingText}>4.8</Text>
+          </View>
+        </View>
       </View>
 
       {/* ── SCROLLABLE CONTENT ── */}
@@ -447,8 +443,7 @@ export default function EventDetailScreen() {
 
         {/* ── INFO BLOCK ── */}
         <View style={S.infoBlock}>
-          <Text style={S.title}>{title}</Text>
-
+          
           <TouchableOpacity
             activeOpacity={0.7}
             onPress={() => {
@@ -459,72 +454,51 @@ export default function EventDetailScreen() {
                 } as any);
               }
             }}
-            style={S.hostHeaderRow}
+            style={L.organizerRow}
           >
-            <View style={S.hostSmallAvatar}>
+            <View style={L.orgAvatarWrap}>
               {ev?.creatorAvatar ? (
-                <Image source={{ uri: ev.creatorAvatar }} style={S.hostSmallAvatarImg} />
+                <Image source={{ uri: ev.creatorAvatar }} style={L.orgAvatar} />
               ) : (
-                <Text style={S.hostSmallInitial}>{(ev?.creatorName || "H").charAt(0).toUpperCase()}</Text>
+                <View style={[L.orgAvatar, { backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center" }]}>
+                  <Text style={{ fontWeight: "800", color: "#64748B" }}>{(ev?.creatorName || "H").charAt(0).toUpperCase()}</Text>
+                </View>
               )}
             </View>
-            <Text style={S.hostHeaderTxt}>By {ev?.creatorName || "Local Host"}</Text>
-            <Ionicons name="checkmark-circle" size={12} color={C.teal} />
-          </TouchableOpacity>
-
-          {!!loc && (
-            <View style={S.locRow}>
-              <Ionicons name="location-sharp" size={14} color={C.red} />
-              <Text style={S.locTxt}>{loc}</Text>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Text style={L.orgName}>{ev?.creatorName || "Local Host"}</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
+                  <Ionicons name="star" size={10} color="#F59E0B" />
+                  <Text style={{ fontSize: 10, fontWeight: "800", color: "#475569" }}>4.8</Text>
+                </View>
+              </View>
+              <Text style={L.orgSub}>Verified Organizer • Host</Text>
             </View>
-          )}
+            <View style={L.verifiedBadge}>
+              <Ionicons name="checkmark" size={10} color={C.green} />
+              <Text style={L.verifiedText}>Verified</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={14} color={C.muted} style={{ marginLeft: 4 }} />
+          </TouchableOpacity>
 
           {/* Stats row */}
           <View style={S.statsRow}>
             <View style={S.statItem}>
-              <Text style={{ fontSize: 14 }}>⭐</Text>
-              <Text style={S.statVal}>4.8</Text>
-              <Text style={S.statSub}>(54)</Text>
+              <Ionicons name="location-outline" size={14} color={C.red} />
+              <Text style={S.statVal} numberOfLines={1}>{loc || "Bhopal, India"}</Text>
             </View>
-            {totalCount > 0 && (
-              <>
-                <View style={S.divider} />
-                <View style={S.statItem}>
-                  <Ionicons name="people-outline" size={14} color={C.muted} />
-                  <Text style={S.statVal}>{totalCount}</Text>
-                  <Text style={S.statSub}>going</Text>
-                </View>
-              </>
-            )}
-            {!!(ev?.time || ev?.date) && (
-              <>
-                <View style={S.divider} />
-                <View style={S.statItem}>
-                  <Ionicons name="time-outline" size={14} color={C.muted} />
-                  <Text style={S.statVal} numberOfLines={1}>
-                    {formatEventDateTime(ev?.date, ev?.time)}
-                  </Text>
-                </View>
-              </>
-            )}
-            {!!ev?.duration && (
-              <>
-                <View style={S.divider} />
-                <View style={S.statItem}>
-                  <Ionicons name="hourglass-outline" size={14} color={C.muted} />
-                  <Text style={S.statVal}>{ev.duration}</Text>
-                </View>
-              </>
-            )}
+            
+            <View style={S.divider} />
+            
+            <View style={S.statItem}>
+              <Ionicons name="time-outline" size={14} color={C.muted} />
+              <Text style={S.statVal} numberOfLines={1}>
+                {formatEventDateTime(ev?.date, ev?.time)}
+              </Text>
+            </View>
           </View>
 
-          {/* Price display */}
-          <View style={S.priceRow}>
-            <Text style={[S.bigPrice, { color: isPaid ? C.ink : C.green }]}>
-              {price}
-            </Text>
-            {isPaid && <Text style={S.perPerson}> per person</Text>}
-          </View>
         </View>
 
         {/* ── ATTENDANCE PREVIEW CARD ── */}
@@ -699,7 +673,7 @@ export default function EventDetailScreen() {
             startDate={ev.date || (ev.startsAt ? String(ev.startsAt).split("T")[0] : "")}
             endDate={ev.date || (ev.startsAt ? String(ev.startsAt).split("T")[0] : "")}
             eventLocation={ev.location?.formattedAddress || ""}
-            label={ev.kind === "paid" ? `Book Now · ${price}` : "Join Now · Free"}
+            label={(ev.kind === "paid" || ev.kind === "service") ? `Book Now · ${price}` : "Join Now · Free"}
             onJoined={() => setBooked(true)}
           />
         ) : null}
@@ -826,4 +800,30 @@ const S = StyleSheet.create({
   hostSmallAvatarImg: { width: "100%", height: "100%", borderRadius: 8 },
   hostHeaderTxt:    { fontSize: 13, fontWeight: "700", color: C.ink2, opacity: 0.9 },
   hostAvatarImg:    { width: "100%", height: "100%", borderRadius: 16 },
+});
+
+// ─── NEW PREMIUM LAYOUT STYLES ───────────────────────────
+const L = StyleSheet.create({
+  ratingBadge: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    backgroundColor: "rgba(245,158,11,0.1)", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12,
+    borderWidth: 1, borderColor: "rgba(245,158,11,0.2)",
+  },
+  ratingText: { fontSize: 14, fontWeight: "900", color: "#F59E0B" },
+  organizerRow: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    padding: 16, borderRadius: 20, backgroundColor: "#fff",
+    borderWidth: 1, borderColor: "#F1F5F9",
+    marginBottom: 20,
+    shadowColor: "#000", shadowOpacity: 0.03, shadowRadius: 10, elevation: 2,
+  },
+  orgAvatarWrap: { width: 44, height: 44, borderRadius: 12, overflow: "hidden" },
+  orgAvatar: { width: "100%", height: "100%" },
+  orgName:   { fontSize: 15, fontWeight: "800", color: "#1E293B" },
+  orgSub:    { fontSize: 12, fontWeight: "600", color: "#64748B", marginTop: 1 },
+  verifiedBadge: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    backgroundColor: "rgba(34,197,94,0.08)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8,
+  },
+  verifiedText: { fontSize: 10, fontWeight: "800", color: "#15803D" },
 });

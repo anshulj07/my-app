@@ -39,6 +39,8 @@ export type CreateListingPayload = {
   // for events (free/paid)
   date?: string;   // yyyy-mm-dd
   time?: string;   // HH:mm
+  endDate?: string; // yyyy-mm-dd
+  endTime?: string; // HH:mm
   timezone?: string;
 
   // for paid event + service

@@ -3306,7 +3306,7 @@ import React, {
 import {
   View, Text, TouchableOpacity, Animated, ActivityIndicator,
   Image, RefreshControl, Modal, Dimensions,
-  StyleSheet, StatusBar, Platform,
+  StyleSheet, StatusBar, Platform, Linking,
 } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useRouter, useFocusEffect } from "expo-router";
@@ -4152,6 +4152,21 @@ export default function ProfileHome() {
           </View>
         </View>
       </Modal>
+
+      {/* Floating Support Button */}
+      <TouchableOpacity 
+        style={S.supportFloat} 
+        activeOpacity={0.85}
+        onPress={() => {
+          // WhatsApp Support Link with provided number
+          const url = 'https://wa.me/918103822670';
+          Linking.openURL(url).catch(() => {
+             alert("Could not open WhatsApp. Please ensure it is installed.");
+          });
+        }}
+      >
+        <Ionicons name="headset-outline" size={28} color="#fff" />
+      </TouchableOpacity>
     </View>
   );
 }
@@ -4368,6 +4383,24 @@ const S = StyleSheet.create({
   modalBtnRow:  { flexDirection: "row", gap: 10, width: "100%" },
   modalBtn:     { flex: 1, height: 52, borderRadius: 999, alignItems: "center", justifyContent: "center" },
   modalBtnTxt:  { fontSize: 15, fontWeight: "800" },
+
+  supportFloat: {
+    position: "absolute",
+    bottom: 90, // Moved up from 30
+    right: 20,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: "#3ECFB2", // Teal accent
+    alignItems: "center",
+    justifyContent: "center",
+    elevation: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    zIndex: 9999,
+  },
 });
 
 
@@ -4409,7 +4442,11 @@ type MyEventDoc = {
   _id: string; title: string; emoji?: string;
   kind: "free" | "paid" | "service";
   priceCents?: number | null;
-  startsAt?: string | null; date?: string; time?: string; status?: string;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  date?: string;
+  time?: string;
+  status?: string;
   attendance?: number | null; attendees?: any[];
   location?: { city?: string; admin1Code?: string; countryCode?: string };
   _role?: "created" | "attended";
@@ -4423,11 +4460,28 @@ function evStartMs(ev: MyEventDoc): number {
   if (d) { const t = new Date(`${d}T12:00:00Z`).getTime(); if (Number.isFinite(t)) return t; }
   return Number.POSITIVE_INFINITY;
 }
+
+function evEndMs(ev: MyEventDoc): number {
+  if (ev.endsAt) { const t = new Date(ev.endsAt).getTime(); if (Number.isFinite(t)) return t; }
+  // Fallback: 3 hours after start if no end time
+  const start = evStartMs(ev);
+  if (Number.isFinite(start)) return start + (3 * 60 * 60 * 1000);
+  return Number.POSITIVE_INFINITY;
+}
+
 function evState(ev: MyEventDoc): "upcoming" | "ongoing" | "past" {
   const s = String(ev.status || "active").toLowerCase();
   if (s === "ended" || s === "completed") return "past";
-  const ms = evStartMs(ev);
-  return (ms === Number.POSITIVE_INFINITY || ms > Date.now()) ? "upcoming" : "ongoing";
+  
+  const start = evStartMs(ev);
+  const end   = evEndMs(ev);
+  const now   = Date.now();
+
+  if (now > end && end !== Number.POSITIVE_INFINITY) return "past";
+  if (now >= start && now <= end) return "ongoing";
+  if (now < start) return "upcoming";
+
+  return "upcoming";
 }
 function evWhen(ev: MyEventDoc) {
   const ms = evStartMs(ev);

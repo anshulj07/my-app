@@ -435,7 +435,7 @@ export default function ChatListScreen() {
     : conversations;
 
   const totalUnread = conversations.reduce((s, c) => s + (c.unreadCount || 0), 0);
-  const TOP = Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0;
+  const TOP = (Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0) + 12;
   const fallback = (name: string) =>
     `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=3ECFB2&color=fff&size=80`;
 
@@ -567,11 +567,11 @@ const S = StyleSheet.create({
     shadowOpacity: 0.07, shadowRadius: 10, elevation: 3,
   },
   headerInner: {
-    flexDirection: "row", alignItems: "center", gap: 14,
-    paddingHorizontal: 18, paddingTop: 10, paddingBottom: 10,
+    flexDirection: "row", alignItems: "center", gap: 12,
+    paddingHorizontal: 18, paddingTop: 8, paddingBottom: 10,
   },
   heroIcon: {
-    width: 52, height: 52, borderRadius: 16,
+    width: 44, height: 44, borderRadius: 12,
     backgroundColor: C.tealBg, borderWidth: 1.5, borderColor: C.teal + "44",
     alignItems: "center", justifyContent: "center",
   },

@@ -78,6 +78,12 @@ export default function EditEventModalView(props: {
 
     time24: string;
     setTime24: (v: string) => void;
+ 
+    endDateISO: string;
+    setEndDateISO: (v: string) => void;
+ 
+    endTime24: string;
+    setEndTime24: (v: string) => void;
 
     query: string;
     setQuery: (v: string) => void;
@@ -137,16 +143,32 @@ export default function EditEventModalView(props: {
         return formatTime12h(hh, mm);
     }, [props.time24]);
 
+    const endDateLabel = useMemo(() => {
+        if (!props.endDateISO) return "No date";
+        return isoToSafeDate(props.endDateISO).toLocaleDateString(undefined, {
+            weekday: "short",
+            month: "short",
+            day: "numeric",
+        });
+    }, [props.endDateISO]);
+
+    const endTimeLabel = useMemo(() => {
+        if (!props.endTime24) return "No time";
+        const [hh, mm] = props.endTime24.split(":").map((x) => parseInt(x, 10));
+        if (!Number.isFinite(hh) || !Number.isFinite(mm)) return "No time";
+        return formatTime12h(hh, mm);
+    }, [props.endTime24]);
+
     const [dateOpen, setDateOpen] = useState(false);
     const [timeOpen, setTimeOpen] = useState(false);
+    const [endDateOpen, setEndDateOpen] = useState(false);
+    const [endTimeOpen, setEndTimeOpen] = useState(false);
     const emoji = useMemo(() => textToEmoji(props.title || ""), [props.title]);
 
     const typeSubtitle =
         props.kind === "event_free"
             ? "Free • joinable"
-            : props.kind === ("event_paid" as ListingKind)
-                ? "Paid • ticketed"
-                : "Service • bookable";
+            : "Paid • ticketed";
 
     return (
         <Modalize
@@ -226,13 +248,6 @@ export default function EditEventModalView(props: {
                                 active: props.kind === ("event_paid" as ListingKind),
                                 onPress: () => props.setKind("event_paid" as ListingKind),
                             },
-                            {
-                                key: "service",
-                                label: "Service",
-                                hint: "Book",
-                                active: props.kind === "service",
-                                onPress: () => props.setKind("service"),
-                            },
                         ]}
                     />
 
@@ -273,16 +288,18 @@ export default function EditEventModalView(props: {
                             <Text style={styles.cardSub}>tap to pick</Text>
                         </View>
 
-                        {(props.dateISO || props.time24) ? (
+                        {(props.dateISO || props.time24 || props.endDateISO || props.endTime24) ? (
                             <Pressable
                                 hitSlop={10}
                                 onPress={() => {
                                     props.setDateISO("");
                                     props.setTime24("");
+                                    props.setEndDateISO("");
+                                    props.setEndTime24("");
                                 }}
                                 style={styles.clearPill}
                             >
-                                <Text style={styles.clearPillText}>Clear</Text>
+                                <Text style={styles.clearPillText}>Clear all</Text>
                             </Pressable>
                         ) : null}
                     </View>
@@ -315,6 +332,40 @@ export default function EditEventModalView(props: {
 
                             <Text numberOfLines={1} style={[styles.whenTileValue, !props.time24 && styles.whenTileValueMuted]}>
                                 {props.time24 ? timeLabel : "Select time"}
+                            </Text>
+
+                            <Text style={styles.whenTileHint}>Tap to choose</Text>
+                        </Pressable>
+                    </View>
+
+                    <View style={[styles.whenGrid, { marginTop: 12 }]}>
+                        {/* End Date */}
+                        <Pressable onPress={() => setEndDateOpen(true)} style={styles.whenTile} android_ripple={{ color: "#E2E8F0" }}>
+                            <View style={styles.whenTileTop}>
+                                <View style={[styles.whenBadge, { backgroundColor: "rgba(139, 92, 246, 0.1)" }]}>
+                                    <Text style={styles.whenBadgeText}>🏁</Text>
+                                </View>
+                                <Text style={styles.whenTileLabel}>End Date</Text>
+                            </View>
+
+                            <Text numberOfLines={1} style={[styles.whenTileValue, !props.endDateISO && styles.whenTileValueMuted]}>
+                                {props.endDateISO ? endDateLabel : "Select date"}
+                            </Text>
+
+                            <Text style={styles.whenTileHint}>Tap to choose</Text>
+                        </Pressable>
+
+                        {/* End Time */}
+                        <Pressable onPress={() => setEndTimeOpen(true)} style={styles.whenTile} android_ripple={{ color: "#E2E8F0" }}>
+                            <View style={styles.whenTileTop}>
+                                <View style={[styles.whenBadge, { backgroundColor: "rgba(236, 72, 153, 0.1)" }]}>
+                                    <Text style={styles.whenBadgeText}>⌛</Text>
+                                </View>
+                                <Text style={styles.whenTileLabel}>End Time</Text>
+                            </View>
+
+                            <Text numberOfLines={1} style={[styles.whenTileValue, !props.endTime24 && styles.whenTileValueMuted]}>
+                                {props.endTime24 ? endTimeLabel : "Select time"}
                             </Text>
 
                             <Text style={styles.whenTileHint}>Tap to choose</Text>
@@ -369,6 +420,60 @@ export default function EditEventModalView(props: {
                                 }}
                             />
                             <TouchableOpacity style={styles.pickerDone} onPress={() => setTimeOpen(false)} activeOpacity={0.9}>
+                                <Text style={styles.pickerDoneText}>Done</Text>
+                            </TouchableOpacity>
+                        </Pressable>
+                    </Pressable>
+                </Modal>
+
+                {/* End Date picker modal */}
+                <Modal transparent visible={endDateOpen} animationType="fade" onRequestClose={() => setEndDateOpen(false)}>
+                    <Pressable style={styles.pickerOverlay} onPress={() => setEndDateOpen(false)}>
+                        <Pressable style={styles.pickerCard} onPress={() => { }}>
+                            <Text style={styles.pickerTitle}>Pick an end date</Text>
+                            <DateTimePicker
+                                value={props.endDateISO ? isoToSafeDate(props.endDateISO) : (props.dateISO ? isoToSafeDate(props.dateISO) : new Date())}
+                                mode="date"
+                                display={Platform.OS === "ios" ? "inline" : "default"}
+                                themeVariant="light"
+                                textColor="#0F172A"
+                                accentColor="#0A84FF"
+                                minimumDate={props.dateISO ? isoToSafeDate(props.dateISO) : undefined}
+                                onChange={(_, d) => {
+                                    if (!d) return;
+                                    const iso = d.toISOString().slice(0, 10);
+                                    props.setEndDateISO(iso);
+                                    if (Platform.OS !== "ios") setEndDateOpen(false);
+                                }}
+                            />
+                            <TouchableOpacity style={styles.pickerDone} onPress={() => setEndDateOpen(false)} activeOpacity={0.9}>
+                                <Text style={styles.pickerDoneText}>Done</Text>
+                            </TouchableOpacity>
+                        </Pressable>
+                    </Pressable>
+                </Modal>
+
+                {/* End Time picker modal */}
+                <Modal transparent visible={endTimeOpen} animationType="fade" onRequestClose={() => setEndTimeOpen(false)}>
+                    <Pressable style={styles.pickerOverlay} onPress={() => setEndTimeOpen(false)}>
+                        <Pressable style={styles.pickerCard} onPress={() => { }}>
+                            <Text style={styles.pickerTitle}>Pick an end time</Text>
+                            <DateTimePicker
+                                value={timeToDate(props.endTime24)}
+                                mode="time"
+                                display={Platform.OS === "ios" ? "spinner" : "default"}
+                                themeVariant="light"
+                                textColor="#0F172A"
+                                accentColor="#0A84FF"
+                                onChange={(_, d) => {
+                                    if (!d) return;
+                                    const hh = d.getHours();
+                                    const mm = d.getMinutes();
+                                    props.setEndTime24(`${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`);
+                                    if (Platform.OS !== "ios") setEndTimeOpen(false);
+                                }}
+                            />
+                            <TouchableOpacity style={styles.pickerDone} onPress={() => setEndTimeOpen(false)} activeOpacity={0.9}>
                                 <Text style={styles.pickerDoneText}>Done</Text>
                             </TouchableOpacity>
                         </Pressable>

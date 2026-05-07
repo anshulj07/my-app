@@ -68,7 +68,14 @@ function getEventState(ev: EventDoc): "upcoming" | "live" | "ended" {
 function fmtWhen(ev: EventDoc) {
   const ms = eventStartMs(ev);
   if (!Number.isFinite(ms) || ms === Number.POSITIVE_INFINITY) return "No time set";
-  return new Date(ms).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  return new Date(ms).toLocaleString(undefined, { 
+    weekday: "short", 
+    month: "short", 
+    day: "numeric", 
+    hour: "numeric", 
+    minute: "2-digit",
+    hour12: true 
+  });
 }
 function fmtWhere(ev: EventDoc) {
   const city = ev.location?.city?.trim(); const s = ev.location?.admin1Code?.trim(); const cc = ev.location?.countryCode?.trim();
@@ -164,7 +171,12 @@ function EventCard({ e, index, onPressEvent }: { e: EventDoc; index: number; onP
 
   const myOtp       = (e as any)?.myCheckInOtp ?? (e as any)?.checkInOtp ?? null;
   const isCheckedIn = !!(e as any)?.myCheckedIn;
-  const isPending   = (e as any)?.myJoinStatus === "pending";
+  
+  const myStatus    = String((e as any)?.myJoinStatus || "confirmed").toLowerCase();
+  const isPending   = ["pending", "pending_approval", "paid_pending_approval", "payment_pending"].includes(myStatus);
+  const needsPay    = myStatus === "payment_pending";
+  const isPaidWait  = myStatus === "paid_pending_approval";
+  const isFreeWait  = myStatus === "pending_approval";
 
   const attendees: Array<{ clerkId: string; name: string; imageUrl?: string }> =
     Array.isArray(e.attendees) ? e.attendees : [];
@@ -203,11 +215,13 @@ function EventCard({ e, index, onPressEvent }: { e: EventDoc; index: number; onP
           </View>
         )}
 
-        {/* Pending badge */}
+        {/* Status Badges */}
         {isPending && (
           <View style={T.pendingBadge}>
             <Text style={{ fontSize: 12 }}>⏳</Text>
-            <Text style={T.pendingText}>Pending Approval</Text>
+            <Text style={T.pendingText}>
+              {isPaidWait ? "Paid • Waiting Host" : "Pending Approval"}
+            </Text>
           </View>
         )}
 
@@ -224,18 +238,12 @@ function EventCard({ e, index, onPressEvent }: { e: EventDoc; index: number; onP
                 <Text style={[T.badgeText, { color: kindCfg.accentText }]}>{kindLabel(e)}</Text>
               </View>
 
-              {/* Approval Status Badge */}
-              {isPending ? (
-                <View style={[T.badge, { backgroundColor: C.amberBg, borderColor: C.amber + "55" }]}>
-                  <Text style={[T.badgeText, { color: C.amberText }]}>
-                    {(e as any).isPaid ? "💰 Paid • Waiting Approval" : "⏳ Waiting Approval"}
-                  </Text>
-                </View>
-              ) : (e.joinPolicy === "approval" ? (
+              {/* Approval Status Badge (Internal) */}
+              {!isPending && e.joinPolicy === "approval" && (
                 <View style={[T.badge, { backgroundColor: C.greenBg, borderColor: C.green + "55" }]}>
-                  <Text style={[T.badgeText, { color: C.greenText }]}>✅ Approved by Host</Text>
+                  <Text style={[T.badgeText, { color: C.greenText }]}>✅ Approved</Text>
                 </View>
-              ) : null)}
+              )}
 
               {isCheckedIn && (
                 <View style={[T.badge, { backgroundColor: C.greenBg, borderColor: C.green + "55" }]}>

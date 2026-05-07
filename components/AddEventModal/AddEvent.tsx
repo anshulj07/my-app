@@ -54,6 +54,8 @@ export default function AddEventModal({
   const [description, setDescription] = useState("");
   const [dateISO, setDateISO] = useState("");
   const [time24, setTime24] = useState("");
+  const [endDateISO, setEndDateISO] = useState("");
+  const [endTime24, setEndTime24] = useState("");
 
   const [limitEnabled, setLimitEnabled] = useState(false);
   const [capacityText, setCapacityText] = useState("");
@@ -67,6 +69,8 @@ export default function AddEventModal({
 
   const [dateOpen, setDateOpen] = useState(false);
   const [timeOpen, setTimeOpen] = useState(false);
+  const [endDateOpen, setEndDateOpen] = useState(false);
+  const [endTimeOpen, setEndTimeOpen] = useState(false);
 
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
@@ -88,6 +92,11 @@ const [bannerUri, setBannerUri] = useState<string | null>(null);
   useEffect(() => {
     if (visible) setKind(defaultKind);
   }, [defaultKind, visible]);
+ 
+  // ✅ Auto-sync End Date with Start Date (single-date events)
+  useEffect(() => {
+    setEndDateISO(dateISO);
+  }, [dateISO]);
 
   const priceCents = useMemo(() => {
     if (kind === "event_free") return null;
@@ -107,6 +116,20 @@ const [bannerUri, setBannerUri] = useState<string | null>(null);
     if (!Number.isFinite(hh) || !Number.isFinite(mm)) return "Select time";
     return formatTime12h(hh, mm);
   }, [time24]);
+
+  const endDateLabel = useMemo(() => {
+    if (!endDateISO) return "Select date";
+    return isoToSafeDate(endDateISO).toLocaleDateString(undefined, {
+      weekday: "short", month: "short", day: "numeric",
+    });
+  }, [endDateISO]);
+
+  const endTimeLabel = useMemo(() => {
+    if (!endTime24) return "Select time";
+    const [hh, mm] = endTime24.split(":").map((x) => parseInt(x, 10));
+    if (!Number.isFinite(hh) || !Number.isFinite(mm)) return "Select time";
+    return formatTime12h(hh, mm);
+  }, [endTime24]);
 
   const hasLocation = useMemo(() => !!coord && Number.isFinite(coord.lat) && Number.isFinite(coord.lng), [coord]);
 
@@ -156,9 +179,10 @@ const [bannerUri, setBannerUri] = useState<string | null>(null);
 
   const hardReset = () => {
     setTitle(""); setKind(defaultKind); setPriceText(""); setDescription(""); setJoinPolicy("open");
-    setDateISO(""); setTime24(""); setLimitEnabled(false); setCapacityText("");
+    setDateISO(""); setTime24(""); setEndDateISO(""); setEndTime24(""); setLimitEnabled(false); setCapacityText("");
     setSlots([]); setSlotDuration("60");
     setShowDetails(false); setShowWhen(false); setDateOpen(false); setTimeOpen(false);
+    setEndDateOpen(false); setEndTimeOpen(false);
     setQuery(""); setSuggestions([]); setSelectedAddress(""); setCoord(null); setLocationPayload(null);
     setErr(null); setSubmitting(false); setMapReady(false); setLoadingSug(false); setLocLoading(false);
   };
@@ -225,18 +249,22 @@ const [bannerUri, setBannerUri] = useState<string | null>(null);
     if (needsPrice && priceCents === null) throw new Error("Enter a valid price.");
     if (backendKind === "free" && limitEnabled && !capacityOk) throw new Error("Enter a valid capacity.");
 
-    const timezone = typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "America/New_York";
+    const timezone = typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "Asia/Kolkata";
     const startsAt = dateISO && time24 ? new Date(`${dateISO}T${time24}:00`).toISOString() : undefined;
-console.log("SENDING BANNER URI:", bannerUri);
+    const endsAt   = endDateISO && endTime24 ? new Date(`${endDateISO}T${endTime24}:00`).toISOString() : undefined;
+
+    console.log("SENDING DATES:", { startsAt, endsAt, timezone });
 
     const payload = {
       title: title.trim(), description: description.trim(), emoji,
-  bannerUri: bannerUri,
+      bannerUri: bannerUri,
       creatorClerkId: userId,
       creatorName: `${user?.firstName || ""} ${user?.lastName || ""}`.trim() || user?.username || "Local Host",
       kind: backendKind, priceCents: needsPrice ? priceCents : null,
       capacity: backendKind === "free" && limitEnabled ? capacity : null,
-      timezone, startsAt, date: dateISO.trim(), time: time24.trim(),
+      timezone, startsAt, endsAt,
+      date: dateISO.trim(), time: time24.trim(),
+      endDate: endDateISO.trim(), endTime: endTime24.trim(),
       // Service slots
       ...(backendKind === "service" ? {
         slots,
@@ -337,9 +365,14 @@ setBannerUri={setBannerUri}
         showWhen={showWhen} setShowWhen={setShowWhen}
         dateISO={dateISO} setDateISO={setDateISO}
         time24={time24} setTime24={setTime24}
+        endDateISO={endDateISO} setEndDateISO={setEndDateISO}
+        endTime24={endTime24} setEndTime24={setEndTime24}
         dateLabel={dateLabel} timeLabel={timeLabel}
+        endDateLabel={endDateLabel} endTimeLabel={endTimeLabel}
         dateOpen={dateOpen} setDateOpen={setDateOpen}
         timeOpen={timeOpen} setTimeOpen={setTimeOpen}
+        endDateOpen={endDateOpen} setEndDateOpen={setEndDateOpen}
+        endTimeOpen={endTimeOpen} setEndTimeOpen={setEndTimeOpen}
         query={query}
         setQuery={(t) => { setQuery(t); setSelectedAddress(""); setLocationPayload(null); setErr(null); }}
         suggestions={suggestions} loadingSug={loadingSug}

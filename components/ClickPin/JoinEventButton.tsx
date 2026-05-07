@@ -52,6 +52,8 @@ type Props = {
   creatorClerkId?: string;
   startDate?: string;
   endDate?: string;
+  durationHrs?: number;
+  customTrigger?: (onPress: () => React.ReactNode) => React.ReactNode;
 };
 
 export default function JoinEventButton({
@@ -67,6 +69,8 @@ export default function JoinEventButton({
   creatorClerkId,
   startDate,
   endDate,
+  durationHrs = 1,
+  customTrigger,
 }: Props) {
   const router    = useRouter();
   const { userId } = useAuth();
@@ -81,7 +85,7 @@ export default function JoinEventButton({
     return h;
   }, [EVENT_API_KEY]);
 
-  const isPaid = kind === "paid" || kind === "event_paid";
+  const isPaid = kind === "paid" || kind === "event_paid" || kind === "service";
   const pricePerSpot = priceCents ? priceCents / 100 : 0;
   const platformFeeFixed = 10; // ₹10 flat platform fee
 
@@ -92,8 +96,13 @@ export default function JoinEventButton({
   const [showModal, setShowModal]           = useState(false);
   const [screen, setScreen]                 = useState<Screen>("booking");
 
-  // Spots
+  // Spots / Duration
   const [spots, setSpots] = useState(1);
+  const [duration, setDuration] = useState(durationHrs);
+
+  useEffect(() => {
+    if (durationHrs !== duration) setDuration(durationHrs);
+  }, [durationHrs]);
 
   // Confirmation data
   const [confirmOtp,       setConfirmOtp]       = useState<string | null>(null);
@@ -114,9 +123,25 @@ export default function JoinEventButton({
   // Booking result tracking
   const [activeBookingId, setActiveBookingId] = useState<string | null>(null);
 
+  // Slots
+  const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
+  const [bookedSlots,   setBookedSlots]   = useState<any[]>([]);
+
   // Totals
-  const subtotal   = pricePerSpot * spots;
+  const subtotal   = pricePerSpot * (kind === "service" ? duration : spots);
   const totalPaise = (subtotal + platformFeeFixed) * 100;
+
+  // Helpers
+  const t12 = (t24: string) => {
+    if (!t24) return "";
+    try {
+      const [h, m] = t24.split(":").map(Number);
+      if (isNaN(h) || isNaN(m)) return t24;
+      const suffix = h >= 12 ? "PM" : "AM";
+      const h12 = h % 12 || 12;
+      return `${h12}:${m.toString().padStart(2, '0')} ${suffix}`;
+    } catch { return t24; }
+  };
 
   /* ── auto-fill name ── */
   useEffect(() => {
@@ -147,7 +172,7 @@ export default function JoinEventButton({
   }, [API_BASE, EVENT_API_KEY, userId, eventId]);
 
   /* ── open sheet ── */
-  const onPress = () => {
+  const onPress = async () => {
     if (disabled || loading || joined || pendingRequest) return;
     if (!userId) {
       Alert.alert("Sign in required", "Please sign in to continue.");
@@ -156,7 +181,20 @@ export default function JoinEventButton({
     }
     setScreen("booking");
     setSpots(1);
+    setDuration(durationHrs);
+    setSelectedSlot(null);
     setShowModal(true);
+
+    // Fetch booked slots if service
+    if (kind === "service" && API_BASE && eventId) {
+      try {
+        const r = await apiFetch(`${API_BASE}/api/bookings/service-bookings?eventId=${eventId}&creatorClerkId=${creatorClerkId}`, {
+          headers: headers,
+        });
+        const j = await r.json().catch(() => null);
+        if (r.ok) setBookedSlots(Array.isArray(j?.bookings) ? j.bookings : []);
+      } catch {}
+    }
   };
 
   /* ── Confirm Booking → go to payment or free join ── */
@@ -233,6 +271,8 @@ export default function JoinEventButton({
           bookerPhone: phone.trim(),
           bookerImageUrl: user?.imageUrl || "",
           notes:       message.trim(),
+          startTime:   selectedSlot || null,
+          duration:    kind === "service" ? duration : null,
         }),
       });
 
@@ -334,6 +374,7 @@ export default function JoinEventButton({
   const buttonLabel =
     pendingRequest     ? "Waiting for Approval" :
     joined             ? "You're In ✓" :
+    kind === "service" ? "Book Now" :
     isPaid && priceCents ? `Pay ₹${pricePerSpot.toFixed(0)} & Join` :
     joinPolicy === "approval" ? "Request to Join" :
     label;
@@ -346,33 +387,37 @@ export default function JoinEventButton({
   return (
     <>
       {/* ── MAIN CTA BUTTON ── */}
-      <Pressable
-        onPress={onPress}
-        disabled={isDisabledBtn}
-        style={({ pressed }) => [
-          B.cta,
-          joined        && B.ctaJoined,
-          pendingRequest && B.ctaPending,
-          isDisabledBtn  && B.ctaDisabled,
-          pressed && !isDisabledBtn && B.ctaPressed,
-        ]}
-      >
-        {loading
-          ? <ActivityIndicator color="#fff" />
-          : <>
-              <Ionicons
-                name={
-                  pendingRequest ? "time-outline" :
-                  joined         ? "checkmark-circle" :
-                  isPaid         ? "card-outline" :
-                  "people-outline"
-                }
-                size={18} color="#fff"
-              />
-              <Text style={B.ctaText}>{buttonLabel}</Text>
-            </>
-        }
-      </Pressable>
+      {customTrigger ? (
+        customTrigger(onPress)
+      ) : (
+        <Pressable
+          onPress={onPress}
+          disabled={isDisabledBtn}
+          style={({ pressed }) => [
+            B.cta,
+            joined        && B.ctaJoined,
+            pendingRequest && B.ctaPending,
+            isDisabledBtn  && B.ctaDisabled,
+            pressed && !isDisabledBtn && B.ctaPressed,
+          ]}
+        >
+          {loading
+            ? <ActivityIndicator color="#fff" />
+            : <>
+                <Ionicons
+                  name={
+                    pendingRequest ? "time-outline" :
+                    joined         ? "checkmark-circle" :
+                    isPaid         ? "card-outline" :
+                    "people-outline"
+                  }
+                  size={18} color="#fff"
+                />
+                <Text style={B.ctaText}>{buttonLabel}</Text>
+              </>
+          }
+        </Pressable>
+      )}
 
       {(joined || pendingRequest) && (
         <TouchableOpacity 
@@ -426,28 +471,68 @@ export default function JoinEventButton({
                 keyboardShouldPersistTaps="handled"
                 contentContainerStyle={M.body}
               >
+                {/* ── SERVICE SLOT SELECTION ── */}
+                {kind === "service" && (
+                  <View style={M.section}>
+                    <Text style={M.sectionTitle}>Select Start Time</Text>
+                    <View style={M.slotsGrid}>
+                      {(() => {
+                        // For now we just generate some sample hours. 
+                        // In a real app we'd use the host's actual schedule.
+                        const slots = ["09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "12:00", "12:30", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00"];
+                        return slots.map(s => {
+                          const hour = parseInt(s.split(":")[0]);
+                          const isBooked = bookedSlots.some(b => {
+                            const bStart = parseInt((b.startTime || "00:00").split(":")[0]);
+                            const bDur = b.duration || 1;
+                            return hour >= bStart && hour < bStart + bDur;
+                          });
+                          const active = selectedSlot === s;
+                          return (
+                            <TouchableOpacity
+                              key={s}
+                              disabled={isBooked}
+                              onPress={() => setSelectedSlot(s)}
+                              style={[M.slotBtn, active && M.slotBtnActive, isBooked && M.slotBtnBooked]}
+                            >
+                              <Text style={[M.slotBtnTxt, active && M.slotBtnTxtActive, isBooked && M.slotBtnTxtBooked]}>
+                                {isBooked ? "Booked" : t12(s)}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        });
+                      })()}
+                    </View>
+                  </View>
+                )}
 
-                {/* Spots selector (paid only) */}
+                {/* Spots / Duration selector */}
                 {isPaid && (
                   <View style={M.section}>
                     <Text style={M.sectionTitle}>Number of spots</Text>
                     <View style={M.spotCard}>
                       <View style={M.spotRow}>
                         <View style={{ flex: 1 }}>
-                          <Text style={M.spotLabel}>Spot</Text>
-                          <Text style={M.spotPrice}>₹{pricePerSpot.toFixed(0)}</Text>
+                          <Text style={M.spotLabel}>{kind === "service" ? "Duration" : "Spot"}</Text>
+                          <Text style={M.spotPrice}>₹{pricePerSpot.toFixed(0)}{kind === "service" ? "/hr" : ""}</Text>
                         </View>
                         <View style={M.spotCounter}>
                           <TouchableOpacity
-                            onPress={() => setSpots(s => Math.max(1, s - 1))}
-                            style={[M.counterBtn, spots <= 1 && { opacity: 0.35 }]}
-                            disabled={spots <= 1}
+                            onPress={() => {
+                              if (kind === "service") setDuration(d => Math.max(1, d - 1));
+                              else setSpots(s => Math.max(1, s - 1));
+                            }}
+                            style={[M.counterBtn, (kind === "service" ? duration : spots) <= 1 && { opacity: 0.35 }]}
+                            disabled={(kind === "service" ? duration : spots) <= 1}
                           >
                             <Ionicons name="remove" size={16} color={C.ink} />
                           </TouchableOpacity>
-                          <Text style={M.counterVal}>{spots}</Text>
+                          <Text style={M.counterVal}>{kind === "service" ? duration : spots}</Text>
                           <TouchableOpacity
-                            onPress={() => setSpots(s => s + 1)}
+                            onPress={() => {
+                              if (kind === "service") setDuration(d => d + 1);
+                              else setSpots(s => s + 1);
+                            }}
                             style={M.counterBtn}
                           >
                             <Ionicons name="add" size={16} color={C.ink} />
@@ -458,7 +543,9 @@ export default function JoinEventButton({
                       <View style={M.divider} />
 
                       <View style={M.summaryRow}>
-                        <Text style={M.summaryLabel}>{spots} x Spot</Text>
+                        <Text style={M.summaryLabel}>
+                          {kind === "service" ? `${duration} x Hour` : `${spots} x Spot`}
+                        </Text>
                         <Text style={M.summaryVal}>₹{subtotal.toFixed(0)}</Text>
                       </View>
                       <View style={M.summaryRow}>
@@ -556,14 +643,16 @@ export default function JoinEventButton({
                 <View style={M.footer}>
                   <TouchableOpacity
                     onPress={handleConfirmBooking}
-                    disabled={loading}
-                    style={[M.confirmBtn, loading && { opacity: 0.6 }]}
+                    disabled={loading || (kind === "service" && !selectedSlot)}
+                    style={[M.confirmBtn, (loading || (kind === "service" && !selectedSlot)) && { opacity: 0.6 }]}
                     activeOpacity={0.88}
                   >
                     {loading
                       ? <ActivityIndicator color="#fff" />
                       : <>
-                          <Text style={M.confirmBtnText}>Confirm Booking</Text>
+                          <Text style={M.confirmBtnText}>
+                            {kind === "service" ? `Pay ₹${(subtotal + platformFeeFixed).toFixed(0)} & Book` : "Confirm Booking"}
+                          </Text>
                           <Ionicons name="arrow-forward" size={18} color="#fff" />
                         </>
                     }
@@ -589,7 +678,9 @@ export default function JoinEventButton({
                   <Text style={M.sectionTitle}>Order Summary</Text>
                   <View style={M.spotCard}>
                     <View style={M.summaryRow}>
-                      <Text style={M.summaryLabel}>{spots} x Spot</Text>
+                      <Text style={M.summaryLabel}>
+                        {kind === "service" ? `${duration} x Hour` : `${spots} x Spot`}
+                      </Text>
                       <Text style={M.summaryVal}>₹{subtotal.toFixed(0)}</Text>
                     </View>
                     <View style={M.summaryRow}>
@@ -675,8 +766,10 @@ export default function JoinEventButton({
                       <Text style={M.ticketCellVal}>{name || "You"}</Text>
                     </View>
                     <View style={M.ticketCell}>
-                      <Text style={M.ticketCellLabel}>Tickets</Text>
-                      <Text style={M.ticketCellVal}>{spots} x General</Text>
+                      <Text style={M.ticketCellLabel}>{kind === "service" ? "Duration" : "Tickets"}</Text>
+                      <Text style={M.ticketCellVal}>
+                        {kind === "service" ? `${duration} Hours` : `${spots} x General`}
+                      </Text>
                     </View>
                     <View style={M.ticketCell}>
                       <Text style={M.ticketCellLabel}>Location</Text>
@@ -968,4 +1061,24 @@ const M = StyleSheet.create({
   otpLabel:    { fontSize: 11, fontWeight: "700", color: C.muted, textTransform: "uppercase", letterSpacing: 0.6 },
   otpCode:     { fontSize: 36, fontWeight: "900", color: C.green, letterSpacing: 8 },
   otpHint:     { fontSize: 11, color: C.muted, textAlign: "center" },
+
+  // Slots
+  slotsGrid: {
+    flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8,
+  },
+  slotBtn: {
+    paddingHorizontal: 10, paddingVertical: 10,
+    borderRadius: 10, backgroundColor: "#F3F4F6",
+    borderWidth: 1, borderColor: "rgba(0,0,0,0.05)",
+    minWidth: "22%", alignItems: "center",
+  },
+  slotBtnActive: {
+    backgroundColor: C.green, borderColor: C.green,
+  },
+  slotBtnBooked: {
+    backgroundColor: "#E5E7EB", opacity: 0.6,
+  },
+  slotBtnTxt: { fontSize: 13, fontWeight: "700", color: C.ink2 },
+  slotBtnTxtActive: { color: "#fff" },
+  slotBtnTxtBooked: { color: C.hint, fontSize: 11 },
 });

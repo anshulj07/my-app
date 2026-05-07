@@ -56,7 +56,9 @@ export type EventKind = "free" | "paid" | "service";
 export type EventDoc = {
   _id: string; title: string; emoji?: string; description?: string;
   creatorClerkId: string; kind: EventKind; priceCents: number | null;
-  startsAt?: string | null; date?: string; time?: string; status?: string;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  date?: string; time?: string; status?: string;
   attendance?: number | null; attendees?: any[];
   joinPolicy?: "open" | "approval"; // ✅ Added for approval flow tracking
   location?: { city?: string; admin1Code?: string; countryCode?: string };
@@ -76,7 +78,14 @@ function eventStartMs(ev: EventDoc): number {
 function fmtWhen(ev: EventDoc) {
   const ms = eventStartMs(ev);
   if (!Number.isFinite(ms) || ms === Number.POSITIVE_INFINITY) return "No time set";
-  return new Date(ms).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  return new Date(ms).toLocaleString(undefined, { 
+    weekday: "short", 
+    month: "short", 
+    day: "numeric", 
+    hour: "numeric", 
+    minute: "2-digit",
+    hour12: true 
+  });
 }
 function fmtWhere(ev: EventDoc) {
   const city = ev.location?.city?.trim(); const s = ev.location?.admin1Code?.trim(); const cc = ev.location?.countryCode?.trim();
@@ -1133,8 +1142,14 @@ function NotificationModal({
                 <Text style={NH.sectionTitle}>JOIN REQUESTS</Text>
                 <View style={NH.sectionBadge}><Text style={NH.sectionBadgeText}>{pending.length}</Text></View>
               </View>
-              {pending.map(p => (
-                <PendingRequestCard key={p.clerkUserId} item={p} onAdmit={() => onAdmit(p.clerkUserId)} onReject={() => onReject(p.clerkUserId)} admitBusy={admitBusy} />
+              {pending.map((p, idx) => (
+                <PendingRequestCard 
+                  key={p.clerkUserId + (p.requestedAt || idx)} 
+                  item={p} 
+                  onAdmit={() => onAdmit(p.clerkUserId)} 
+                  onReject={() => onReject(p.clerkUserId)} 
+                  admitBusy={admitBusy} 
+                />
               ))}
             </View>
           )}

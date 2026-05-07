@@ -55,9 +55,24 @@ export default function EarningsDetail() {
       const json = await res.json().catch(() => null);
       if (!res.ok) throw new Error(json?.error || "Failed to load data");
       
-      // Filter for events that have ended and had a price
+      // Filter for all paid events (active or ended)
       const list = (Array.isArray(json.createdEvents) ? json.createdEvents : [])
-        .filter((e: any) => (e.status === "ended" || e.status === "completed") && e.kind === "paid")
+        .filter((e: any) => e.kind === "paid")
+        .map((e: any) => {
+           // Calculate dynamic earnings if not finalized
+           if (e.finalEarnings === undefined || e.finalEarnings === null) {
+              const paidCount = Array.isArray(e.attendees) 
+                ? e.attendees.filter((a: any) => a.isPaid || !!a.razorpayPaymentId).length 
+                : 0;
+              e.calculatedEarnings = paidCount * (e.priceCents || 0);
+              e.calculatedAttendees = paidCount;
+           } else {
+              e.calculatedEarnings = e.finalEarnings;
+              e.calculatedAttendees = e.finalAttendeeCount ?? 0;
+           }
+           return e;
+        })
+        .filter((e: any) => e.calculatedEarnings > 0 || e.status === "ended" || e.status === "completed") // Only show if earned something OR ended
         .sort((a: any, b: any) => new Date(b.endedAt || b.startsAt || 0).getTime() - new Date(a.endedAt || a.startsAt || 0).getTime());
         
       setEvents(list);
@@ -70,7 +85,7 @@ export default function EarningsDetail() {
 
   useEffect(() => { load(); }, []);
 
-  const totalEarnings = events.reduce((acc, e) => acc + (e.finalEarnings || 0), 0);
+  const totalEarnings = events.reduce((acc, e) => acc + (e.calculatedEarnings || 0), 0);
 
   return (
     <View style={S.container}>
@@ -140,8 +155,8 @@ export default function EarningsDetail() {
                 </Text>
               </View>
               <View style={{ alignItems: "flex-end" }}>
-                <Text style={S.amount}>+₹{((e.finalEarnings || 0) / 100).toLocaleString()}</Text>
-                <Text style={S.guests}>{e.finalAttendeeCount || 0} guests</Text>
+                <Text style={S.amount}>+₹{((e.calculatedEarnings || 0) / 100).toLocaleString()}</Text>
+                <Text style={S.guests}>{e.calculatedAttendees || 0} guests</Text>
               </View>
             </TouchableOpacity>
           ))

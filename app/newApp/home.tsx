@@ -10,6 +10,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { BlurView } from "expo-blur";
+import { useAuth } from "@clerk/clerk-expo";
 
 import MapView from "../../components/Map/MapView";
 import type { EventPin } from "../../components/Map/MapView";
@@ -17,7 +18,9 @@ import MapSearchHeader from "../../components/SearchHeaderHomeScreen/MapSearchHe
 import ModalizeEventSheet from "../../components/AddEventModal/AddEvent";
 import EventsListModal from "../../components/List/EventsListModal";
 import PersonBookingSheet from "../../components/ClickPin/PersonBookingSheet";
+import EditServiceFlow from "../../components/EditServiceFlow/EditServiceFlow";
 import EditEventModal from "../../components/EditEventModal/EditEvent";
+import CreateServiceFlow from "../../components/CreateServiceFlow/CreateServiceFlow";
 
 // ─── Design tokens ───────────────────────────────────────────────────────────
 const C = {
@@ -85,6 +88,9 @@ function normalizeEvent(e: any): EventPin | null {
     startsAt:    e?.startsAt ?? null,
     date:        e?.date ?? null,
     time:        e?.time ?? null,
+    endsAt:      e?.endsAt ?? null,
+    endDate:     e?.endDate ?? null,
+    endTime:     e?.endTime ?? null,
   };
 }
 
@@ -170,23 +176,32 @@ function PickerOption({
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function Home() {
+  const { userId } = useAuth();
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
   const [open,        setOpen]        = useState(false);
   const [showList,    setShowList]    = useState(false);
   const [showPicker,  setShowPicker]  = useState(false);
+  const [showServiceFlow, setShowServiceFlow] = useState(false);
   const [defaultKind, setDefaultKind] = useState<"event_free" | "service">("event_free");
 
   const [events,    setEvents]    = useState<EventPin[]>([]);
   const [myLoc,     setMyLoc]     = useState<{ lat: number; lng: number } | null>(null);
   const [myCity,    setMyCity]    = useState("");
   const [locStatus, setLocStatus] = useState<"unknown" | "granted" | "denied">("unknown");
+  // ✅ Don't render map until we have a real location OR permission is denied
+  const [locReady,  setLocReady]  = useState(false);
 
   const [selectedPin,     setSelectedPin]     = useState<EventPin | null>(null);
   const [showPersonSheet, setShowPersonSheet] = useState(false);
   const [editOpen,        setEditOpen]        = useState(false);
   const [editEvent,       setEditEvent]       = useState<EditEventValue>(null);
+
+  // Edit Service Flow
+  const [showEditService, setShowEditService] = useState(false);
+  const [serviceToEdit, setServiceToEdit] = useState<any>(null);
+
   const [activeFilter,    setActiveFilter]    = useState<string | null>(null);
   const [mapStackOpen,    setMapStackOpen]    = useState(false);
 
@@ -209,37 +224,92 @@ export default function Home() {
   }, []);
 
   const loadEvents = useCallback(async () => {
-    if (!API_BASE) return;
-    const res = await fetch(`${API_BASE.replace(/\/$/, "")}/api/events/get-events?limit=200`, {
-      headers: { ...(EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {}), "ngrok-skip-browser-warning": "1" },
-    });
-    const text = await res.text();
-    if (!res.ok) return;
+    if (!API_BASE) return [];
     try {
-      const json = JSON.parse(text);
-      setEvents((Array.isArray(json?.events) ? json.events : []).map(normalizeEvent).filter(Boolean) as EventPin[]);
-    } catch {}
+      const res = await fetch(`${API_BASE.replace(/\/$/, "")}/api/events/get-events?limit=200`, {
+        headers: { ...(EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {}), "ngrok-skip-browser-warning": "1" },
+      });
+      if (!res.ok) return [];
+      const json = await res.json().catch(() => ({}));
+      const newEvents = (Array.isArray(json?.events) ? json.events : []).map(normalizeEvent).filter(Boolean) as EventPin[];
+      setEvents(newEvents);
+      return newEvents;
+    } catch {
+      return [];
+    }
   }, [API_BASE, EVENT_API_KEY]);
 
   const loadMyLocation = useCallback(async () => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") { setLocStatus("denied"); return; }
+      if (status !== "granted") {
+        setLocStatus("denied");
+        setLocReady(true); // ✅ Permission denied — still show map (events fallback)
+        return;
+      }
       setLocStatus("granted");
-      const cur = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      setMyLoc({ lat: cur.coords.latitude, lng: cur.coords.longitude });
-      const rev = await Location.reverseGeocodeAsync({ latitude: cur.coords.latitude, longitude: cur.coords.longitude });
-      setMyCity((rev?.[0]?.city || "").trim());
-    } catch {}
+
+      // 1. Try last known position for instant map jump
+      const last = await Location.getLastKnownPositionAsync().catch(() => null);
+      if (last) {
+        const { latitude: lat, longitude: lng } = last.coords;
+        setMyLoc({ lat, lng });
+        setLocReady(true); // ✅ We have a cached location — show map immediately
+        Location.reverseGeocodeAsync({ latitude: lat, longitude: lng })
+          .then(rev => {
+            const c = (rev?.[0]?.city || rev?.[0]?.district || rev?.[0]?.subregion || rev?.[0]?.name || "").trim();
+            if (c) setMyCity(c);
+          })
+          .catch(() => {});
+      }
+
+      // 2. Get fresh GPS fix with a timeout and High accuracy
+      const freshPromise = Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+
+      const timeoutPromise = new Promise<null>((_, reject) =>
+        setTimeout(() => reject(new Error("timeout")), 8000)
+      );
+
+      const fresh = await Promise.race([freshPromise, timeoutPromise]).catch(() => null);
+
+      if (fresh) {
+        const { latitude: flat, longitude: flng } = fresh.coords;
+        setMyLoc({ lat: flat, lng: flng });
+        setLocReady(true); // ✅ Fresh GPS fix — map will update
+        const rev = await Location.reverseGeocodeAsync({ latitude: flat, longitude: flng }).catch(() => null);
+        if (rev?.[0]) {
+          const c = (rev[0].city || rev[0].district || rev[0].subregion || rev[0].name || "").trim();
+          if (c) setMyCity(c);
+        }
+      } else if (!last) {
+        // No last known and fresh timed out — show map anyway (events fallback)
+        setLocReady(true);
+      }
+    } catch (err) {
+      console.log("[Home] Location load error:", err);
+      setLocReady(true); // ✅ On any error, still show the map
+    }
   }, []);
 
   useEffect(() => { loadMyLocation(); loadEvents(); }, [loadEvents, loadMyLocation]);
 
   const filteredEvents = useMemo(() => {
     // ✅ Show active events + live events (started but status still "active")
+    const now = Date.now();
     const active = events.filter(e => {
       const st = String(e.status ?? "active").toLowerCase();
-      return st === "active" || st === "live";
+      const isMine = userId && String(e.creatorClerkId) === userId;
+
+      // ✅ AUTOMATIC ENDING: If event has an end time and it's in the past, hide it.
+      // ⚠️ EXCEPTION: Services never "end" automatically based on time. They stay on map.
+      if (e.kind !== "service" && e.endsAt) {
+        const endTs = new Date(e.endsAt).getTime();
+        if (Number.isFinite(endTs) && now > endTs) return false;
+      }
+
+      return st === "active" || st === "live" || (st === "paused" && isMine);
     });
     if (!activeFilter) return active;
     return active.filter(e => {
@@ -249,12 +319,10 @@ export default function Home() {
       if (f === "service") return kind === "service";
       return true;
     });
-  }, [events, activeFilter]);
+  }, [events, activeFilter, userId]);
 
   const [pinsVersion, setPinsVersion] = useState(0);
-  const mapKey = myLoc
-    ? `${myLoc.lat.toFixed(6)}:${myLoc.lng.toFixed(6)}:${activeFilter ?? "all"}:${pinsVersion}`
-    : `init:${activeFilter ?? "all"}:${pinsVersion}`;
+  const mapKey = `map:${activeFilter ?? "all"}:${pinsVersion}`;
 
   const onPinPress = useCallback((pin: EventPin) => {
     const raw = (pin as any)?._id ?? (pin as any)?.id ?? "";
@@ -272,15 +340,20 @@ export default function Home() {
 
   return (
     <>
-      <MapView
-        key={mapKey}
-        events={filteredEvents}
-        initialCenter={myLoc}
-        locationStatus={locStatus}
-        onPinPress={onPinPress}
-        onStackOpen={() => setMapStackOpen(true)}
-        onStackClose={() => setMapStackOpen(false)}
-      />
+      {/* ✅ Only render map after real location is known — prevents hardcoded Indore fallback */}
+      {locReady && (
+        <MapView
+          key={mapKey}
+          events={filteredEvents}
+          initialCenter={myLoc}
+          locationStatus={locStatus}
+          onPinPress={onPinPress}
+          userId={userId}
+          onLocationUpdate={(lat, lng) => setMyLoc({ lat, lng })}
+          onStackOpen={() => setMapStackOpen(true)}
+          onStackClose={() => setMapStackOpen(false)}
+        />
+      )}
 
       <MapSearchHeader
         top={insets.top + 10}
@@ -302,7 +375,16 @@ export default function Home() {
       <PersonBookingSheet
         visible={showPersonSheet} person={selectedPin}
         onClose={() => setShowPersonSheet(false)}
-        onEditDetails={ev => { setShowPersonSheet(false); setEditEvent(toEditableEvent(ev)); setEditOpen(true); }}
+        onEditDetails={ev => {
+          setShowPersonSheet(false);
+          if (ev.kind === "service") {
+            setServiceToEdit(ev);
+            setShowEditService(true);
+          } else {
+            setEditEvent(toEditableEvent(ev));
+            setEditOpen(true);
+          }
+        }}
         onStatusChanged={onStatusChanged}
         onDeleteEvent={eventId => {
           setEvents(prev => prev.filter(e => String(e._id || "") !== eventId));
@@ -342,6 +424,8 @@ export default function Home() {
       <EventsListModal
         visible={showList} onClose={() => setShowList(false)}
         events={filteredEvents as any} myCity={myCity}
+        myLoc={myLoc}
+        onPinPress={onPinPress}
       />
 
       {/* ── FAB Picker Modal ─────────────────────────── */}
@@ -383,7 +467,7 @@ export default function Home() {
 
             {/* Option — Service */}
             <PickerOption
-              onPress={() => { setDefaultKind("service"); setShowPicker(false); setTimeout(() => setOpen(true), 120); }}
+              onPress={() => { setShowPicker(false); setTimeout(() => setShowServiceFlow(true), 120); }}
               iconName="briefcase"
               iconColor={C.purpleText}
               iconBg={C.purpleDim}
@@ -412,6 +496,43 @@ export default function Home() {
           setEvents(prev => [n, ...prev]);
           setOpen(false);
           loadEvents();
+        }}
+      />
+
+      <CreateServiceFlow
+        visible={showServiceFlow}
+        cityName={myCity}
+        onClose={() => setShowServiceFlow(false)}
+        onCreate={(e) => {
+          const n = normalizeEvent(e) ?? (e as EventPin);
+          setEvents(prev => [n, ...prev]);
+          loadEvents();
+        }}
+        onBackToPicker={() => {
+          setShowServiceFlow(false);
+          setTimeout(() => setShowPicker(true), 300);
+        }}
+      />
+
+      <EditServiceFlow
+        visible={showEditService}
+        service={serviceToEdit}
+        onClose={() => { setShowEditService(false); setServiceToEdit(null); }}
+        onUpdated={() => { 
+          setShowEditService(false); 
+          setServiceToEdit(null);
+          // ✅ Reload events and refresh selectedPin so cover photo updates immediately
+          loadEvents().then(newEvents => {
+            if (newEvents && newEvents.length > 0) {
+              const pinId = selectedPin?._id;
+              if (pinId) {
+                const updated = newEvents.find(e => String(e._id) === String(pinId));
+                if (updated) {
+                  setSelectedPin(updated as any);
+                }
+              }
+            }
+          });
         }}
       />
     </>

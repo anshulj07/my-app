@@ -54,6 +54,7 @@ type Props = {
   endDate?: string;
   durationHrs?: number;
   customTrigger?: (onPress: () => React.ReactNode) => React.ReactNode;
+  autoOpen?: boolean;
 };
 
 export default function JoinEventButton({
@@ -71,6 +72,7 @@ export default function JoinEventButton({
   endDate,
   durationHrs = 1,
   customTrigger,
+  autoOpen = false,
 }: Props) {
   const router    = useRouter();
   const { userId } = useAuth();
@@ -127,6 +129,21 @@ export default function JoinEventButton({
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [bookedSlots,   setBookedSlots]   = useState<any[]>([]);
 
+  // Date selection
+  const [selectedDate, setSelectedDate] = useState(startDate || new Date().toISOString().split("T")[0]);
+
+  // Generate next 14 days
+  const availableDates = useMemo(() => {
+    const dates = [];
+    const today = new Date();
+    for (let i = 0; i < 14; i++) {
+      const d = new Date(today);
+      d.setDate(today.getDate() + i);
+      dates.push(d.toISOString().split("T")[0]);
+    }
+    return dates;
+  }, []);
+
   // Totals
   const subtotal   = pricePerSpot * (kind === "service" ? duration : spots);
   const totalPaise = (subtotal + platformFeeFixed) * 100;
@@ -150,6 +167,13 @@ export default function JoinEventButton({
       if (fullName) setName(fullName);
     }
   }, [showModal, user]);
+
+  /* ── auto-open ── */
+  useEffect(() => {
+    if (autoOpen && !showModal && !joined && !pendingRequest && !loading) {
+      onPress();
+    }
+  }, [autoOpen, joined, pendingRequest, loading]);
 
   /* ── check already joined ── */
   useEffect(() => {
@@ -183,19 +207,31 @@ export default function JoinEventButton({
     setSpots(1);
     setDuration(durationHrs);
     setSelectedSlot(null);
+    setSelectedDate(startDate || new Date().toISOString().split("T")[0]);
     setShowModal(true);
 
     // Fetch booked slots if service
     if (kind === "service" && API_BASE && eventId) {
-      try {
-        const r = await apiFetch(`${API_BASE}/api/bookings/service-bookings?eventId=${eventId}&creatorClerkId=${creatorClerkId}`, {
-          headers: headers,
-        });
-        const j = await r.json().catch(() => null);
-        if (r.ok) setBookedSlots(Array.isArray(j?.bookings) ? j.bookings : []);
-      } catch {}
+      fetchBookedSlots(selectedDate);
     }
   };
+
+  const fetchBookedSlots = async (date: string) => {
+    if (!API_BASE || !eventId) return;
+    try {
+      const r = await apiFetch(`${API_BASE}/api/bookings/service-bookings?eventId=${eventId}&date=${date}`, {
+        headers: headers,
+      });
+      const j = await r.json().catch(() => null);
+      if (r.ok) setBookedSlots(Array.isArray(j?.bookings) ? j.bookings : []);
+    } catch {}
+  };
+
+  useEffect(() => {
+    if (showModal && kind === "service" && selectedDate) {
+      fetchBookedSlots(selectedDate);
+    }
+  }, [selectedDate]);
 
   /* ── Confirm Booking → go to payment or free join ── */
   const handleConfirmBooking = async () => {
@@ -263,8 +299,8 @@ export default function JoinEventButton({
           hostId:      creatorClerkId,
           eventId:     eventId,
           type:        kind.includes("service") ? "service" : "event",
-          startDate:   startDate || new Date().toISOString().split("T")[0],
-          endDate:     endDate   || startDate || new Date().toISOString().split("T")[0],
+          startDate:   selectedDate,
+          endDate:     selectedDate,
           pricePerDay: totalPaise, // backend expects the final amount for the order
           bookerName:  name.trim(),
           bookerEmail: user?.primaryEmailAddress?.emailAddress || "",
@@ -419,7 +455,8 @@ export default function JoinEventButton({
         </Pressable>
       )}
 
-      {(joined || pendingRequest) && (
+      {/* ── CANCEL / LEAVE BUTTON (Only if no customTrigger) ── */}
+      {!customTrigger && (joined || pendingRequest) && (
         <TouchableOpacity 
           onPress={handleLeave}
           disabled={loading}
@@ -471,10 +508,37 @@ export default function JoinEventButton({
                 keyboardShouldPersistTaps="handled"
                 contentContainerStyle={M.body}
               >
-                {/* ── SERVICE SLOT SELECTION ── */}
+                {/* ── SERVICE DATE & SLOT SELECTION ── */}
                 {kind === "service" && (
                   <View style={M.section}>
-                    <Text style={M.sectionTitle}>Select Start Time</Text>
+                    <Text style={M.sectionTitle}>Select Date</Text>
+                    <ScrollView 
+                      horizontal 
+                      showsHorizontalScrollIndicator={false} 
+                      contentContainerStyle={M.dateList}
+                    >
+                      {availableDates.map(dateStr => {
+                        const d = new Date(dateStr);
+                        const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
+                        const dayNum  = d.getDate();
+                        const active  = selectedDate === dateStr;
+                        return (
+                          <TouchableOpacity 
+                            key={dateStr}
+                            style={[M.dateBtn, active && M.dateBtnActive]}
+                            onPress={() => {
+                              setSelectedDate(dateStr);
+                              setSelectedSlot(null); // Reset slot on date change
+                            }}
+                          >
+                            <Text style={[M.dateDay, active && M.dateTextActive]}>{dayName}</Text>
+                            <Text style={[M.dateNum, active && M.dateTextActive]}>{dayNum}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+
+                    <Text style={[M.sectionTitle, { marginTop: 20 }]}>Select Start Time</Text>
                     <View style={M.slotsGrid}>
                       {(() => {
                         // For now we just generate some sample hours. 
@@ -748,7 +812,7 @@ export default function JoinEventButton({
                   <Ionicons name="checkmark" size={52} color={C.green} />
                 </View>
                 <Text style={M.confirmTitle}>Booking Confirmed!</Text>
-                <Text style={M.confirmSub}>Your tickets are ready. Show QR at the entry.</Text>
+                <Text style={M.confirmSub}>Your booking is confirmed! You can view your tickets in My Bookings.</Text>
 
                 {/* Ticket card */}
                 <View style={M.ticketCard}>
@@ -804,12 +868,9 @@ export default function JoinEventButton({
                 </View>
 
                 {/* Buttons */}
-                <View style={{ width: "100%", gap: 10, marginTop: 8 }}>
+                <View style={{ width: "100%", marginTop: 8 }}>
                   <TouchableOpacity style={M.confirmBtn} activeOpacity={0.88} onPress={() => setShowModal(false)}>
-                    <Text style={M.confirmBtnText}>Show QR</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={M.cancelBtn} activeOpacity={0.88} onPress={() => setShowModal(false)}>
-                    <Text style={[M.cancelBtnText, { color: C.muted }]}>All Tickets</Text>
+                    <Text style={M.confirmBtnText}>Done</Text>
                   </TouchableOpacity>
                 </View>
 
@@ -1081,4 +1142,19 @@ const M = StyleSheet.create({
   slotBtnTxt: { fontSize: 13, fontWeight: "700", color: C.ink2 },
   slotBtnTxtActive: { color: "#fff" },
   slotBtnTxtBooked: { color: C.hint, fontSize: 11 },
+
+  // Date selection styles
+  dateList: { gap: 10, paddingVertical: 4 },
+  dateBtn: {
+    width: 54, height: 64, borderRadius: 12,
+    backgroundColor: C.surface, borderWidth: 1, borderColor: C.border,
+    alignItems: "center", justifyContent: "center", gap: 4,
+  },
+  dateBtnActive: {
+    backgroundColor: C.green, borderColor: C.green,
+    shadowColor: C.green, shadowOpacity: 0.2, shadowRadius: 8, elevation: 4,
+  },
+  dateDay: { fontSize: 11, fontWeight: "600", color: C.muted, textTransform: "uppercase" },
+  dateNum: { fontSize: 18, fontWeight: "800", color: C.ink },
+  dateTextActive: { color: "#fff" },
 });

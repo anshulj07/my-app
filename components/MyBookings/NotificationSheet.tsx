@@ -13,7 +13,7 @@ import { NotifItem } from "../../context/NotificationContext";
 // ─────────────────────────────────────────────────────────────
 const C = {
   bg:      "#FFFFFF",
-  primary: "#3ECFB2", // Brand Teal
+  primary: "#6C63FF", // Brand Purple
   ink:     "#1C1A17",
   ink2:    "#4A453E",
   muted:   "#8A8278",
@@ -22,8 +22,7 @@ const C = {
   white:   "#FFFFFF",
   coral:   "#FF6F6F",
   coralBg: "#FFF0F0",
-  teal:    "#3ECFB2",
-  tealBg:  "#E8FAF7",
+  brandSoft: "#EEF2FF",
 };
 
 function timeAgo(iso: string) {
@@ -204,8 +203,8 @@ const S = StyleSheet.create({
   headerTitle: { fontSize: 24, fontWeight: "900", color: C.ink },
   headerSub: { fontSize: 13, color: C.muted, fontWeight: "600", marginTop: 2 },
   headerActions: { flexDirection: "row", alignItems: "center", gap: 12 },
-  markBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, backgroundColor: "rgba(0,0,0,0.04)" },
-  markTxt: { fontSize: 12, fontWeight: "800", color: C.ink2 },
+  markBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, backgroundColor: C.brandSoft },
+  markTxt: { fontSize: 12, fontWeight: "800", color: C.primary },
   closeBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(0,0,0,0.04)", alignItems: "center", justifyContent: "center" },
   
   scroll: { paddingHorizontal: 24, paddingBottom: 60, paddingTop: 20 },
@@ -224,7 +223,7 @@ const S = StyleSheet.create({
 
   card: { backgroundColor: C.white, borderRadius: 24, padding: 16, marginBottom: 12, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 10, elevation: 2 },
   cardRow: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
-  avatar: { width: 48, height: 48, borderRadius: 16, backgroundColor: C.tealBg, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  avatar: { width: 48, height: 48, borderRadius: 16, backgroundColor: C.brandSoft, alignItems: "center", justifyContent: "center", overflow: "hidden" },
   avatarImg: { width: "100%", height: "100%" },
   avatarLetter: { fontSize: 18, fontWeight: "900", color: C.primary },
   cardText: { fontSize: 14, lineHeight: 20 },
@@ -243,6 +242,6 @@ const S = StyleSheet.create({
   rejectTxt: { color: C.ink2, fontWeight: "800", fontSize: 14 },
 
   activityRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "rgba(0,0,0,0.03)" },
-  avatarSm: { width: 40, height: 40, borderRadius: 14, backgroundColor: C.tealBg, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  avatarSm: { width: 40, height: 40, borderRadius: 14, backgroundColor: C.brandSoft, alignItems: "center", justifyContent: "center", overflow: "hidden" },
   avatarLetterSm: { fontSize: 15, fontWeight: "900", color: C.primary },
 });

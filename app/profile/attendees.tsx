@@ -8,13 +8,18 @@ import { useAuth } from "@clerk/clerk-expo";
 import Constants from "expo-constants";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as Haptics from "expo-haptics";
+import { LinearGradient } from "expo-linear-gradient";
+import { Image } from "expo-image";
+import AttendanceSheet from "../../components/MyBookings/AttendanceSheet";
+
 
 const { width: W } = Dimensions.get("window");
 
 // Design Tokens (Matching Profile)
 const C = {
-  purple: "#8B5CF6",
-  purpleBg: "#F5F3FF",
+  purple: "#6366F1",
+  purpleGradient: ["#6366F1", "#8B5CF6"] as const,
+  purpleBg: "#EEF2FF",
   teal: "#0D9488",
   tealBg: "#F0FDFA",
   tealText: "#0F766E",
@@ -23,11 +28,15 @@ const C = {
   amberText: "#92400E",
   ink: "#111827",
   muted: "#6B7280",
+  lightMuted: "#9CA3AF",
   card: "#FFFFFF",
-  cardBorder: "#E5E7EB",
+  cardBorder: "#F3F4F6",
   inputBg: "#F9FAFB",
   blue: "#3B82F6",
   blueBg: "#EFF6FF",
+  font: "Outfit_500Medium",
+  fontBold: "Outfit_700Bold",
+  fontExtraBold: "Outfit_800ExtraBold",
 };
 
 export default function AttendeesDetail() {
@@ -39,8 +48,14 @@ export default function AttendeesDetail() {
   
   const [events, setEvents] = useState<any[]>([]);
   const [stats, setStats] = useState<any>(null);
+  const [attendeesList, setAttendeesList] = useState<any[]>([]);
+  const [selectedFilter, setSelectedFilter] = useState<"new" | "repeated" | null>(null);
+  const [showSheet, setShowSheet] = useState(false);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+
+
+
 
   const headers = useMemo(() => ({
     "Content-Type": "application/json",
@@ -65,13 +80,60 @@ export default function AttendeesDetail() {
       
       if (!evRes.ok) throw new Error(evJson?.error || "Failed to load events");
       
-      // Filter for events that have ended
-      const list = (Array.isArray(evJson.createdEvents) ? evJson.createdEvents : [])
+      const allCreated = evJson.createdEvents || [];
+      
+      // Local calculation for accurate New/Repeated stats
+      const seen = new Map<string, number>();
+      let totalCount = 0;
+      allCreated.forEach((ev: any) => {
+        const atts = Array.isArray(ev.attendees) ? ev.attendees : [];
+        atts.forEach((a: any) => {
+          const id = a.clerkId || a.clerkUserId;
+          if (id) {
+            totalCount++;
+            seen.set(id, (seen.get(id) || 0) + 1);
+          }
+        });
+      });
+      
+      let repeatedCount = 0;
+      let newCount = 0;
+      const uniqueAttendees: any[] = [];
+
+      seen.forEach((count, id) => {
+        if (count > 1) repeatedCount++;
+        else newCount++;
+
+        // Find guest info from event history
+        let name = "Guest";
+        let imageUrl = "";
+        for (const ev of allCreated) {
+          const a = ev.attendees?.find((att: any) => (att.clerkId || att.clerkUserId) === id);
+          if (a) {
+            name = a.name || name;
+            imageUrl = a.imageUrl || imageUrl;
+            break;
+          }
+        }
+        uniqueAttendees.push({ id, name, imageUrl, count, isRepeated: count > 1 });
+      });
+      
+      setAttendeesList(uniqueAttendees);
+      
+      const localStats = {
+        totalAttendees: totalCount,
+        newAttendees: newCount,
+        repeatedAttendees: repeatedCount,
+        ...stJson
+      };
+
+      // Filter for events that have ended for the list display
+      const list = allCreated
         .filter((e: any) => e.status === "ended" || e.status === "completed")
         .sort((a: any, b: any) => new Date(b.endedAt || b.startsAt || 0).getTime() - new Date(a.endedAt || a.startsAt || 0).getTime());
         
       setEvents(list);
-      setStats(stJson);
+      setStats(localStats);
     } catch (e: any) {
       setErr(e.message);
     } finally {
@@ -88,32 +150,72 @@ export default function AttendeesDetail() {
       {/* Header */}
       <View style={S.header}>
         <TouchableOpacity onPress={() => router.back()} style={S.backBtn}>
-          <Ionicons name="chevron-back" size={20} color={C.ink} />
+          <Ionicons name="arrow-back" size={22} color={C.purple} />
         </TouchableOpacity>
         <Text style={S.headerTitle}>Attendees Overview</Text>
-        <View style={{ width: 40 }} />
+        <TouchableOpacity style={S.notifBtn}>
+          <Ionicons name="notifications-outline" size={22} color={C.ink} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={S.scroll} showsVerticalScrollIndicator={false}>
-        {/* Analytics Grid */}
-        <View style={S.statsGrid}>
-          <View style={[S.statCard, { backgroundColor: C.teal }]}>
-            <Text style={S.statLabel}>TOTAL GUESTS</Text>
-            <Text style={S.statValue}>{stats?.totalAttendees || 0}</Text>
+        {/* Analytics Card */}
+        <LinearGradient 
+          colors={C.purpleGradient} 
+          start={{ x: 0, y: 0 }} 
+          end={{ x: 1, y: 1 }} 
+          style={S.mainStatCard}
+        >
+          <Text style={S.mainStatLabel}>Total Guests</Text>
+          <View style={S.mainStatValueRow}>
+            <Text style={S.mainStatValue}>{stats?.totalAttendees || 0}</Text>
+            <Text style={S.mainStatSubValue}>confirmed</Text>
           </View>
-          <View style={S.bottomGrid}>
-            <View style={[S.miniCard, { backgroundColor: "#fff" }]}>
-              <Text style={[S.miniLabel, { color: C.muted }]}>NEW</Text>
-              <Text style={S.miniValue}>{stats?.newAttendees || 0}</Text>
+        </LinearGradient>
+
+        <View style={S.miniStatsRow}>
+          <TouchableOpacity 
+            style={S.miniStatCard} 
+            activeOpacity={0.7}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              setSelectedFilter("new");
+              setShowSheet(true);
+            }}
+
+          >
+            <View style={S.miniStatIconBox}>
+               <Ionicons name="person-add" size={18} color={C.purple} />
             </View>
-            <View style={[S.miniCard, { backgroundColor: "#fff" }]}>
-              <Text style={[S.miniLabel, { color: C.muted }]}>REPEATED</Text>
-              <Text style={S.miniValue}>{stats?.repeatedAttendees || 0}</Text>
+            <View>
+              <Text style={S.miniStatLabel}>New</Text>
+              <Text style={S.miniStatValue}>{stats?.newAttendees || 0}</Text>
             </View>
-          </View>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={S.miniStatCard} 
+            activeOpacity={0.7}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              setSelectedFilter("repeated");
+              setShowSheet(true);
+            }}
+
+          >
+            <View style={S.miniStatIconBox}>
+               <Ionicons name="people" size={18} color={C.purple} />
+            </View>
+            <View>
+              <Text style={S.miniStatLabel}>Repeated</Text>
+              <Text style={S.miniStatValue}>{stats?.repeatedAttendees || 0}</Text>
+            </View>
+          </TouchableOpacity>
         </View>
 
-        <Text style={S.listTitle}>Attendance History</Text>
+        <View style={S.sectionHeader}>
+          <Text style={S.sectionTitle}>Attendance History</Text>
+          <TouchableOpacity><Text style={S.viewAll}>View All</Text></TouchableOpacity>
+        </View>
 
         {loading ? (
           <View style={S.center}>
@@ -145,79 +247,141 @@ export default function AttendeesDetail() {
               }}
               style={S.eventCard}
             >
-              <View style={[S.emojiBox, { backgroundColor: e.kind === "service" ? C.purpleBg : C.blueBg }]}>
-                <Text style={{ fontSize: 20 }}>{e.emoji || "📅"}</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={S.eventTitle} numberOfLines={1}>{e.title}</Text>
-                <View style={S.badgeRow}>
-                  <View style={[S.kindBadge, { backgroundColor: e.kind === "paid" ? C.amberBg : C.tealBg }]}>
-                    <Text style={[S.kindText, { color: e.kind === "paid" ? C.amberText : C.tealText }]}>
-                      {e.kind.toUpperCase()}
-                    </Text>
-                  </View>
-                  <Text style={S.eventDate}>
-                    · {new Date(e.endedAt || e.startsAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                  </Text>
+              <View style={S.eventImageWrapper}>
+                <Image 
+                  source={{ uri: e.bannerUri || e.coverPhoto }} 
+                  style={S.eventImage}
+                  contentFit="cover"
+                />
+                <View style={[S.kindBadge, { backgroundColor: e.kind === "paid" ? C.purple : "#fff" }]}>
+                   <Text style={[S.kindText, { color: e.kind === "paid" ? "#fff" : C.purple }]}>
+                     {e.kind.toUpperCase()}
+                   </Text>
                 </View>
               </View>
-              <View style={S.countBox}>
-                <Text style={S.countValue}>{e.finalAttendeeCount ?? (e.attendees?.length || 0)}</Text>
-                <Text style={S.countLabel}>GUESTS</Text>
+              
+              <View style={S.eventInfo}>
+                <Text style={S.eventTitle} numberOfLines={1}>{e.title}</Text>
+                <Text style={S.eventDate}>
+                   <Ionicons name="calendar-outline" size={12} color={C.lightMuted} /> {new Date(e.endedAt || e.startsAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                </Text>
+              </View>
+
+              <View style={S.guestBadge}>
+                 <Ionicons name="people-outline" size={14} color={C.purple} />
+                 <Text style={S.guestBadgeText}>{e.finalAttendeeCount ?? (e.attendees?.length || 0)} guests</Text>
               </View>
             </TouchableOpacity>
           ))
         )}
+
+        {/* Grow Your Circle */}
+        <View style={S.growCard}>
+           <View style={S.growIconCircle}>
+             <Ionicons name="people" size={24} color={C.purple} />
+           </View>
+           <Text style={S.growTitle}>Grow Your Circle</Text>
+           <Text style={S.growSub}>Host more events to see your community thrive and analytics grow.</Text>
+        </View>
       </ScrollView>
+
+      <AttendanceSheet 
+        visible={showSheet}
+        onClose={() => setShowSheet(false)}
+        attendees={attendeesList.filter(a => selectedFilter === "new" ? !a.isRepeated : a.isRepeated).map(a => ({
+          ...a,
+          imageUrl: a.imageUrl,
+          name: a.name,
+          joinedAt: undefined, // Or pass something relevant
+        }))}
+      />
     </View>
+
   );
 }
 
 const S = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F9FAFB" },
+  container: { flex: 1, backgroundColor: "#fff" },
   header: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     paddingTop: Platform.OS === "ios" ? 60 : 40,
     paddingHorizontal: 20, paddingBottom: 15,
-    backgroundColor: "#fff", borderBottomWidth: 1, borderColor: C.cardBorder,
   },
-  backBtn: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: C.inputBg },
-  headerTitle: { fontSize: 17, fontWeight: "800", color: C.ink },
-  scroll: { padding: 20, paddingBottom: 60 },
-  statsGrid: { marginBottom: 25 },
-  statCard: {
-    borderRadius: 24, padding: 24, marginBottom: 12,
-    shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 4,
+  backBtn: { width: 42, height: 42, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: "#fff", borderWidth: 1, borderColor: "#F3F4F6" },
+  notifBtn: { width: 42, height: 42, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  headerTitle: { fontSize: 18, fontFamily: C.fontExtraBold, color: C.purple, textAlign: "center", flex: 1 },
+  scroll: { padding: 20, paddingBottom: 100 },
+  
+  mainStatCard: {
+    borderRadius: 32, padding: 28, marginBottom: 20,
+    shadowColor: C.purple, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.15, shadowRadius: 20, elevation: 8,
   },
-  statLabel: { color: "rgba(255,255,255,0.7)", fontSize: 11, fontWeight: "900", letterSpacing: 1.2, marginBottom: 4 },
-  statValue: { color: "#fff", fontSize: 34, fontWeight: "900" },
-  bottomGrid: { flexDirection: "row", gap: 12 },
-  miniCard: { 
-    flex: 1, padding: 16, borderRadius: 20, borderWidth: 1.5, borderColor: C.cardBorder,
-    shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 5,
+  mainStatLabel: { color: "rgba(255,255,255,0.8)", fontSize: 13, fontFamily: C.fontBold, marginBottom: 8 },
+  mainStatValueRow: { flexDirection: "row", alignItems: "baseline", gap: 8 },
+  mainStatValue: { color: "#fff", fontSize: 48, fontFamily: C.fontExtraBold },
+  mainStatSubValue: { color: "rgba(255,255,255,0.8)", fontSize: 16, fontFamily: C.fontBold },
+
+  miniStatsRow: { flexDirection: "row", gap: 12, marginBottom: 30 },
+  miniStatCard: { 
+    flex: 1, flexDirection: "row", alignItems: "center", gap: 12,
+    padding: 16, borderRadius: 24, backgroundColor: "#fff", 
+    borderWidth: 1, borderColor: "#F3F4F6",
+    shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 10, elevation: 2,
   },
-  miniLabel: { fontSize: 10, fontWeight: "900", letterSpacing: 0.5, marginBottom: 4 },
-  miniValue: { fontSize: 20, fontWeight: "900", color: C.ink },
-  listTitle: { fontSize: 13, fontWeight: "900", color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 15, marginLeft: 4 },
+  miniStatIconBox: { width: 36, height: 36, borderRadius: 12, backgroundColor: C.purpleBg, alignItems: "center", justifyContent: "center" },
+  miniStatLabel: { fontSize: 12, fontFamily: C.fontBold, color: C.muted, marginBottom: 2 },
+  miniStatValue: { fontSize: 20, fontFamily: C.fontExtraBold, color: C.ink },
+
+  sectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 20 },
+  sectionTitle: { fontSize: 18, fontFamily: C.fontExtraBold, color: C.ink },
+  viewAll: { fontSize: 13, fontFamily: C.fontBold, color: C.purple },
+
   eventCard: {
     flexDirection: "row", alignItems: "center", backgroundColor: "#fff",
-    padding: 14, borderRadius: 18, marginBottom: 12,
-    borderWidth: 1.5, borderColor: C.cardBorder, gap: 12,
+    padding: 12, borderRadius: 24, marginBottom: 16,
+    borderWidth: 1, borderColor: "#F3F4F6", gap: 12,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 1,
   },
-  emojiBox: { width: 48, height: 48, borderRadius: 14, alignItems: "center", justifyContent: "center" },
-  eventTitle: { fontSize: 15, fontWeight: "900", color: C.ink, marginBottom: 4 },
-  badgeRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  kindBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
-  kindText: { fontSize: 9, fontWeight: "900" },
-  eventDate: { fontSize: 11, color: C.muted, fontWeight: "600" },
-  countBox: { alignItems: "center", minWidth: 50 },
-  countValue: { fontSize: 18, fontWeight: "900", color: C.ink },
-  countLabel: { fontSize: 8, color: C.muted, fontWeight: "900" },
+  eventImageWrapper: { position: "relative" },
+  eventImage: { width: 70, height: 70, borderRadius: 18, backgroundColor: "#F3F4F6" },
+  kindBadge: { 
+    position: "absolute", top: 4, left: 4, 
+    paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4,
+  },
+  kindText: { fontSize: 8, fontFamily: C.fontExtraBold },
+  eventInfo: { flex: 1 },
+  eventTitle: { fontSize: 15, fontFamily: C.fontBold, color: C.ink, marginBottom: 6 },
+  eventDate: { fontSize: 12, fontFamily: C.font, color: C.muted },
+  guestBadge: { 
+    flexDirection: "row", alignItems: "center", gap: 4,
+    backgroundColor: C.purpleBg, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12,
+  },
+  guestBadgeText: { fontSize: 11, fontFamily: C.fontBold, color: C.purple },
+
+  growCard: {
+    marginTop: 20, padding: 30, borderRadius: 32,
+    borderWidth: 2, borderColor: "#F3F4F6", borderStyle: "dashed",
+    alignItems: "center", justifyContent: "center",
+  },
+  growIconCircle: { width: 60, height: 60, borderRadius: 30, backgroundColor: C.purpleBg, alignItems: "center", justifyContent: "center", marginBottom: 16 },
+  growTitle: { fontSize: 16, fontFamily: C.fontBold, color: C.ink, marginBottom: 8 },
+  growSub: { fontSize: 13, fontFamily: C.font, color: C.muted, textAlign: "center", lineHeight: 20, paddingHorizontal: 20 },
+
   center: { alignItems: "center", paddingVertical: 60 },
-  err: { color: "#EF4444", fontSize: 14, fontWeight: "700", marginBottom: 10 },
-  retry: { backgroundColor: C.teal, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 99 },
-  retryText: { color: "#fff", fontWeight: "800" },
-  empty: { alignItems: "center", paddingVertical: 80 },
-  emptyTitle: { fontSize: 18, fontWeight: "900", color: C.ink, marginBottom: 8 },
-  emptySub: { fontSize: 13, color: C.muted, fontWeight: "600", textAlign: "center", paddingHorizontal: 30 },
+  err: { color: "#EF4444", fontSize: 14, fontFamily: C.fontBold, marginBottom: 10 },
+  retry: { backgroundColor: C.purple, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 16 },
+  retryText: { color: "#fff", fontFamily: C.fontBold },
+  empty: { alignItems: "center", paddingVertical: 60 },
+  emptyTitle: { fontSize: 18, fontFamily: C.fontBold, color: C.ink, marginBottom: 8 },
+  emptySub: { fontSize: 14, fontFamily: C.font, color: C.muted, textAlign: "center", paddingHorizontal: 40 },
+
+  modalContent: { padding: 24, paddingBottom: 60 },
+  modalTitle: { fontSize: 24, fontFamily: C.fontExtraBold, color: C.ink, marginBottom: 8 },
+  modalSub: { fontSize: 14, fontFamily: C.font, color: C.muted, marginBottom: 24 },
+  attendeeList: { gap: 16 },
+  attendeeRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  attendeeAvatar: { width: 50, height: 50, borderRadius: 25, backgroundColor: "#F3F4F6" },
+  attendeeName: { fontSize: 16, fontFamily: C.fontBold, color: C.ink },
+  attendeeStatus: { fontSize: 12, fontFamily: C.font, color: C.muted },
 });

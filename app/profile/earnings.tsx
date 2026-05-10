@@ -1,3 +1,4 @@
+// app/profile/earnings.tsx
 import React, { useEffect, useState, useMemo } from "react";
 import { 
   View, Text, StyleSheet, ScrollView, TouchableOpacity, 
@@ -7,26 +8,21 @@ import { useRouter } from "expo-router";
 import { useAuth } from "@clerk/clerk-expo";
 import Constants from "expo-constants";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
+import { LinearGradient } from "expo-linear-gradient";
 
 const { width: W } = Dimensions.get("window");
 
-// Design Tokens (Matching Profile)
 const C = {
-  purple: "#8B5CF6",
-  purpleBg: "#F5F3FF",
-  teal: "#0D9488",
-  tealBg: "#F0FDFA",
-  tealText: "#0F766E",
-  amber: "#D97706",
-  amberBg: "#FFFBEB",
-  amberText: "#92400E",
-  ink: "#111827",
-  muted: "#6B7280",
-  card: "#FFFFFF",
-  cardBorder: "#E5E7EB",
-  inputBg: "#F9FAFB",
+  bg:       "#F8FAFF",
+  dark:     "#1A1C2E",
+  white:    "#FFFFFF",
+  ink:      "#1A1C2E",
+  ink2:     "#4B4E6D",
+  muted:    "#8F94B1",
+  primary:  "#5252E2",
+  accent:   "#22C55E",
+  border:   "#EAEFF5",
 };
 
 export default function EarningsDetail() {
@@ -39,7 +35,7 @@ export default function EarningsDetail() {
   const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
-
+  
   const headers = useMemo(() => ({
     "Content-Type": "application/json",
     ...(EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {}),
@@ -55,11 +51,9 @@ export default function EarningsDetail() {
       const json = await res.json().catch(() => null);
       if (!res.ok) throw new Error(json?.error || "Failed to load data");
       
-      // Filter for all paid events (active or ended)
       const list = (Array.isArray(json.createdEvents) ? json.createdEvents : [])
         .filter((e: any) => e.kind === "paid")
         .map((e: any) => {
-           // Calculate dynamic earnings if not finalized
            if (e.finalEarnings === undefined || e.finalEarnings === null) {
               const paidCount = Array.isArray(e.attendees) 
                 ? e.attendees.filter((a: any) => a.isPaid || !!a.razorpayPaymentId).length 
@@ -72,7 +66,7 @@ export default function EarningsDetail() {
            }
            return e;
         })
-        .filter((e: any) => e.calculatedEarnings > 0 || e.status === "ended" || e.status === "completed") // Only show if earned something OR ended
+        .filter((e: any) => e.calculatedEarnings > 0 || e.status === "ended" || e.status === "completed")
         .sort((a: any, b: any) => new Date(b.endedAt || b.startsAt || 0).getTime() - new Date(a.endedAt || a.startsAt || 0).getTime());
         
       setEvents(list);
@@ -87,50 +81,50 @@ export default function EarningsDetail() {
 
   const totalEarnings = events.reduce((acc, e) => acc + (e.calculatedEarnings || 0), 0);
 
+  const TOP = Platform.OS === "ios" ? 60 : 40;
+
   return (
     <View style={S.container}>
       <StatusBar barStyle="dark-content" />
       
       {/* Header */}
-      <View style={S.header}>
+      <View style={[S.header, { paddingTop: TOP }]}>
         <TouchableOpacity onPress={() => router.back()} style={S.backBtn}>
-          <Ionicons name="chevron-back" size={20} color={C.ink} />
+          <Ionicons name="chevron-back" size={22} color={C.ink} />
         </TouchableOpacity>
-        <Text style={S.headerTitle}>Earnings History</Text>
+        <Text style={S.headerTitle}>EARNINGS HISTORY</Text>
         <View style={{ width: 40 }} />
       </View>
 
       <ScrollView contentContainerStyle={S.scroll} showsVerticalScrollIndicator={false}>
-        {/* Summary Card */}
-        <View style={S.summaryCard}>
-          <Text style={S.summaryLabel}>TOTAL REVENUE</Text>
-          <Text style={S.summaryValue}>₹{(totalEarnings / 100).toLocaleString()}</Text>
-          <View style={S.summaryMeta}>
-            <View style={S.metaPill}>
-              <Ionicons name="calendar" size={12} color={C.tealText} />
-              <Text style={S.metaText}>{events.length} Paid Events</Text>
+        {/* Main Card */}
+        <LinearGradient colors={["#1C2031", "#2D344B"]} style={S.mainCard}>
+          <View style={S.cardLeft}>
+            <Text style={S.cardLabel}>TOTAL REVENUE</Text>
+            <Text style={S.cardValue}>₹{(totalEarnings / 100).toLocaleString()}</Text>
+            <View style={S.countPill}>
+              <View style={S.countDot} />
+              <Text style={S.countTxt}>{events.length} Paid Events</Text>
             </View>
           </View>
+          <View style={S.chartBox}>
+            <View style={[S.bar, { height: 18, opacity: 0.3 }]} />
+            <View style={[S.bar, { height: 26, opacity: 0.5 }]} />
+            <View style={[S.bar, { height: 42, backgroundColor: "#00E5FF" }]} />
+            <View style={[S.bar, { height: 30, opacity: 0.7 }]} />
+          </View>
+        </LinearGradient>
+
+        {/* Section Header */}
+        <View style={S.sectionHeader}>
+          <Text style={S.sectionTitle}>ACTIVITY BREAKDOWN</Text>
+          <View style={S.datePill}><Text style={S.datePillTxt}>MAY 2026</Text></View>
         </View>
 
-        <Text style={S.listTitle}>Breakdown per Event</Text>
-
         {loading ? (
-          <View style={S.center}>
-            <ActivityIndicator color={C.teal} size="large" />
-            <Text style={S.muted}>Calculating totals...</Text>
-          </View>
-        ) : err ? (
-          <View style={S.center}>
-            <Text style={S.err}>{err}</Text>
-            <TouchableOpacity onPress={load} style={S.retry}><Text style={S.retryText}>Retry</Text></TouchableOpacity>
-          </View>
+          <View style={S.center}><ActivityIndicator color={C.primary} size="large" /></View>
         ) : events.length === 0 ? (
-          <View style={S.empty}>
-            <Text style={{ fontSize: 40, marginBottom: 12 }}>💰</Text>
-            <Text style={S.emptyTitle}>No earnings yet</Text>
-            <Text style={S.emptySub}>End your ongoing paid events to see your revenue breakdown here.</Text>
-          </View>
+          <View style={S.empty}><Text style={S.emptyTxt}>No activity found</Text></View>
         ) : (
           events.map((e, i) => (
             <TouchableOpacity 
@@ -143,65 +137,97 @@ export default function EarningsDetail() {
                   params: { eventId: e._id, kind: e.kind, title: e.title, emoji: e.emoji || "📍" }
                 } as any);
               }}
-              style={S.eventCard}
+              style={S.activityCard}
             >
-              <View style={[S.emojiBox, { backgroundColor: C.tealBg }]}>
-                <Text style={{ fontSize: 20 }}>{e.emoji || "🎟"}</Text>
+              <View style={S.emojiBox}>
+                <Text style={{ fontSize: 24 }}>{e.emoji || "🎟"}</Text>
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={S.eventTitle} numberOfLines={1}>{e.title}</Text>
-                <Text style={S.eventDate}>
-                  {new Date(e.endedAt || e.startsAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+              <View style={S.activityInfo}>
+                <Text style={S.activityTitle}>{e.title}</Text>
+                <Text style={S.activityDate}>
+                  {new Date(e.endedAt || e.startsAt).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })}
                 </Text>
               </View>
-              <View style={{ alignItems: "flex-end" }}>
-                <Text style={S.amount}>+₹{((e.calculatedEarnings || 0) / 100).toLocaleString()}</Text>
-                <Text style={S.guests}>{e.calculatedAttendees || 0} guests</Text>
+              <View style={S.activityRight}>
+                <Text style={S.activityAmount}>+₹{((e.calculatedEarnings || 0) / 100).toLocaleString()}</Text>
+                <Text style={S.activityGuest}>{e.calculatedAttendees || 0} {e.calculatedAttendees === 1 ? "GUEST" : "GUESTS"}</Text>
               </View>
             </TouchableOpacity>
           ))
         )}
+
+        {/* Footer */}
+        <View style={S.footer}>
+          <Text style={S.footerTxt}>Need help with your earnings?</Text>
+          <TouchableOpacity style={S.supportBtn}>
+            <Text style={S.supportBtnTxt}>Contact Support</Text>
+            <Ionicons name="chevron-forward" size={14} color={C.ink2} />
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </View>
   );
 }
 
 const S = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F9FAFB" },
-  header: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    paddingTop: Platform.OS === "ios" ? 60 : 40,
-    paddingHorizontal: 20, paddingBottom: 15,
-    backgroundColor: "#fff", borderBottomWidth: 1, borderColor: C.cardBorder,
+  container: { flex: 1, backgroundColor: "#F8FAFF" },
+  header: { 
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between", 
+    paddingHorizontal: 20, paddingBottom: 15, backgroundColor: "#F8FAFF" 
   },
-  backBtn: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: C.inputBg },
-  headerTitle: { fontSize: 17, fontWeight: "800", color: C.ink },
-  scroll: { padding: 20, paddingBottom: 60 },
-  summaryCard: {
-    backgroundColor: C.teal, borderRadius: 24, padding: 24, marginBottom: 25,
-    shadowColor: C.teal, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.2, shadowRadius: 20, elevation: 10,
+  backBtn: { 
+    width: 44, height: 44, borderRadius: 15, backgroundColor: "#FFF", 
+    alignItems: "center", justifyContent: "center",
+    shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 10, elevation: 2
   },
-  summaryLabel: { color: "rgba(255,255,255,0.7)", fontSize: 11, fontWeight: "900", letterSpacing: 1.2, marginBottom: 8 },
-  summaryValue: { color: "#fff", fontSize: 34, fontWeight: "900" },
-  summaryMeta: { flexDirection: "row", marginTop: 15 },
-  metaPill: { backgroundColor: "rgba(255,255,255,0.15)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, flexDirection: "row", alignItems: "center", gap: 6 },
-  metaText: { color: "#fff", fontSize: 12, fontWeight: "800" },
-  listTitle: { fontSize: 13, fontWeight: "900", color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 15, marginLeft: 4 },
-  eventCard: {
-    flexDirection: "row", alignItems: "center", backgroundColor: "#fff",
-    padding: 14, borderRadius: 18, marginBottom: 12,
-    borderWidth: 1.5, borderColor: C.cardBorder, gap: 12,
+  headerTitle: { fontSize: 14, fontFamily: "Outfit_800ExtraBold", color: C.ink2, letterSpacing: 0.5 },
+  
+  scroll: { paddingHorizontal: 20, paddingBottom: 40 },
+  
+  mainCard: { 
+    borderRadius: 35, padding: 30, marginTop: 10,
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between"
   },
-  emojiBox: { width: 48, height: 48, borderRadius: 14, alignItems: "center", justifyContent: "center" },
-  eventTitle: { fontSize: 15, fontWeight: "900", color: C.ink, marginBottom: 2 },
-  eventDate: { fontSize: 12, color: C.muted, fontWeight: "600" },
-  amount: { fontSize: 16, fontWeight: "900", color: C.teal, marginBottom: 2 },
-  guests: { fontSize: 11, color: C.muted, fontWeight: "700" },
-  center: { alignItems: "center", paddingVertical: 60 },
-  err: { color: "#EF4444", fontSize: 14, fontWeight: "700", marginBottom: 10 },
-  retry: { backgroundColor: C.teal, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 99 },
-  retryText: { color: "#fff", fontWeight: "800" },
-  empty: { alignItems: "center", paddingVertical: 80 },
-  emptyTitle: { fontSize: 18, fontWeight: "900", color: C.ink, marginBottom: 8 },
-  emptySub: { fontSize: 13, color: C.muted, fontWeight: "600", textAlign: "center", paddingHorizontal: 30 },
+  cardLeft: { flex: 1 },
+  cardLabel: { fontSize: 11, fontFamily: "Outfit_600SemiBold", color: "rgba(255,255,255,0.5)", letterSpacing: 1, marginBottom: 5 },
+  cardValue: { fontSize: 48, fontFamily: "Outfit_900Black", color: "#FFF" },
+  countPill: { 
+    flexDirection: "row", alignItems: "center", gap: 8, alignSelf: "flex-start",
+    backgroundColor: "rgba(255,255,255,0.1)", paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, marginTop: 15 
+  },
+  countDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: C.accent },
+  countTxt: { fontSize: 12, fontFamily: "Outfit_600SemiBold", color: "#FFF" },
+  
+  chartBox: { flexDirection: "row", alignItems: "flex-end", gap: 6 },
+  bar: { width: 10, borderRadius: 5, backgroundColor: C.accent },
+
+  sectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 35, marginBottom: 20 },
+  sectionTitle: { fontSize: 11, fontFamily: "Outfit_700Bold", color: C.muted, letterSpacing: 0.5 },
+  datePill: { backgroundColor: "#EDF2F7", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
+  datePillTxt: { fontSize: 10, fontFamily: "Outfit_800ExtraBold", color: C.ink2 },
+
+  activityCard: { 
+    flexDirection: "row", alignItems: "center", gap: 15,
+    backgroundColor: "#FFF", padding: 18, borderRadius: 25, marginBottom: 15,
+    shadowColor: "#000", shadowOpacity: 0.03, shadowRadius: 15, elevation: 2
+  },
+  emojiBox: { 
+    width: 56, height: 56, borderRadius: 18, backgroundColor: "#F8FAFF", 
+    alignItems: "center", justifyContent: "center" 
+  },
+  activityInfo: { flex: 1 },
+  activityTitle: { fontSize: 16, fontFamily: "Outfit_700Bold", color: C.ink },
+  activityDate: { fontSize: 12, fontFamily: "Outfit_500Medium", color: C.muted, marginTop: 2 },
+  activityRight: { alignItems: "flex-end" },
+  activityAmount: { fontSize: 16, fontFamily: "Outfit_800ExtraBold", color: C.ink },
+  activityGuest: { fontSize: 10, fontFamily: "Outfit_700Bold", color: C.muted, marginTop: 4 },
+
+  footer: { alignItems: "center", marginTop: 40 },
+  footerTxt: { fontSize: 13, fontFamily: "Outfit_500Medium", color: C.muted },
+  supportBtn: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 8 },
+  supportBtnTxt: { fontSize: 14, fontFamily: "Outfit_800ExtraBold", color: C.ink2 },
+
+  center: { paddingVertical: 40 },
+  empty: { paddingVertical: 40, alignItems: "center" },
+  emptyTxt: { fontSize: 14, fontFamily: "Outfit_600SemiBold", color: C.muted },
 });

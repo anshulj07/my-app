@@ -38,6 +38,8 @@ export type EditableEvent = {
     address?: string;
     placeId?: string;
   };
+  capacity?: number | null;
+  attendance?: number | null;
 };
 
 function toNumber(v: any): number | null {
@@ -98,6 +100,14 @@ export default function EditEventModal({
   const [time24, setTime24] = useState("");
   const [endDateISO, setEndDateISO] = useState("");
   const [endTime24, setEndTime24] = useState("");
+  const [limitEnabled, setLimitEnabled] = useState(false);
+  const [capacityText, setCapacityText] = useState("");
+
+  const capacityOk = useMemo(() => {
+    if (!limitEnabled) return true;
+    const n = parseInt(capacityText, 10);
+    return Number.isFinite(n) && n > 0;
+  }, [limitEnabled, capacityText]);
 
   // Places autocomplete
   const [query, setQuery] = useState("");
@@ -127,7 +137,9 @@ export default function EditEventModal({
 
     const eTitle = (event.title ?? "").toString();
     const eDesc = (event.description ?? "").toString(); // ✅ NEW
-    const eKind = (event.kind ?? "free") as ListingKind;
+    let eKind = (event.kind ?? "event_free") as ListingKind;
+    if ((eKind as string) === "free") eKind = "event_free";
+    if ((eKind as string) === "paid") eKind = "event_paid";
 
     const ePrice =
       event.priceCents == null
@@ -138,6 +150,8 @@ export default function EditEventModal({
 
     const eDate = (event.date ?? "").toString();
     const eTime = (event.time ?? "").toString();
+    const eEndDate = (event.endDate ?? "").toString();
+    const eEndTime = (event.endTime ?? "").toString();
 
     const lat = toNumber(event.location?.lat);
     const lng = toNumber(event.location?.lng);
@@ -146,11 +160,20 @@ export default function EditEventModal({
     setTitle(eTitle);
     setDescription(eDesc); // ✅ NEW
     setKind(eKind);
-    setPriceText(eKind === "service" ? ePrice : "");
+    setPriceText((eKind === "service" || eKind === "event_paid") ? ePrice : "");
     setDateISO(eDate);
     setTime24(eTime);
     setEndDateISO(eEndDate);
     setEndTime24(eEndTime);
+
+    const cap = event.capacity ?? event.attendance ?? null;
+    if (cap != null && cap > 0) {
+      setLimitEnabled(true);
+      setCapacityText(cap.toString());
+    } else {
+      setLimitEnabled(false);
+      setCapacityText("");
+    }
 
     setErr(null);
     setSubmitting(false);
@@ -253,12 +276,14 @@ export default function EditEventModal({
     location: LocationPayload;
     kind: ListingKind;
     priceCents: number | null;
+    capacity: number | null;
+    attendance: number | null;
     creatorClerkId: string;
   }) {
     const payload = {
       _id: args.eventId,
       eventId: args.eventId,
-
+ 
       updates: {
         title: args.title,
         description: args.description, // ✅ NEW
@@ -270,6 +295,8 @@ export default function EditEventModal({
         timezone: args.timezone ?? "",
         kind: args.kind,
         priceCents: args.priceCents,
+        capacity: args.capacity,
+        attendance: args.attendance,
         location: {
           ...args.location,
           cityKey: args.location.cityKey || makeCityKey(args.location.city),
@@ -277,7 +304,7 @@ export default function EditEventModal({
           source: args.location.source ?? "user_edit",
         },
       },
-
+ 
       title: args.title,
       description: args.description, // ✅ NEW
       emoji: args.emoji,
@@ -288,6 +315,8 @@ export default function EditEventModal({
       timezone: args.timezone ?? "",
       kind: args.kind,
       priceCents: args.priceCents,
+      capacity: args.capacity,
+      attendance: args.attendance,
       location: {
         ...args.location,
         cityKey: args.location.cityKey || makeCityKey(args.location.city),
@@ -394,6 +423,7 @@ export default function EditEventModal({
 
     try {
       const timezone = typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "";
+      const capVal = limitEnabled ? parseInt(capacityText, 10) : null;
 
       const updated = await updateEventInDb({
         apiBase: API_BASE,
@@ -410,6 +440,8 @@ export default function EditEventModal({
         location: locationPayload,
         kind,
         priceCents,
+        capacity: capVal,
+        attendance: capVal,
         creatorClerkId: userId,
       });
 
@@ -517,6 +549,11 @@ export default function EditEventModal({
       err={err}
       submitting={submitting}
       deleting={deleting}
+
+      limitEnabled={limitEnabled}
+      setLimitEnabled={setLimitEnabled}
+      capacityText={capacityText}
+      setCapacityText={setCapacityText}
 
       onClosePress={() => sheetRef.current?.close()}
       onSave={handleSave}

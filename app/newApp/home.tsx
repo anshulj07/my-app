@@ -17,7 +17,6 @@ import type { EventPin } from "../../components/Map/MapView";
 import MapSearchHeader from "../../components/SearchHeaderHomeScreen/MapSearchHeader";
 import ModalizeEventSheet from "../../components/AddEventModal/AddEvent";
 import EventsListModal from "../../components/List/EventsListModal";
-import PersonBookingSheet from "../../components/ClickPin/PersonBookingSheet";
 import EditServiceFlow from "../../components/EditServiceFlow/EditServiceFlow";
 import EditEventModal from "../../components/EditEventModal/EditEvent";
 import CreateServiceFlow from "../../components/CreateServiceFlow/CreateServiceFlow";
@@ -46,6 +45,7 @@ const C = {
   purpleDim:   "rgba(124,77,255,0.12)",
   purpleGlow:  "rgba(124,77,255,0.25)",
   purpleText:  "#B388FF",
+
 
   // Amber for chat
   amber:       "#FFB300",
@@ -193,8 +193,6 @@ export default function Home() {
   // ✅ Don't render map until we have a real location OR permission is denied
   const [locReady,  setLocReady]  = useState(false);
 
-  const [selectedPin,     setSelectedPin]     = useState<EventPin | null>(null);
-  const [showPersonSheet, setShowPersonSheet] = useState(false);
   const [editOpen,        setEditOpen]        = useState(false);
   const [editEvent,       setEditEvent]       = useState<EditEventValue>(null);
 
@@ -325,18 +323,11 @@ export default function Home() {
   const mapKey = `map:${activeFilter ?? "all"}:${pinsVersion}`;
 
   const onPinPress = useCallback((pin: EventPin) => {
-    const raw = (pin as any)?._id ?? (pin as any)?.id ?? "";
-    const id  = typeof raw === "string" ? raw.trim() : String(raw?.$oid || raw?.oid || "");
-    setSelectedPin((events.find(e => String(e._id) === id) || pin) as any);
-    setShowPersonSheet(true);
-  }, [events]);
-
-  const onStatusChanged = useCallback((id: string, nextStatus: string) => {
-    const idStr = String(id).trim(), ns = String(nextStatus || "").trim() || "active";
-    setEvents(prev => prev.map(e => String(e._id) === idStr ? { ...e, status: ns } as any : e));
-    setSelectedPin(prev => prev && String(prev._id) === idStr ? { ...prev, status: ns } as any : prev);
-    setPinsVersion(v => v + 1);
-  }, []);
+    router.push({
+      pathname: "/newApp/event-detail",
+      params: { eventId: pin._id, title: pin.title, emoji: pin.emoji }
+    });
+  }, [router]);
 
   return (
     <>
@@ -372,26 +363,6 @@ export default function Home() {
       </TouchableOpacity>
 
       {/* ── Sheets ───────────────────────────────────── */}
-      <PersonBookingSheet
-        visible={showPersonSheet} person={selectedPin}
-        onClose={() => setShowPersonSheet(false)}
-        onEditDetails={ev => {
-          setShowPersonSheet(false);
-          if (ev.kind === "service") {
-            setServiceToEdit(ev);
-            setShowEditService(true);
-          } else {
-            setEditEvent(toEditableEvent(ev));
-            setEditOpen(true);
-          }
-        }}
-        onStatusChanged={onStatusChanged}
-        onDeleteEvent={eventId => {
-          setEvents(prev => prev.filter(e => String(e._id || "") !== eventId));
-          setPinsVersion(v => v + 1);
-          setShowPersonSheet(false);
-        }}
-      />
       <EditEventModal
         visible={editOpen} event={editEvent}
         onClose={() => { setEditOpen(false); setEditEvent(null); }}
@@ -489,6 +460,17 @@ export default function Home() {
         </Pressable>
       </Modal>
 
+      <EditServiceFlow
+        visible={showEditService}
+        service={serviceToEdit}
+        onClose={() => { setShowEditService(false); setServiceToEdit(null); }}
+        onUpdated={() => { 
+          setShowEditService(false); 
+          setServiceToEdit(null);
+          loadEvents();
+        }}
+      />
+
       <ModalizeEventSheet
         visible={open} onClose={() => setOpen(false)} defaultKind={defaultKind}
         onCreate={(e: any) => {
@@ -511,28 +493,6 @@ export default function Home() {
         onBackToPicker={() => {
           setShowServiceFlow(false);
           setTimeout(() => setShowPicker(true), 300);
-        }}
-      />
-
-      <EditServiceFlow
-        visible={showEditService}
-        service={serviceToEdit}
-        onClose={() => { setShowEditService(false); setServiceToEdit(null); }}
-        onUpdated={() => { 
-          setShowEditService(false); 
-          setServiceToEdit(null);
-          // ✅ Reload events and refresh selectedPin so cover photo updates immediately
-          loadEvents().then(newEvents => {
-            if (newEvents && newEvents.length > 0) {
-              const pinId = selectedPin?._id;
-              if (pinId) {
-                const updated = newEvents.find(e => String(e._id) === String(pinId));
-                if (updated) {
-                  setSelectedPin(updated as any);
-                }
-              }
-            }
-          });
         }}
       />
     </>

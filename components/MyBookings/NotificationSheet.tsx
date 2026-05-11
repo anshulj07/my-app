@@ -35,7 +35,7 @@ function timeAgo(iso: string) {
 }
 
 export default function NotificationSheet({
-  visible, onClose, items, loading, admitBusy, onAdmit, onReject, onPressEvent, onMarkRead
+  visible, onClose, items, loading, admitBusy, onAdmit, onReject, onPressEvent, onPressUser, onMarkRead
 }: {
   visible: boolean;
   onClose: () => void;
@@ -45,6 +45,7 @@ export default function NotificationSheet({
   onAdmit: (item: NotifItem) => void;
   onReject: (item: NotifItem) => void;
   onPressEvent: (eventId: string) => void;
+  onPressUser: (clerkUserId: string) => void;
   onMarkRead: () => void;
 }) {
   const pending = items.filter(i => i.type === "pending");
@@ -114,9 +115,13 @@ export default function NotificationSheet({
                         </View>
                         <View style={{ flex: 1 }}>
                           <Text style={S.cardText} numberOfLines={2}>
-                            <Text style={S.boldText}>{item.userName}</Text>
+                            <Text style={S.boldText} onPress={() => onPressUser(item.userClerkId)}>
+                              {item.userName}
+                            </Text>
                             <Text style={S.normalText}> wants to join </Text>
-                            <Text style={S.eventText}>{item.eventEmoji} {item.eventTitle}</Text>
+                            <Text style={S.eventText} onPress={() => onPressEvent(item.eventId)}>
+                              {item.eventEmoji} {item.eventTitle}
+                            </Text>
                           </Text>
                           <Text style={S.timeText}>{timeAgo(item.timestamp)}</Text>
                         </View>
@@ -171,9 +176,13 @@ export default function NotificationSheet({
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={S.cardText} numberOfLines={2}>
-                        <Text style={S.boldText}>{item.userName}</Text>
+                        <Text style={S.boldText} onPress={() => onPressUser(item.userClerkId)}>
+                          {item.userName}
+                        </Text>
                         <Text style={S.normalText}> joined </Text>
-                        <Text style={S.eventText}>{item.eventEmoji} {item.eventTitle}</Text>
+                        <Text style={S.eventText} onPress={() => onPressEvent(item.eventId)}>
+                          {item.eventEmoji} {item.eventTitle}
+                        </Text>
                       </Text>
                       <Text style={S.timeText}>{timeAgo(item.timestamp)}</Text>
                     </View>

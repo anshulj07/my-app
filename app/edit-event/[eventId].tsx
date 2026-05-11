@@ -64,6 +64,6 @@ export default function EditEventPage() {
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0B1220" },
-  center: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#0B1220" }
+  container: { flex: 1, backgroundColor: "#FFFFFF" },
+  center: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#FFFFFF" }
 });

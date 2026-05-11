@@ -254,9 +254,9 @@ import { apiFetch } from "../../../lib/apiFetch";
 import HistorySummaryModal from "../../../components/profile/HistorySummaryModal";
 
 const C = {
-  bg: "#F7F8FA", card: "#FFFFFF", cardBorder: "#EAECF0",
-  ink: "#0D1117", muted: "#656D76", hint: "#AFB8C1",
-  green: "#22C55E", greenBg: "#DCFCE7", greenBorder: "#86EFAC", greenText: "#15803D",
+  bg: "#F8F7FF", card: "#FFFFFF", cardBorder: "#E8E6FF",
+  ink: "#1A1523", muted: "#6E6B85", hint: "#AFB2C1",
+  purple: "#6C63FF", purpleBg: "#F3F0FF", purpleBorder: "#DED9FF", purpleText: "#5249D7",
   amber: "#F59E0B", amberBg: "#FEF3C7", amberText: "#B45309",
   teal: "#0EA5E9", tealBg: "#E0F2FE",
 };
@@ -279,32 +279,42 @@ function fmtDate(ev: HistoryEvent) {
 }
 
 function statusBadge(status?: string) {
-  const s = (status || "active").toLowerCase();
-  if (s === "ended") return { label: "Ended", bg: C.amberBg, txt: C.amberText };
-  if (s === "active") return { label: "Active", bg: C.greenBg, txt: C.greenText };
+  const s = (status || "").toLowerCase().replace(/_/g, " ");
+  if (s === "live") return { label: "LIVE", bg: "#FEE2E2", txt: "#EF4444", isLive: true };
+  if (s.includes("pending")) return { label: "Pending", bg: C.amberBg, txt: C.amberText };
+  if (s.includes("confirm")) return { label: "Confirmed", bg: "#ECFDF5", txt: "#059669" };
+  if (s.includes("reject") || s.includes("cancel")) return { label: "Rejected", bg: "#FFF1F2", txt: "#E11D48" };
+  if (s === "ended") return { label: "Ended", bg: "#F3F4F6", txt: C.muted };
+  if (s === "active") return { label: "Active", bg: C.purpleBg, txt: C.purpleText };
   return { label: s.charAt(0).toUpperCase() + s.slice(1), bg: "#F3F4F6", txt: C.muted };
 }
 
 function EventRow({ item, onPress }: { item: HistoryEvent; onPress: () => void }) {
   const badge = statusBadge(item.status);
+  const isLive = badge.label === "LIVE";
   const city = item.location?.city || item.location?.formattedAddress?.split(",")[0] || "";
   const date = fmtDate(item);
   return (
-    <TouchableOpacity style={S.row} onPress={onPress} activeOpacity={0.88}>
-      <View style={[S.rowIconBox, item._role === "created" ? { backgroundColor: C.amberBg } : { backgroundColor: C.greenBg }]}>
+    <TouchableOpacity
+      style={[S.row, isLive && { borderColor: "#EF4444", borderWidth: 1.5, shadowColor: "#EF4444", shadowOpacity: 0.1 }]}
+      onPress={onPress}
+      activeOpacity={0.88}
+    >
+      <View style={[S.rowIconBox, item._role === "created" ? { backgroundColor: C.amberBg } : { backgroundColor: C.purpleBg }, isLive && { backgroundColor: "#FEE2E2" }]}>
         <Ionicons
-          name={item._role === "created" ? "star-outline" : "ticket-outline"}
-          size={18}
-          color={item._role === "created" ? C.amber : C.green}
+          name={isLive ? "radio-outline" : (item._role === "created" ? "star-outline" : "ticket-outline")}
+          size={isLive ? 20 : 18}
+          color={isLive ? "#EF4444" : (item._role === "created" ? C.amber : C.purple)}
         />
       </View>
       <View style={S.rowBody}>
-        <Text style={S.rowTitle} numberOfLines={1}>{item.title}</Text>
+        <Text style={S.rowTitle} numberOfLines={1}>{item.title || "Untitled Event"}</Text>
         <Text style={S.rowSub} numberOfLines={1}>
-          {[city, date].filter(Boolean).join(" · ") || "No details"}
+          {[city, date].filter(Boolean).join(" · ") || "Location & date TBD"}
         </Text>
       </View>
-      <View style={[S.badge, { backgroundColor: badge.bg }]}>
+      <View style={[S.badge, { backgroundColor: badge.bg }, isLive && S.liveBadge]}>
+        {isLive && <View style={S.liveDot} />}
         <Text style={[S.badgeTxt, { color: badge.txt }]}>{badge.label}</Text>
       </View>
     </TouchableOpacity>
@@ -398,20 +408,20 @@ export default function History() {
       </View>
 
       {loading ? (
-        <View style={S.center}><ActivityIndicator color={C.green} /></View>
+        <View style={S.center}><ActivityIndicator color={C.purple} /></View>
       ) : (
         <FlatList
           data={data}
           keyExtractor={i => `${i._id}-${i._role}`}
           showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.green} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.purple} />}
           contentContainerStyle={{ paddingBottom: 32, paddingTop: 10, paddingHorizontal: 16 }}
           ListEmptyComponent={
             <View style={S.empty}>
-              <View style={[S.emptyIconBox, tab === "joined" ? { backgroundColor: C.greenBg } : { backgroundColor: C.amberBg }]}>
+              <View style={[S.emptyIconBox, tab === "joined" ? { backgroundColor: C.purpleBg } : { backgroundColor: C.amberBg }]}>
                 <Ionicons
                   name={tab === "joined" ? "ticket-outline" : "star-outline"}
-                  size={28} color={tab === "joined" ? C.green : C.amber}
+                  size={28} color={tab === "joined" ? C.purple : C.amber}
                 />
               </View>
               <Text style={S.emptyTitle}>
@@ -429,10 +439,11 @@ export default function History() {
                 if (item.status?.toLowerCase() === "ended" && item._role === "created") {
                   setSummaryEvent(item);
                 } else {
-                  router.push({
-                    pathname: "/event-interest/[eventId]",
-                    params: { eventId: item._id, kind: item.kind, title: item.title, emoji: item.emoji || "📍" },
-                  } as any);
+                  // ✅ Navigation disabled for now as requested
+                  // router.push({
+                  //   pathname: "/event-interest/[eventId]",
+                  //   params: { eventId: item._id, kind: item.kind, title: item.title, emoji: item.emoji || "📍" },
+                  // } as any);
                 }
               }}
             />
@@ -460,18 +471,18 @@ const S = StyleSheet.create({
     width: 40, height: 40, borderRadius: 12, backgroundColor: C.bg,
     alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: C.cardBorder,
   },
-  title: { fontSize: 17, fontWeight: "800", color: C.ink },
+  title: { fontSize: 17, fontFamily: "Outfit-Bold", color: C.ink },
   statsRow: {
     flexDirection: "row", gap: 12, paddingHorizontal: 16, paddingVertical: 12,
     backgroundColor: C.card, borderBottomWidth: 1, borderBottomColor: C.cardBorder,
   },
   statCard: {
     flex: 1, flexDirection: "row", alignItems: "center", gap: 8,
-    backgroundColor: C.greenBg, borderRadius: 12, padding: 12,
-    borderWidth: 1, borderColor: C.greenBorder,
+    backgroundColor: C.purpleBg, borderRadius: 12, padding: 12,
+    borderWidth: 1, borderColor: C.purpleBorder,
   },
-  statNum: { fontSize: 16, fontWeight: "800", color: C.green },
-  statLabel: { fontSize: 12, fontWeight: "600", color: C.greenText },
+  statNum: { fontSize: 16, fontFamily: "Outfit-Bold", color: C.purple },
+  statLabel: { fontSize: 12, fontFamily: "Outfit-Medium", color: C.purpleText },
   tabs: {
     flexDirection: "row", backgroundColor: C.card,
     borderBottomWidth: 1, borderBottomColor: C.cardBorder,
@@ -482,8 +493,8 @@ const S = StyleSheet.create({
     gap: 6, paddingVertical: 10, borderRadius: 10,
     backgroundColor: C.bg, borderWidth: 1, borderColor: C.cardBorder,
   },
-  tabBtnActive: { backgroundColor: C.green, borderColor: C.green },
-  tabTxt: { fontSize: 12, fontWeight: "700", color: C.muted },
+  tabBtnActive: { backgroundColor: C.purple, borderColor: C.purple },
+  tabTxt: { fontSize: 12, fontFamily: "Outfit-Bold", color: C.muted },
   tabTxtActive: { color: "#fff" },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   row: {
@@ -498,12 +509,14 @@ const S = StyleSheet.create({
     alignItems: "center", justifyContent: "center", marginRight: 12,
   },
   rowBody: { flex: 1, minWidth: 0 },
-  rowTitle: { fontSize: 14, fontWeight: "700", color: C.ink, marginBottom: 3 },
-  rowSub: { fontSize: 12, fontWeight: "500", color: C.muted },
+  rowTitle: { fontSize: 14, fontFamily: "Outfit-Bold", color: C.ink, marginBottom: 3 },
+  rowSub: { fontSize: 12, fontFamily: "Outfit-Medium", color: C.muted },
   badge: { paddingHorizontal: 9, paddingVertical: 5, borderRadius: 8 },
-  badgeTxt: { fontSize: 11, fontWeight: "800" },
+  badgeTxt: { fontSize: 11, fontFamily: "Outfit-Bold" },
+  liveBadge: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, backgroundColor: "#FEE2E2" },
+  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#EF4444" },
   empty: { alignItems: "center", paddingTop: 60, padding: 32 },
   emptyIconBox: { width: 72, height: 72, borderRadius: 20, alignItems: "center", justifyContent: "center", marginBottom: 16 },
-  emptyTitle: { fontSize: 17, fontWeight: "800", color: C.ink, marginBottom: 6 },
-  emptySub: { fontSize: 13, fontWeight: "500", color: C.muted, textAlign: "center" },
+  emptyTitle: { fontSize: 17, fontFamily: "Outfit-Bold", color: C.ink, marginBottom: 6 },
+  emptySub: { fontSize: 13, fontFamily: "Outfit-Medium", color: C.muted, textAlign: "center" },
 });

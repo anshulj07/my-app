@@ -18,10 +18,10 @@ const C = {
   white:       "#FFFFFF",
   ink:         "#1A1C2E",
   muted:       "#7E8494",
-  accent:      "#5252E2",
+  accent:      "#6366F1",
   accentLight: "#EEF2FF",
   border:      "#EAEFF5",
-  green:       "#22C55E",
+  green:       "#10B981",
   red:         "#EF4444",
 };
 
@@ -93,7 +93,7 @@ export default function ChatListScreen() {
 
   const TOP = (Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0) + 10;
   const fallback = (name: string) =>
-    `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=5252E2&color=fff&size=100`;
+    `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=6366F1&color=fff&size=100`;
 
   return (
     <View style={[S.screen, { paddingTop: TOP }]}>
@@ -104,9 +104,7 @@ export default function ChatListScreen() {
         <TouchableOpacity style={S.iconBtn}><Ionicons name="menu-outline" size={24} color={C.ink} /></TouchableOpacity>
         <Text style={S.headerTitle}>Messages</Text>
         <View style={S.headerActions}>
-          <TouchableOpacity style={S.iconBtn} onPress={() => router.push("/newApp/search" as any)}>
-            <Ionicons name="create-outline" size={24} color={C.ink} />
-          </TouchableOpacity>
+          {/* Global search/create removed per request */}
         </View>
       </View>
 

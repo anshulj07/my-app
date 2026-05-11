@@ -85,9 +85,9 @@ export async function fetchAutocomplete(args: {
   setLoading: (b: boolean) => void;
   setList: (v: Suggestion[]) => void;
   setErr: (m: string | null) => void;
-  countryCode?: string; // "in" = India (default), "" = worldwide
+  countryCode?: string;
 }) {
-  const { key, q, setLoading, setList, setErr, countryCode = "in" } = args;
+  const { key, q, setLoading, setList, setErr, countryCode = "" } = args;
 
   try {
     setLoading(true);

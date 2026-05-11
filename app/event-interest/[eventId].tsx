@@ -11,6 +11,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { apiFetch } from "../../lib/apiFetch";
 import AttendanceSheet from "../../components/MyBookings/AttendanceSheet";
+import OtpVerifyModal from "../../components/modals/OtpVerifyModal";
 
 
 const { width: SW } = Dimensions.get("window");
@@ -62,9 +63,6 @@ export default function ManageEventScreen() {
   const [attendees, setAttendees] = useState<any[]>([]);
   const [reviews, setReviews] = useState<any[]>([]);
   const [showOtpModal, setShowOtpModal] = useState(false);
-  const [showAttendeeModal, setShowAttendeeModal] = useState(false);
-  const [otpValue, setOtpValue] = useState("");
-  const [verifying, setVerifying] = useState(false);
 
   const load = useCallback(async () => {
     if (!API_BASE || !userId || !eventId) return;
@@ -128,30 +126,7 @@ export default function ManageEventScreen() {
     } as any);
   };
 
-  const handleVerifyOtp = async () => {
-    if (otpValue.length < 4) return;
-    setVerifying(true);
-    try {
-      const res = await apiFetch(`${API_BASE}/api/events/checkin`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-api-key": EVENT_API_KEY || "" },
-        body: JSON.stringify({ eventId, creatorClerkId: userId, otp: otpValue }),
-      });
-      if (res.ok) {
-        alert("Guest Verified!");
-        setOtpValue("");
-        setShowOtpModal(false);
-        load();
-      } else {
-        const json = await res.json();
-        alert(json.error || "Invalid OTP");
-      }
-    } catch {
-      alert("Error verifying OTP");
-    } finally {
-      setVerifying(false);
-    }
-  };
+  const [showAttendeeModal, setShowAttendeeModal] = useState(false);
 
   if (loading) {
     return (
@@ -251,29 +226,13 @@ export default function ManageEventScreen() {
         </View>
       </ScrollView>
 
-      {/* OTP MODAL */}
-      <Modal visible={showOtpModal} transparent animationType="slide">
-        <View style={S.modalOverlay}>
-          <View style={S.modalContent}>
-            <View style={S.modalHeader}>
-               <Text style={S.modalTitle}>Verify Guest OTP</Text>
-               <TouchableOpacity onPress={() => setShowOtpModal(false)}><Ionicons name="close" size={24} color={C.ink} /></TouchableOpacity>
-            </View>
-            <TextInput
-              style={S.otpInput}
-              placeholder="0 0 0 0"
-              keyboardType="number-pad"
-              maxLength={4}
-              value={otpValue}
-              onChangeText={setOtpValue}
-              autoFocus
-            />
-            <TouchableOpacity style={S.submitBtn} onPress={handleVerifyOtp} disabled={verifying}>
-               {verifying ? <ActivityIndicator color="#fff" /> : <Text style={S.submitBtnText}>Verify & Check-in</Text>}
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      <OtpVerifyModal
+        visible={showOtpModal}
+        onClose={() => setShowOtpModal(false)}
+        eventId={eventId}
+        eventTitle={eventData?.title}
+        onSuccess={load}
+      />
 
       {/* ATTENDEES MODAL */}
       <AttendanceSheet 

@@ -40,11 +40,11 @@ const C = {
   greenGlow:   "rgba(0,230,118,0.25)",
   greenText:   "#00E676",
 
-  // Purple accent
-  purple:      "#7C4DFF",
-  purpleDim:   "rgba(124,77,255,0.12)",
-  purpleGlow:  "rgba(124,77,255,0.25)",
-  purpleText:  "#B388FF",
+  // Purple accent (Standardized to Indigo)
+  purple:      "#6366F1",
+  purpleDim:   "#EEF2FF",
+  purpleGlow:  "rgba(99,102,241,0.15)",
+  purpleText:  "#4F46E5",
 
 
   // Amber for chat
@@ -425,15 +425,15 @@ export default function Home() {
             <PickerOption
               onPress={() => { setDefaultKind("event_free"); setShowPicker(false); setTimeout(() => setOpen(true), 120); }}
               iconName="calendar"
-              iconColor={C.greenText}
-              iconBg={C.greenDim}
-              borderColor={C.green + "30"}
-              glowColor={C.greenGlow}
+              iconColor={C.purpleText}
+              iconBg={C.purpleDim}
+              borderColor={C.purple + "30"}
+              glowColor={C.purpleGlow}
               title="Event"
               subtitle="Free or paid · People join & attend"
               badgeText="Free / Paid"
-              badgeColor={C.greenText}
-              badgeBg={C.greenDim}
+              badgeColor={C.purpleText}
+              badgeBg={C.purpleDim}
             />
 
             {/* Option — Service */}
@@ -545,16 +545,18 @@ const P = StyleSheet.create({
     justifyContent: "flex-end",
   },
   sheet: {
-    backgroundColor: "#111111",
-    borderTopLeftRadius: 32, borderTopRightRadius: 32,
-    paddingHorizontal: 20, paddingBottom: 40, paddingTop: 12,
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 36, borderTopRightRadius: 36,
+    paddingHorizontal: 24, paddingBottom: 60, paddingTop: 12,
     borderTopWidth: 1, borderLeftWidth: 1, borderRightWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
+    borderColor: "rgba(0,0,0,0.05)",
+    shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 20,
+    elevation: 10,
   },
   grabber: {
     width: 40, height: 4, borderRadius: 999,
-    backgroundColor: "#333",
-    alignSelf: "center", marginBottom: 20,
+    backgroundColor: "#E0E0E0",
+    alignSelf: "center", marginBottom: 24,
   },
   headerRow: {
     flexDirection: "row",
@@ -562,26 +564,29 @@ const P = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 18,
   },
-  heading:    { fontSize: 22, fontWeight: "800", color: C.ink, letterSpacing: -0.5 },
-  subheading: { fontSize: 13, fontWeight: "400", color: C.muted, marginTop: 4 },
+  heading:    { fontSize: 24, fontWeight: "900", color: "#111111", letterSpacing: -0.6 },
+  subheading: { fontSize: 14, fontWeight: "500", color: "#666666", marginTop: 4 },
   closeBtn: {
-    width: 34, height: 34, borderRadius: 999,
-    backgroundColor: "#1E1E1E",
-    borderWidth: 1, borderColor: "#2C2C2C",
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: "#F5F5F5",
+    borderWidth: 1, borderColor: "#EEEEEE",
     alignItems: "center", justifyContent: "center",
   },
   divider: {
-    height: 1, backgroundColor: "#1E1E1E", marginBottom: 16,
+    height: 1, backgroundColor: "#F0F0F0", marginBottom: 20,
   },
 
   // Option card
   option: {
     flexDirection: "row", alignItems: "center", gap: 14,
-    padding: 16, borderRadius: 20,
-    backgroundColor: "#303230",
-    borderWidth: 1,
-    marginBottom: 12,
+    padding: 20, borderRadius: 28,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1.5,
+    borderColor: "#F1F5F9",
+    marginBottom: 16,
     overflow: "hidden",
+    shadowColor: "#6366F1", shadowOpacity: 0.05, shadowRadius: 12, shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
   },
   optionGlow: {
     position: "absolute", top: 0, left: 0, right: 0, height: 1,
@@ -594,8 +599,8 @@ const P = StyleSheet.create({
     flexShrink: 0,
   },
   optionBody: { flex: 1 },
-  optionTitle: { fontSize: 16, fontWeight: "700", color: C.ink, letterSpacing: -0.2 },
-  optionSub:   { fontSize: 12, fontWeight: "400", color: C.muted, marginTop: 3 },
+  optionTitle: { fontSize: 17, fontWeight: "800", color: "#111111", letterSpacing: -0.2 },
+  optionSub:   { fontSize: 12, fontWeight: "500", color: "#888888", marginTop: 3 },
 
   badge: {
     paddingHorizontal: 10, paddingVertical: 5,
@@ -605,10 +610,10 @@ const P = StyleSheet.create({
 
   // Cancel
   cancelBtn: {
-    marginTop: 4, paddingVertical: 15, borderRadius: 16,
-    backgroundColor: "#d4cece",
-    borderWidth: 1, borderColor: "#e7c4c4",
-    alignItems: "center",
+    marginTop: 8, height: 58, borderRadius: 24,
+    backgroundColor: "#F5F7FF",
+    borderWidth: 1, borderColor: "#E0E7FF",
+    alignItems: "center", justifyContent: "center",
   },
-  cancelText: { fontSize: 14, fontWeight: "600", color: C.muted },
+  cancelText: { fontSize: 15, fontWeight: "800", color: "#6366F1" },
 });

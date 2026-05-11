@@ -13,6 +13,7 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { apiFetch } from "../../lib/apiFetch";
 import JoinEventButton from "../../components/ClickPin/JoinEventButton";
 import AttendanceSheet from "../../components/MyBookings/AttendanceSheet";
+import OtpVerifyModal from "../../components/modals/OtpVerifyModal";
 
 
 const { width: SW } = Dimensions.get("window");
@@ -46,8 +47,6 @@ export default function EventDetailScreen() {
   const [newRating, setNewRating] = useState(5);
   const [newComment, setNewComment] = useState("");
   const [showOtpModal, setShowOtpModal] = useState(false);
-  const [otpValue, setOtpValue] = useState("");
-  const [verifying, setVerifying] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -87,31 +86,6 @@ export default function EventDetailScreen() {
     });
     return () => sub.remove();
   }, [router]);
-
-  const handleVerifyOtp = async () => {
-    if (otpValue.length < 4) return;
-    setVerifying(true);
-    try {
-      const res = await apiFetch(`${API_BASE}/api/events/checkin`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-api-key": EVENT_API_KEY || "" },
-        body: JSON.stringify({ eventId: params.eventId, creatorClerkId: userId, otp: otpValue }),
-      });
-      if (res.ok) {
-        Alert.alert("Success", "Guest Verified!");
-        setOtpValue("");
-        setShowOtpModal(false);
-        loadAll();
-      } else {
-        const json = await res.json();
-        Alert.alert("Error", json.error || "Invalid OTP");
-      }
-    } catch {
-      Alert.alert("Error", "Error verifying OTP");
-    } finally {
-      setVerifying(false);
-    }
-  };
 
   const submitReview = async () => {
     if (!newComment.trim() || !userId || !event) return;
@@ -181,6 +155,24 @@ export default function EventDetailScreen() {
   const isJoined = !!joinedInfo;
   const isPast   = params.isPast === "true" || ev?.status === "completed" || ev?.status === "past";
 
+  const startMs = useMemo(() => {
+    if (!ev) return Number.POSITIVE_INFINITY;
+    if (ev.startsAt) { const t = new Date(ev.startsAt).getTime(); if (Number.isFinite(t)) return t; }
+    const date = (ev.date ?? "").trim();
+    const time = (ev.time ?? "").trim();
+    if (date && time) { const t = new Date(`${date} ${time}`).getTime(); if (Number.isFinite(t)) return t; }
+    if (date) { const t = new Date(date).getTime(); if (Number.isFinite(t)) return t; }
+    return Number.POSITIVE_INFINITY;
+  }, [ev]);
+
+  const showOtp = useMemo(() => {
+    if (!isJoined) return false;
+    if (isPast) return false;
+    const now = Date.now();
+    // Show 60 mins before (3600000 ms)
+    return now >= (startMs - 3600000);
+  }, [isJoined, isPast, startMs]);
+
 
 
   const handleLeave = async () => {
@@ -227,6 +219,27 @@ export default function EventDetailScreen() {
     outputRange: [0, 1],
     extrapolate: "clamp",
   });
+
+  const handleMessageHost = () => {
+    if (isHost) return;
+    if (!isJoined) {
+      Alert.alert("Join to Message", "You must join this event/service to message the host.");
+      return;
+    }
+    if (isPast) {
+      Alert.alert("Chat Closed", "This event has ended and chatting is no longer available.");
+      return;
+    }
+    
+    router.push({
+      pathname: "/newApp/chat/[userId]" as any,
+      params: { 
+        userId: ev?.creatorClerkId || ev?.clerkUserId, 
+        name: ev?.creatorName || "Host", 
+        avatarUrl: ev?.creatorAvatar 
+      },
+    });
+  };
 
   if (loading) {
     return (
@@ -324,15 +337,28 @@ export default function EventDetailScreen() {
         </View>
 
         {/* ── JOINED OTP DISPLAY ── */}
-        {isJoined && (
+        {isJoined && !isPast && (
           <View style={[S.section, { marginTop: 20 }]}>
-            <View style={S.otpCard}>
+            <View style={[S.otpCard, !showOtp && { borderStyle: "solid", borderColor: C.border }]}>
               <View style={S.row}>
-                <Ionicons name="ticket" size={20} color={C.accent} />
-                <Text style={S.otpLabel}>Your Check-in OTP</Text>
+                <Ionicons name="ticket" size={20} color={showOtp ? C.accent : C.muted} />
+                <Text style={[S.otpLabel, !showOtp && { color: C.muted }]}>
+                  {showOtp ? "Your Check-in OTP" : "Check-in OTP"}
+                </Text>
               </View>
-              <Text style={S.otpValue}>{joinedInfo?.checkInOtp || "----"}</Text>
-              <Text style={S.otpSub}>Show this to the host at the entrance</Text>
+              {showOtp ? (
+                <>
+                  <Text style={S.otpValue}>{joinedInfo?.checkInOtp || "----"}</Text>
+                  <Text style={S.otpSub}>Show this to the host at the entrance</Text>
+                </>
+              ) : (
+                <View style={{ marginTop: 10, alignItems: "center" }}>
+                   <Text style={[S.otpValue, { fontSize: 24, letterSpacing: 2, color: C.muted }]}>LOCKED</Text>
+                   <Text style={[S.otpSub, { textAlign: "center" }]}>
+                     OTP will be available 60 minutes before the event starts
+                   </Text>
+                </View>
+              )}
             </View>
           </View>
         )}
@@ -344,9 +370,11 @@ export default function EventDetailScreen() {
             <Text style={S.hostName}>{ev?.creatorName || "Local Host"}</Text>
             <Text style={S.hostSub}>HOST & ORGANIZER</Text>
           </View>
-          <TouchableOpacity style={S.messageBtn}>
-            <Text style={S.messageBtnText}>Message</Text>
-          </TouchableOpacity>
+          {!isHost && (
+            <TouchableOpacity style={S.messageBtn} onPress={handleMessageHost}>
+              <Text style={S.messageBtnText}>Message</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* ABOUT THE EVENT */}
@@ -515,9 +543,11 @@ export default function EventDetailScreen() {
               eventTitle={title}
               eventLocation={ev?.location?.formattedAddress}
               creatorClerkId={ev?.creatorClerkId || ev?.clerkUserId}
-              startDate={ev?.date}
+              startDate={ev?.startsAt || ev?.date}
               durationHrs={ev?.durationHours || 1}
               autoOpen={params.booking === "true"}
+              eventLat={ev?.location?.lat}
+              eventLng={ev?.location?.lng}
               onJoined={() => loadAll()}
               customTrigger={(onPress) => (
                 <TouchableOpacity 
@@ -553,30 +583,13 @@ export default function EventDetailScreen() {
         )}
       </View>
 
-      {/* OTP VERIFY MODAL */}
-      <Modal visible={showOtpModal} transparent animationType="slide">
-        <View style={S.modalOverlay}>
-          <View style={S.modalContent}>
-            <View style={S.modalHeader}>
-               <Text style={S.modalTitle}>Verify Guest OTP</Text>
-               <TouchableOpacity onPress={() => setShowOtpModal(false)}><Ionicons name="close" size={24} color={C.ink} /></TouchableOpacity>
-            </View>
-            <Text style={S.modalLabel}>Enter the 4-digit code from guest's booking</Text>
-            <TextInput
-              style={S.otpInput}
-              placeholder="0 0 0 0"
-              keyboardType="number-pad"
-              maxLength={4}
-              value={otpValue}
-              onChangeText={setOtpValue}
-              autoFocus
-            />
-            <TouchableOpacity style={S.submitReviewBtn} onPress={handleVerifyOtp} disabled={verifying}>
-               {verifying ? <ActivityIndicator color="#fff" /> : <Text style={S.submitReviewText}>Verify & Check-in</Text>}
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      <OtpVerifyModal
+        visible={showOtpModal}
+        onClose={() => setShowOtpModal(false)}
+        eventId={params.eventId}
+        eventTitle={event?.title}
+        onSuccess={loadAll}
+      />
 
       {/* REVIEW MODAL */}
       <Modal visible={showReviewModal} transparent animationType="slide">

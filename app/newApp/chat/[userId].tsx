@@ -446,17 +446,17 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { apiFetch } from "../../../lib/apiFetch";
 
 const C = {
-  bg:          "#FFFBF5",
+  bg:          "#FFFFFF",
   card:        "#FFFFFF",
-  cardBorder:  "#F0EBE3",
-  inputBg:     "#FAF7F2",
-  inputBorder: "#E8E0D5",
-  ink:         "#1C1A17",
-  muted:       "#8A8278",
-  hint:        "#BCB6AD",
-  teal:        "#22C55E",
-  tealBg:      "#E8FAF7",
-  tealText:    "#1A7A6A",
+  cardBorder:  "#F1F5F9",
+  inputBg:     "#F8FAFC",
+  inputBorder: "#E2E8F0",
+  ink:         "#0F172A",
+  muted:       "#64748B",
+  hint:        "#94A3B8",
+  purple:      "#6366F1",
+  purpleBg:    "#EEF2FF",
+  purpleText:  "#4F46E5",
 };
 const R = { pill: 999 };
 
@@ -508,7 +508,7 @@ export default function ChatDMScreen() {
     Animated.timing(fade, { toValue: 1, duration: 280, useNativeDriver: true }).start();
   }, []);
 
-  const fallbackUri = `https://ui-avatars.com/api/?name=${encodeURIComponent(otherName)}&background=3ECFB2&color=fff&size=80`;
+  const fallbackUri = `https://ui-avatars.com/api/?name=${encodeURIComponent(otherName)}&background=6366F1&color=fff&size=80`;
 
   const fetchMessages = useCallback(async () => {
     if (!API_BASE || !userId || !otherId) return;
@@ -619,7 +619,7 @@ export default function ChatDMScreen() {
 
         <View style={S.headerInner}>
           <TouchableOpacity onPress={() => router.back()} style={S.backBtn} hitSlop={12}>
-            <Ionicons name="chevron-back" size={20} color={C.tealText} />
+            <Ionicons name="chevron-back" size={20} color={C.purple} />
           </TouchableOpacity>
           <Pressable
             onPress={() => router.push({
@@ -718,7 +718,7 @@ const S = StyleSheet.create({
 
   header: {
     backgroundColor: C.card, borderBottomWidth: 1.5, borderBottomColor: C.cardBorder,
-    shadowColor: C.teal, shadowOffset: { width: 0, height: 3 },
+    shadowColor: C.purple, shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.07, shadowRadius: 10, elevation: 3,
   },
   headerInner: {
@@ -727,11 +727,11 @@ const S = StyleSheet.create({
   },
   backBtn: {
     width: 38, height: 38, borderRadius: 12,
-    backgroundColor: C.tealBg, borderWidth: 1.5, borderColor: C.teal + "44",
+    backgroundColor: C.purpleBg, borderWidth: 1.5, borderColor: C.purple + "44",
     alignItems: "center", justifyContent: "center",
   },
   headerProfile: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10 },
-  avatarWrap:    { width: 40, height: 40, borderRadius: 20, borderWidth: 2, borderColor: C.teal + "55", overflow: "hidden" },
+  avatarWrap:    { width: 40, height: 40, borderRadius: 20, borderWidth: 2, borderColor: C.purple + "55", overflow: "hidden" },
   headerAvatar:  { width: 40, height: 40 },
   headerName:    { fontSize: 15, fontWeight: "900", color: C.ink, letterSpacing: -0.2 },
   headerSub:     { fontSize: 11, fontWeight: "600", color: C.muted, marginTop: 1 },
@@ -750,12 +750,12 @@ const S = StyleSheet.create({
   bubbleRowThem: { justifyContent: "flex-start" },
   bubbleAvatar:  {
     width: 28, height: 28, borderRadius: 14,
-    backgroundColor: C.tealBg, borderWidth: 1.5, borderColor: C.teal + "44", marginBottom: 2,
+    backgroundColor: C.purpleBg, borderWidth: 1.5, borderColor: C.purple + "44", marginBottom: 2,
   },
   bubble: { maxWidth: "74%", paddingHorizontal: 14, paddingVertical: 10, borderRadius: 18 },
   bubbleMe: {
-    backgroundColor: C.teal, borderBottomRightRadius: 5,
-    shadowColor: C.teal, shadowOpacity: 0.22, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 3,
+    backgroundColor: C.purple, borderBottomRightRadius: 5,
+    shadowColor: C.purple, shadowOpacity: 0.22, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 3,
   },
   bubbleThem: {
     backgroundColor: C.card, borderBottomLeftRadius: 5,
@@ -792,9 +792,9 @@ const S = StyleSheet.create({
   },
   input:      { fontSize: 15, fontWeight: "500", color: C.ink, maxHeight: 120 },
   sendBtn:    {
-    width: 44, height: 44, borderRadius: 22, backgroundColor: C.teal,
+    width: 44, height: 44, borderRadius: 22, backgroundColor: C.purple,
     alignItems: "center", justifyContent: "center",
-    shadowColor: C.teal, shadowOpacity: 0.35, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 5,
+    shadowColor: C.purple, shadowOpacity: 0.35, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 5,
   },
   sendBtnOff: { backgroundColor: C.inputBorder, shadowOpacity: 0 },
 

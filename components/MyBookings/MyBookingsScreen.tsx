@@ -42,17 +42,17 @@ function eventStartMs(ev: EventDoc): number {
 
 function getEventState(ev: EventDoc): "upcoming" | "ongoing" | "past" {
   const status = String(ev.status || "active").toLowerCase();
-  if (status === "ended" || status === "completed") return "past";
+  if (status === "ended" || status === "completed" || status === "past") return "past";
+  if (status === "live" || status === "ongoing") return "ongoing";
   
-  // Services should always stay in Created/Upcoming unless ended
-  if (ev.kind === "service") return "upcoming";
-
   const start = eventStartMs(ev);
   if (!Number.isFinite(start) || start === Number.POSITIVE_INFINITY) return "upcoming";
   
-  // If event just started or is today, keep it in upcoming/ongoing
+  const now = Date.now();
   const endTs = ev.endsAt ? new Date(ev.endsAt).getTime() : start + (4 * 3600000); // Default 4 hours duration
-  if (Date.now() > endTs) return "past";
+  
+  if (now > endTs) return "past";
+  if (now >= start && now <= endTs) return "ongoing";
   
   return "upcoming";
 }
@@ -71,6 +71,7 @@ export default function MyBookingsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [filterType, setFilterType] = useState<"all" | "event" | "service">("all");
   const [showNotifs, setShowNotifs] = useState(false);
+  const [admitBusy, setAdmitBusy] = useState<Record<string, boolean>>({});
   
   const { notifications, unreadCount, refresh: refreshNotifs, markAsRead, loading: notifsLoading } = useNotifications();
 
@@ -138,6 +139,71 @@ export default function MyBookingsScreen() {
     router.push({
       pathname: "/event-interest/[eventId]",
       params: { eventId: ev._id, kind: ev.kind, title: ev.title, emoji: ev.emoji || "📍" },
+    });
+  };
+
+  const handleAdmitNotif = async (item: any) => {
+    if (!API_BASE || !userId) return;
+    const key = `${item.id}-admit`;
+    setAdmitBusy(prev => ({ ...prev, [key]: true }));
+    try {
+      const res = await apiFetch(`${API_BASE}/api/events/admit-request`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": EVENT_API_KEY || "" },
+        body: JSON.stringify({
+          eventId: item.eventId,
+          creatorClerkId: userId,
+          requestClerkUserId: item.userClerkId,
+          action: "admit",
+        }),
+      });
+      if (res.ok) {
+        refreshNotifs();
+        load();
+      }
+    } catch (e) {
+      console.log("Admit error", e);
+    } finally {
+      setAdmitBusy(prev => ({ ...prev, [key]: false }));
+    }
+  };
+
+  const handleRejectNotif = async (item: any) => {
+    if (!API_BASE || !userId) return;
+    const key = `${item.id}-reject`;
+    setAdmitBusy(prev => ({ ...prev, [key]: true }));
+    try {
+      const res = await apiFetch(`${API_BASE}/api/events/admit-request`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": EVENT_API_KEY || "" },
+        body: JSON.stringify({
+          eventId: item.eventId,
+          creatorClerkId: userId,
+          requestClerkUserId: item.userClerkId,
+          action: "reject",
+        }),
+      });
+      if (res.ok) {
+        refreshNotifs();
+      }
+    } catch (e) {
+      console.log("Reject error", e);
+    } finally {
+      setAdmitBusy(prev => ({ ...prev, [key]: false }));
+    }
+  };
+
+  const handlePressNotifEvent = (eventId: string) => {
+    router.push({
+      pathname: "/newApp/event-detail",
+      params: { eventId }
+    });
+  };
+
+  const handlePressUser = (clerkUserId: string) => {
+    router.push({
+      pathname: "/profile/[clerkUserId]",
+      params: { clerkUserId }
     });
   };
 
@@ -233,6 +299,11 @@ export default function MyBookingsScreen() {
         items={notifications}
         loading={notifsLoading}
         onMarkRead={markAsRead}
+        admitBusy={admitBusy}
+        onAdmit={handleAdmitNotif}
+        onReject={handleRejectNotif}
+        onPressEvent={handlePressNotifEvent}
+        onPressUser={handlePressUser}
       />
 
       <HistorySummaryModal 

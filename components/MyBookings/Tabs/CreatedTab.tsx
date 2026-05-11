@@ -7,6 +7,7 @@ import {
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { apiFetch } from "../../../lib/apiFetch";
 import Constants from "expo-constants";
+import OtpVerifyModal from "../../../components/modals/OtpVerifyModal";
 
 const C = {
   bg:          "#F8FAFC",
@@ -60,8 +61,8 @@ function getDisplayState(ev: EventDoc) {
   const now = Date.now();
   const endTs = ev.endsAt ? new Date(ev.endsAt).getTime() : start + (4 * 3600000);
   if (now > endTs) return { label: "Ended", color: "#F1F5F9", text: C.muted, key: "ended" };
-  if (now >= start) return { label: "Live", color: C.green, text: C.greenText, key: "live" };
-  return { label: "Upcoming", color: C.red, text: C.redText, key: "upcoming" };
+  if (now >= start) return { label: "Live", color: "#EF4444", text: "#FFFFFF", key: "live" };
+  return { label: "Upcoming", color: C.blue, text: C.blueText, key: "upcoming" };
 }
 
 export default function CreatedTab({
@@ -104,11 +105,12 @@ export default function CreatedTab({
       showsVerticalScrollIndicator={false}
     />
 
-    <VerifyOtpModal 
-      visible={verifyModal.visible} 
-      onClose={() => setVerifyModal({ ...verifyModal, visible: false })} 
+    <OtpVerifyModal
+      visible={verifyModal.visible}
+      onClose={() => setVerifyModal(prev => ({ ...prev, visible: false }))}
       eventId={verifyModal.eventId}
       eventTitle={verifyModal.title}
+      onSuccess={onRefresh}
     />
     </>
   );
@@ -132,7 +134,7 @@ function EventCard({ e, onPress, onManage, onVerify }: any) {
         )}
         <View style={T.badgeLeft}>
           <View style={[T.statusBadge, { backgroundColor: state.color }]}>
-            <View style={[T.dot, { backgroundColor: state.text }]} />
+            <View style={[T.dot, { backgroundColor: state.key === "live" ? "#FFFFFF" : state.text }]} />
             <Text style={[T.statusText, { color: state.text }]}>{state.label}</Text>
           </View>
         </View>
@@ -175,75 +177,6 @@ function EventCard({ e, onPress, onManage, onVerify }: any) {
         </View>
       </View>
     </TouchableOpacity>
-  );
-}
-
-// --- OTP VERIFICATION MODAL ---
-function VerifyOtpModal({ visible, onClose, eventId, eventTitle }: any) {
-  const [otp, setOtp] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [msg, setMsg] = useState({ text: "", type: "" });
-  const API_BASE = (Constants.expoConfig?.extra as any)?.apiBaseUrl;
-
-  const handleVerify = async () => {
-    if (otp.length < 4) return;
-    setLoading(true); setMsg({ text: "", type: "" });
-    try {
-      const res = await apiFetch(`${API_BASE}/api/events/verify-otp`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ eventId, otp }),
-      });
-      const json = await res.json();
-      if (res.ok) {
-        setMsg({ text: "✓ Guest Checked-in Successfully!", type: "success" });
-        setTimeout(onClose, 2000);
-      } else {
-        setMsg({ text: json.error || "Invalid OTP", type: "error" });
-      }
-    } catch {
-      setMsg({ text: "Connection error", type: "error" });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={T.modalOverlay}>
-        <View style={T.modalContent}>
-          <View style={T.modalHeader}>
-             <Text style={T.modalTitle}>Verify Guest OTP</Text>
-             <TouchableOpacity onPress={onClose}><Ionicons name="close" size={24} color={C.ink} /></TouchableOpacity>
-          </View>
-          <Text style={T.modalSub}>{eventTitle}</Text>
-
-          <TextInput
-            style={T.otpInput}
-            placeholder="Enter 6-digit OTP"
-            keyboardType="number-pad"
-            maxLength={6}
-            value={otp}
-            onChangeText={setOtp}
-            autoFocus
-          />
-
-          {msg.text ? (
-            <Text style={[T.msgText, msg.type === "error" ? { color: C.redText } : { color: C.greenText }]}>
-              {msg.text}
-            </Text>
-          ) : null}
-
-          <TouchableOpacity 
-            style={[T.submitBtn, otp.length < 4 && { opacity: 0.5 }]} 
-            onPress={handleVerify}
-            disabled={loading || otp.length < 4}
-          >
-            {loading ? <ActivityIndicator color="#fff" /> : <Text style={T.submitBtnText}>Verify & Check-in</Text>}
-          </TouchableOpacity>
-        </View>
-      </View>
-    </Modal>
   );
 }
 

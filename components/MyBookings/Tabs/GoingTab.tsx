@@ -58,6 +58,19 @@ function EventCard({ e, onPress }: { e: EventDoc; onPress: () => void }) {
   const banner = e.bannerUri || e.bannerImage || "";
   const isPaid = e.kind === "paid" || e.kind === "event_paid" || (e.priceCents && e.priceCents > 0);
   
+  // LIVE Logic
+  const start = evStartMs(e);
+  const now = Date.now();
+  const endTs = e.endsAt ? new Date(e.endsAt).getTime() : start + (4 * 3600000);
+  const isLive = (e.status?.toLowerCase() === "live" || e.status?.toLowerCase() === "ongoing") || (now >= start && now <= endTs);
+
+  function evStartMs(ev: EventDoc): number {
+    if (ev.startsAt) { const t = new Date(ev.startsAt).getTime(); if (Number.isFinite(t)) return t; }
+    const date = (ev.date ?? "").trim(); const time = (ev.time ?? "").trim();
+    if (date && time) { const t = new Date(`${date} ${time}`).getTime(); if (Number.isFinite(t)) return t; }
+    if (date) { const t = new Date(date).getTime(); if (Number.isFinite(t)) return t; }
+    return Number.POSITIVE_INFINITY;
+  }
   return (
     <TouchableOpacity activeOpacity={0.9} onPress={onPress} style={T.card}>
       {/* IMAGE SECTION */}
@@ -74,6 +87,12 @@ function EventCard({ e, onPress }: { e: EventDoc; onPress: () => void }) {
           <View style={[T.priceBadge, { backgroundColor: isPaid ? C.gold : C.green }]}>
              <Text style={T.priceBadgeText}>{isPaid ? "PAID EVENT" : "FREE EVENT"}</Text>
           </View>
+          {isLive && (
+            <View style={[T.liveBadge, { marginLeft: 8 }]}>
+              <View style={T.liveDot} />
+              <Text style={T.liveBadgeText}>LIVE</Text>
+            </View>
+          )}
         </View>
         <View style={T.bannerOverlay} />
       </View>
@@ -141,8 +160,11 @@ const T = StyleSheet.create({
   bannerOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.05)" },
   
   topBadgeRow: { position: "absolute", top: 12, left: 12, zIndex: 10 },
-  priceBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   priceBadgeText: { color: "#fff", fontSize: 9, fontFamily: "Outfit_900Black", letterSpacing: 0.5 },
+
+  liveBadge: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, backgroundColor: "#EF4444" },
+  liveBadgeText: { color: "#fff", fontSize: 9, fontFamily: "Outfit_900Black", letterSpacing: 0.5 },
+  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#fff" },
 
   body: { padding: 18 },
   title: { fontSize: 20, fontFamily: "Outfit_900Black", color: C.ink, marginBottom: 18 },

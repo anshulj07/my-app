@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
     View,
     Text,
@@ -10,10 +10,13 @@ import {
     Dimensions,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { useUser, useClerk } from "@clerk/clerk-expo";
+import { useUser, useClerk, useAuth } from "@clerk/clerk-expo";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
+import Constants from "expo-constants";
+import { LinearGradient } from "expo-linear-gradient";
+import { apiFetch } from "../../../lib/apiFetch";
 
 const { width: W } = Dimensions.get("window");
 
@@ -36,13 +39,42 @@ const COLORS = {
 export default function SettingsIndex() {
     const router = useRouter();
     const { user } = useUser();
+    const { userId } = useAuth();
     const { signOut } = useClerk();
+
+    const [profile, setProfile] = useState<any>(null);
+    const [loading, setLoading] = useState(false);
+
+    const API_BASE      = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
+    const EVENT_API_KEY = (Constants.expoConfig?.extra as any)?.eventApiKey as string | undefined;
+
+    const fetchProfile = useCallback(async () => {
+        if (!API_BASE || !userId) return;
+        setLoading(true);
+        try {
+            const res = await apiFetch(`${API_BASE}/api/profile?clerkUserId=${encodeURIComponent(userId)}`, {
+                headers: EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {},
+            });
+            const json = await res.json();
+            if (res.ok) setProfile(json);
+        } catch (err) {
+            console.error("Settings fetch error:", err);
+        } finally {
+            setLoading(false);
+        }
+    }, [API_BASE, EVENT_API_KEY, userId]);
+
+    useEffect(() => { fetchProfile(); }, [fetchProfile]);
 
     const handleLogout = async () => {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         await signOut();
         router.replace("/(auth)/sign-in");
     };
+
+    const name     = profile?.name || user?.fullName || "User Name";
+    const username = profile?.username || user?.username || user?.firstName?.toLowerCase() || "user";
+    const avatar   = profile?.avatar || user?.imageUrl;
 
     return (
         <SafeAreaView style={S.safe}>
@@ -66,18 +98,27 @@ export default function SettingsIndex() {
                 {/* User Profile Card */}
                 <View style={S.profileCard}>
                     <View style={S.avatarWrapper}>
-                        <Image 
-                            source={{ uri: user?.imageUrl }} 
-                            style={S.avatar} 
-                        />
-                        <View style={S.editBadge}>
+                        {avatar ? (
+                            <Image 
+                                source={{ uri: avatar }} 
+                                style={S.avatar} 
+                            />
+                        ) : (
+                            <LinearGradient colors={["#6366F1", "#A855F7"]} style={S.avatar}>
+                                <Ionicons name="person" size={28} color="#fff" style={{ opacity: 0.8 }} />
+                            </LinearGradient>
+                        )}
+                        <TouchableOpacity 
+                            style={S.editBadge}
+                            onPress={() => router.push("/profile/settings/PersonalInfo")}
+                        >
                             <Ionicons name="pencil" size={12} color="#fff" />
-                        </View>
+                        </TouchableOpacity>
                     </View>
                     <View style={S.profileInfo}>
-                        <Text style={S.profileName}>{user?.fullName || "User Name"}</Text>
+                        <Text style={S.profileName}>{name}</Text>
                         <Text style={S.profileUsername}>
-                            @{user?.username || user?.firstName?.toLowerCase() || "user"} • Pro Member
+                            @{username} • {profile?.isVerified ? "Verified Member" : "Community Member"}
                         </Text>
                     </View>
                 </View>

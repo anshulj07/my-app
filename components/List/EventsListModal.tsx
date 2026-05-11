@@ -481,7 +481,6 @@ export default function EventsListModal({
               <View style={S.locTop}>
                 <Ionicons name="location-sharp" size={14} color={COLORS.purple} />
                 <Text style={S.locCity}>{myCity || "Indore"}</Text>
-                <TouchableOpacity><Text style={S.changeLink}>Change</Text></TouchableOpacity>
               </View>
               <TouchableOpacity style={S.radiusBadge}>
                 <Text style={S.radiusBadgeText}>{radius}km Radius</Text>
@@ -640,7 +639,6 @@ const S = StyleSheet.create({
   locInfo: { gap: 8 },
   locTop: { flexDirection: "row", alignItems: "center", gap: 6 },
   locCity: { fontSize: 15, fontFamily: COLORS.fontBold, color: COLORS.text },
-  changeLink: { fontSize: 13, fontFamily: COLORS.fontBold, color: COLORS.purple, marginLeft: "auto" },
   radiusBadge: { alignSelf: "flex-start", backgroundColor: "#E0E7FF", paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20, borderWidth: 1, borderColor: "#C7D2FE" },
   radiusBadgeText: { fontSize: 11, fontFamily: COLORS.fontExtraBold, color: COLORS.purple },
   searchContainer: { paddingHorizontal: 20, marginBottom: 20 },

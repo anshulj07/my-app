@@ -1009,9 +1009,9 @@ const ACTIVITY_FILTERS: Filter[] = [
 ];
 
 const KIND_FILTERS: KindFilter[] = [
-  { key: "free",    label: "Free",    dotColor: C.teal,   activeBg: C.tealBg,   activeText: C.tealText },
-  { key: "paid",    label: "Paid",    dotColor: C.amber,  activeBg: C.amberBg,  activeText: C.amberText },
-  { key: "service", label: "Service", dotColor: C.purple, activeBg: C.purpleBg, activeText: C.purpleText },
+  { key: "free",    label: "Free",    dotColor: "#22C55E", activeBg: "#DCFCE7", activeText: "#166534", icon: "gift-outline" },
+  { key: "paid",    label: "Paid",    dotColor: "#F59E0B", activeBg: "#FEF3C7", activeText: "#92400E", icon: "cash-outline" },
+  { key: "service", label: "Service", dotColor: "#8B5CF6", activeBg: "#F3E8FF", activeText: "#5B21B6", icon: "briefcase-outline" },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1120,6 +1120,22 @@ export default function MapSearchHeader({
       <View pointerEvents="box-none" style={[S.filtersWrap, { top: top + 60 }]}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={S.filtersRow}>
 
+          {/* All Filter */}
+          <TouchableOpacity
+            activeOpacity={0.88}
+            onPress={() => onFilterChange(null)}
+            style={[
+              S.kindChip,
+              activeFilter === null
+                ? { backgroundColor: "#1C1A17", borderColor: "#1C1A17" }
+                : { backgroundColor: "rgba(255,255,255,0.95)", borderColor: C.border },
+            ]}
+          >
+            <Text style={[S.kindChipTxt, activeFilter === null && { color: "#FFF", fontWeight: "900" }]}>
+              All
+            </Text>
+          </TouchableOpacity>
+
           {/* Kind pills */}
           {KIND_FILTERS.map((f) => {
             const active = activeFilter === f.key;
@@ -1135,11 +1151,11 @@ export default function MapSearchHeader({
                     : { backgroundColor: "rgba(255,255,255,0.95)", borderColor: C.border },
                 ]}
               >
-                <View style={[S.kindDot, { backgroundColor: active ? f.dotColor : f.dotColor + "99" }]} />
+                <Ionicons name={f.icon as any} size={14} color={active ? f.activeText : f.dotColor} style={{ marginRight: 2 }} />
                 <Text style={[S.kindChipTxt, active && { color: f.activeText, fontWeight: "900" }]}>
                   {f.label}
                 </Text>
-                {active && <Ionicons name="close" size={11} color={f.activeText} />}
+                {active && <Ionicons name="close" size={11} color={f.activeText} style={{ marginLeft: 2 }} />}
               </TouchableOpacity>
             );
           })}

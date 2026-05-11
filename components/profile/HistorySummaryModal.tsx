@@ -215,7 +215,7 @@ export default function HistorySummaryModal({ visible, onClose, event: e }: Hist
                 </View>
               )) : (
                 <View style={[S.feedbackCard, { width: SW - 40, alignItems: 'center' }]}>
-                   <Text style={C.muted}>No feedback yet</Text>
+                   <Text style={{ color: C.muted }}>No feedback yet</Text>
                 </View>
               )}
             </ScrollView>
@@ -237,6 +237,7 @@ export default function HistorySummaryModal({ visible, onClose, event: e }: Hist
 const S = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)" },
   sheet:   { flex: 1, backgroundColor: C.bg, marginTop: Platform.OS === "ios" ? 0 : 0 },
+  row:     { flexDirection: "row", alignItems: "center" },
 
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 15, backgroundColor: C.bg },
   iconBtn: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },

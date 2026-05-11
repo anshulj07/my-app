@@ -257,14 +257,14 @@ const [bannerUri, setBannerUri] = useState<string | null>(null);
 
     const payload = {
       title: title.trim(), description: description.trim(), emoji,
-      bannerUri: bannerUri,
+      bannerUri: bannerUri || "",
       creatorClerkId: userId,
       creatorName: `${user?.firstName || ""} ${user?.lastName || ""}`.trim() || user?.username || "Local Host",
       kind: backendKind, priceCents: needsPrice ? priceCents : null,
       capacity: backendKind === "free" && limitEnabled ? capacity : null,
       timezone, startsAt, endsAt,
-      date: dateISO.trim(), time: time24.trim(),
-      endDate: endDateISO.trim(), endTime: endTime24.trim(),
+      date: (dateISO || "").trim(), time: (time24 || "").trim(),
+      endDate: (endDateISO || "").trim(), endTime: (endTime24 || "").trim(),
       // Service slots
       ...(backendKind === "service" ? {
         slots,

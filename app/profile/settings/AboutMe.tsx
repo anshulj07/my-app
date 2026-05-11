@@ -164,8 +164,11 @@ const C = {
   bg: "#F7F8FA", card: "#FFFFFF", cardBorder: "#EAECF0",
   inputBg: "#F7F8FA", inputBorder: "#E2E5EA",
   ink: "#0D1117", muted: "#656D76", hint: "#AFB8C1",
-  green: "#22C55E", greenDark: "#16A34A", greenBg: "#DCFCE7",
-  greenBorder: "#86EFAC", greenText: "#15803D",
+  brand: "#6C63FF", brandBg: "#F5F3FF", brandBorder: "#DDD6FE",
+  brandText: "#5B21B6",
+  font: "Outfit_500Medium",
+  fontBold: "Outfit_700Bold",
+  fontExtraBold: "Outfit_800ExtraBold",
 };
 
 export default function AboutMe() {
@@ -239,7 +242,7 @@ export default function AboutMe() {
         {/* Intro */}
         <View style={S.intro}>
           <View style={S.introIconBox}>
-            <Ionicons name="person-outline" size={22} color={C.green} />
+            <Ionicons name="person-outline" size={22} color={C.brand} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={S.introTitle}>Tell your story</Text>
@@ -262,7 +265,7 @@ export default function AboutMe() {
             multiline
             textAlignVertical="top"
             autoCorrect
-            selectionColor={C.green}
+            selectionColor={C.brand}
           />
           <Text style={S.charCount}>{text.length} chars</Text>
         </View>
@@ -304,7 +307,7 @@ const S = StyleSheet.create({
     backgroundColor: "#F7F8FA", borderWidth: 1, borderColor: "#EAECF0",
     alignItems: "center", justifyContent: "center",
   },
-  headerTitle: { fontSize: 17, fontWeight: "800", color: C.ink },
+  headerTitle: { fontSize: 17, fontFamily: C.fontExtraBold, color: C.ink },
 
   content: { padding: 20, flex: 1 },
 
@@ -315,36 +318,36 @@ const S = StyleSheet.create({
   },
   introIconBox: {
     width: 44, height: 44, borderRadius: 12,
-    backgroundColor: C.greenBg, borderWidth: 1, borderColor: C.greenBorder,
+    backgroundColor: C.brandBg, borderWidth: 1, borderColor: C.brandBorder,
     alignItems: "center", justifyContent: "center",
   },
-  introTitle: { fontSize: 15, fontWeight: "800", color: C.ink, marginBottom: 2 },
-  introSub: { fontSize: 12, fontWeight: "500", color: C.muted },
+  introTitle: { fontSize: 15, fontFamily: C.fontBold, color: C.ink, marginBottom: 2 },
+  introSub: { fontSize: 12, fontFamily: C.font, color: C.muted },
 
   inputCard: {
     backgroundColor: "#FFFFFF", borderRadius: 16, borderWidth: 1, borderColor: C.cardBorder,
     padding: 16, marginBottom: 10,
   },
   inputCardHeader: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 10 },
-  inputCardLabel: { fontSize: 11, fontWeight: "700", color: C.muted, textTransform: "uppercase", letterSpacing: 0.8 },
+  inputCardLabel: { fontSize: 11, fontFamily: C.fontExtraBold, color: C.muted, textTransform: "uppercase", letterSpacing: 0.8 },
   input: {
-    fontSize: 15, fontWeight: "500", color: C.ink,
+    fontSize: 15, fontFamily: C.font, color: C.ink,
     minHeight: 140, lineHeight: 22,
   },
-  charCount: { fontSize: 11, color: C.hint, fontWeight: "600", textAlign: "right", marginTop: 8 },
+  charCount: { fontSize: 11, color: C.hint, fontFamily: C.fontBold, textAlign: "right", marginTop: 8 },
 
   tip: {
     flexDirection: "row", alignItems: "center", gap: 6,
     marginBottom: 24, paddingHorizontal: 2,
   },
-  tipText: { fontSize: 12, color: C.hint, fontWeight: "500", flex: 1 },
+  tipText: { fontSize: 12, color: C.hint, fontFamily: C.font, flex: 1 },
 
   saveBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
     height: 52, borderRadius: 999,
-    backgroundColor: C.green,
-    shadowColor: C.green, shadowOffset: { width: 0, height: 4 },
+    backgroundColor: C.brand,
+    shadowColor: C.brand, shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25, shadowRadius: 10, elevation: 4,
   },
-  saveText: { color: "#fff", fontSize: 16, fontWeight: "800" },
+  saveText: { color: "#fff", fontSize: 16, fontFamily: C.fontExtraBold },
 });

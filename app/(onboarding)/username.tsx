@@ -1,266 +1,180 @@
-// app/(onboarding)/username.tsx
-// Step 2 of 5 — Choose a unique @username
-
-import React, { useCallback, useEffect, useRef, useState } from "react";
+// app/(onboarding)/username.tsx — Step 1 of 6
+import { useRef, useEffect, useState } from "react";
 import {
-  View, Text, TextInput, TouchableOpacity,
-  StyleSheet, SafeAreaView, KeyboardAvoidingView,
-  Platform, ActivityIndicator,
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  Animated,
+  Keyboard,
+  Image,
+  useWindowDimensions,
 } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useUser } from "@clerk/clerk-expo";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import Constants from "expo-constants";
-import { apiFetch } from "../../lib/apiFetch";
 
-const COLORS = {
-  bg:          "#0B0B12",
-  card:        "rgba(255,255,255,0.10)",
-  border:      "rgba(255,255,255,0.12)",
-  borderSoft:  "rgba(255,255,255,0.08)",
-  ink:         "#FFFFFF",
-  inkSoft:     "rgba(255,255,255,0.82)",
-  muted:       "rgba(255,255,255,0.62)",
-  placeholder: "rgba(255,255,255,0.42)",
-  primary:     "#FF4D6D",
-  primary2:    "#FF8A00",
-  success:     "#22C55E",
-  danger:      "#FB7185",
-};
+import heroImage from "../../assets/IMG_0016.png";
 
-type CheckState = "idle" | "checking" | "available" | "taken" | "invalid";
-
-// username rules: lowercase letters/numbers/underscores, 3-30 chars
+const STEP = 1;
+const TOTAL = 6;
+const HEADER_MIN = 64;
 const USERNAME_RE = /^[a-z0-9_]{3,30}$/;
+
+type CheckState = "idle" | "invalid" | "valid";
 
 export default function UsernameScreen() {
   const router = useRouter();
   const { isLoaded, user } = useUser();
+  const insets = useSafeAreaInsets();
+  const { width, height } = useWindowDimensions();
+  const HEADER_FULL = height * 0.35;
 
-  const API_BASE      = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
-  const EVENT_API_KEY = (Constants.expoConfig?.extra as any)?.eventApiKey as string | undefined;
+  const headerAnim = useRef(new Animated.Value(HEADER_FULL)).current;
 
-  const [raw,     setRaw]     = useState("");
-  const [check,   setCheck]   = useState<CheckState>("idle");
-  const [saving,  setSaving]  = useState(false);
-  const [err,     setErr]     = useState<string | null>(null);
-  const [hint,    setHint]    = useState<string | null>(null);
+  useEffect(() => {
+    const showE = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideE = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const dur = Platform.OS === "ios" ? 250 : 180;
 
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const show = Keyboard.addListener(showE, () =>
+      Animated.timing(headerAnim, { toValue: HEADER_MIN, duration: dur, useNativeDriver: false }).start()
+    );
+    const hide = Keyboard.addListener(hideE, () =>
+      Animated.timing(headerAnim, { toValue: HEADER_FULL, duration: dur, useNativeDriver: false }).start()
+    );
+    return () => { show.remove(); hide.remove(); };
+  }, [headerAnim, height]);
 
-  // Sanitise input: auto-lowercase, strip disallowed chars
+  const [raw, setRaw] = useState("");
+  const [check, setCheck] = useState<CheckState>("idle");
+  const [hint, setHint] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
   const handleChange = (text: string) => {
     const cleaned = text.toLowerCase().replace(/[^a-z0-9_]/g, "");
     setRaw(cleaned);
     setErr(null);
+    if (!cleaned) { setCheck("idle"); setHint(null); return; }
+    if (!USERNAME_RE.test(cleaned)) {
+      setCheck("invalid");
+      setHint(cleaned.length < 3 ? "At least 3 characters" : "Only lowercase letters, numbers, underscores");
+    } else {
+      setCheck("valid");
+      setHint(null);
+    }
   };
 
-  // Real-time availability check
-  const checkAvailability = useCallback(async (value: string) => {
-    if (!API_BASE || !user?.id) return;
-    setCheck("checking");
-    setHint(null);
-    try {
-      const url = `${API_BASE}/api/onboarding/username?q=${encodeURIComponent(value)}&clerkUserId=${encodeURIComponent(user.id)}`;
-      const res  = await apiFetch(url, {
-        headers: EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : undefined,
-      });
-      const json = await res.json().catch(() => ({}));
-      if (json.available) {
-        setCheck("available");
-        setHint("@" + value + " is available ✓");
-      } else if (json.reason === "invalid_format") {
-        setCheck("invalid");
-        setHint("3–30 chars, only letters / numbers / underscores");
-      } else if (json.reason === "blocked") {
-        setCheck("invalid");
-        setHint("That username is not allowed.");
-      } else {
-        setCheck("taken");
-        setHint("@" + value + " is already taken");
-      }
-    } catch {
-      setCheck("idle");
-    }
-  }, [API_BASE, EVENT_API_KEY, user?.id]);
-
-  useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (!raw) { setCheck("idle"); setHint(null); return; }
-    if (!USERNAME_RE.test(raw)) {
-      setCheck("invalid");
-      setHint(raw.length < 3 ? "At least 3 characters" : "Only lowercase letters, numbers, underscores");
-      return;
-    }
-    setCheck("checking");
-    debounceRef.current = setTimeout(() => checkAvailability(raw), 400);
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [raw, checkAvailability]);
-
-  const canContinue = check === "available" && !saving;
+  const canContinue = check === "valid" && !saving;
 
   const onNext = async () => {
     if (!isLoaded || !user || !canContinue) return;
     setSaving(true);
     setErr(null);
     try {
-      if (!API_BASE) throw new Error("Missing API base URL.");
-
-      const res = await apiFetch(`${API_BASE}/api/onboarding/username`, {
-        method:  "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {}),
-        },
-        body: JSON.stringify({ clerkUserId: user.id, username: raw }),
-      });
-
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json?.error || `Failed (${res.status})`);
-
+      await user.update({ unsafeMetadata: { ...user.unsafeMetadata, username: raw } });
       router.push("/(onboarding)/dateOfBirth");
     } catch (e: any) {
-      setErr(e?.message || "Failed to set username.");
-      setCheck("idle");
+      setErr(e?.message || "Failed to save username.");
     } finally {
       setSaving(false);
     }
   };
 
-  // Icon for real-time status
-  const checkIcon = () => {
-    if (!raw) return null;
-    if (check === "checking") return <ActivityIndicator size="small" color={COLORS.muted} />;
-    if (check === "available") return <Ionicons name="checkmark-circle" size={20} color={COLORS.success} />;
-    if (check === "taken")   return <Ionicons name="close-circle" size={20} color={COLORS.danger} />;
-    if (check === "invalid") return <Ionicons name="alert-circle" size={20} color={COLORS.primary2} />;
-    return null;
-  };
-
-  const hintColor =
-    check === "available" ? COLORS.success :
-    check === "taken"     ? COLORS.danger  :
-    check === "invalid"   ? COLORS.primary2 :
-    COLORS.muted;
-
-  const inputBorderColor =
-    check === "available" ? "rgba(34,197,94,0.45)"  :
-    check === "taken"     ? "rgba(251,113,133,0.45)" :
-    check === "invalid"   ? "rgba(255,138,0,0.45)"   :
-    raw.length > 0        ? "rgba(255,77,109,0.35)"  :
-    COLORS.borderSoft;
-
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={[]}>
       <KeyboardAvoidingView
-        style={styles.flex}
+        style={{ flex: 1 }}
         behavior={Platform.select({ ios: "padding", android: undefined })}
       >
-        <View style={styles.page}>
-          {/* Hero */}
-          <View style={styles.hero}>
-            <View style={styles.heroTop}>
-            <TouchableOpacity
-              onPress={() => {
-                if (router.canGoBack()) {
-                  router.back();
-                } else {
-                  router.push("/(onboarding)/name");
-                }
-              }}
-              activeOpacity={0.7}
-              style={styles.backBtn}
-            >
-              <Ionicons name="chevron-back" size={20} color={COLORS.ink} />
+        {/* Animated collapsing header */}
+        <Animated.View style={{ height: headerAnim, overflow: "hidden" }}>
+          {/* Image taller than container + bottom:0 → shows lower portion of photo */}
+          <Image
+            source={heroImage}
+            style={{ width, height: HEADER_FULL }}
+            resizeMode="cover"
+          />
+          <View style={[styles.headerInner, { paddingTop: insets.top + 12 }]}>
+            <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} hitSlop={12}>
+              <Ionicons name="chevron-back" size={20} color="#fff" />
             </TouchableOpacity>
-
-            <View style={styles.pill}>
-              <View style={styles.pillDot} />
-              <Text style={styles.pillText}>Step 2 of 7</Text>
-            </View>
-            <View style={styles.spark}>
-                <Ionicons name="at" size={18} color={COLORS.primary} />
-              </View>
-            </View>
-
-            <Text style={styles.h1}>Pick your username</Text>
-            <Text style={styles.h2}>
-              This is how people will discover you. You can always change it later.
-            </Text>
           </View>
+        </Animated.View>
 
-          {/* Card */}
-          <View style={styles.card}>
-            <Text style={styles.label}>USERNAME</Text>
+        {/* White content */}
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={styles.contentInner}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <Text style={styles.stepLabel}>STEP {STEP} OF {TOTAL}</Text>
+          <Text style={styles.title}>Choose your username</Text>
+          <Text style={styles.subtitle}>This is how other members will find and mention you.</Text>
 
-            <View style={[styles.inputWrap, { borderColor: inputBorderColor }]}>
-              {/* @ prefix */}
-              <View style={styles.prefixBox}>
-                <Text style={styles.prefix}>@</Text>
-              </View>
-
+          <View style={styles.fieldGroup}>
+            <View style={[
+              styles.fieldWrap,
+              check === "valid" && styles.fieldWrapOk,
+              check === "invalid" && styles.fieldWrapErr,
+            ]}>
+              <Text style={styles.atPrefix}>@</Text>
               <TextInput
                 value={raw}
                 onChangeText={handleChange}
                 placeholder="your_username"
-                placeholderTextColor={COLORS.placeholder}
-                style={styles.input}
+                placeholderTextColor="#C0B8D8"
+                style={styles.fieldInput}
                 autoCapitalize="none"
                 autoCorrect={false}
-                autoComplete="username-new"
-                returnKeyType="done"
+                autoFocus
                 maxLength={30}
+                returnKeyType="done"
                 onSubmitEditing={canContinue ? onNext : undefined}
               />
-
-              <View style={styles.suffixBox}>
-                {checkIcon()}
-              </View>
-            </View>
-
-            {/* Hint line */}
-            {hint ? (
-              <Text style={[styles.hint, { color: hintColor }]}>{hint}</Text>
-            ) : (
-              <Text style={styles.hintGrey}>3–30 chars · only a–z, 0–9, _</Text>
-            )}
-
-            {/* Rules chips */}
-            <View style={styles.rulesRow}>
-              {["Lowercase only", "Letters / numbers / _", "3–30 chars"].map(r => (
-                <View key={r} style={styles.ruleChip}>
-                  <Text style={styles.ruleChipTxt}>{r}</Text>
-                </View>
-              ))}
-            </View>
-
-            {!!err && (
-              <View style={styles.alert}>
-                <View style={styles.alertIcon}>
-                  <Ionicons name="warning-outline" size={18} color={COLORS.danger} />
-                </View>
-                <Text style={styles.alertText}>{err}</Text>
-              </View>
-            )}
-
-            <TouchableOpacity
-              onPress={onNext}
-              disabled={!canContinue}
-              activeOpacity={0.92}
-              style={[styles.cta, !canContinue && styles.ctaDisabled]}
-            >
-              {saving ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <>
-                  <Text style={styles.ctaText}>Continue</Text>
-                  <View style={styles.ctaIcon}>
-                    <Ionicons name="arrow-forward" size={18} color="#fff" />
-                  </View>
-                </>
+              {raw.length > 0 && (
+                <Ionicons
+                  name={check === "valid" ? "checkmark-circle" : check === "invalid" ? "close-circle" : "ellipse-outline"}
+                  size={20}
+                  color={check === "valid" ? "#22C55E" : check === "invalid" ? "#EF4444" : "#ccc"}
+                />
               )}
-            </TouchableOpacity>
+            </View>
+            <Text style={[
+              styles.helperText,
+              check === "invalid" && { color: "#EF4444" },
+              check === "valid" && { color: "#22C55E" },
+            ]}>
+              {/* {hint || "3–30 characters · only a–z, 0–9, _"} */}
+            </Text>
           </View>
+
+          {!!err && <Text style={styles.errText}>{err}</Text>}
+        </ScrollView>
+
+        {/* Footer */}
+        <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
+          <TouchableOpacity
+            onPress={onNext}
+            disabled={!canContinue}
+            style={[styles.cta, !canContinue && styles.ctaDisabled]}
+          >
+            {saving
+              ? <ActivityIndicator color="#fff" />
+              : <Text style={styles.ctaText}>Continue</Text>
+            }
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => router.push("/(onboarding)/dateOfBirth")} style={styles.skipBtn}>
+            <Text style={styles.skipText}>Skip for now</Text>
+          </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -268,139 +182,108 @@ export default function UsernameScreen() {
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  safe: { flex: 1, backgroundColor: COLORS.bg },
+  safe: { flex: 1, backgroundColor: "#3D2875" },
 
-  page: {
-    flex: 1,
-    paddingHorizontal: 18,
-    paddingTop: 14,
-    paddingBottom: 18,
+  headerInner: {
+    paddingHorizontal: 20,
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+  },
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.22)",
+    alignItems: "center",
     justifyContent: "center",
-    gap: 16,
-    backgroundColor: COLORS.bg,
   },
 
-  // HERO
-  hero: { paddingHorizontal: 2, gap: 10 },
-  heroTop: {
+  content: {
+    flex: 1,
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    marginTop: -20,
+  },
+  contentInner: {
+    paddingHorizontal: 24,
+    paddingTop: 28,
+    paddingBottom: 24,
+  },
+
+  stepLabel: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#6B46C1",
+    letterSpacing: 1.5,
+    marginBottom: 10,
+  },
+  title: {
+    fontSize: 26,
+    fontWeight: "800",
+    color: "#111",
+    letterSpacing: -0.5,
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: "#666",
+    lineHeight: 21,
+    marginBottom: 28,
+  },
+
+  fieldGroup: { marginBottom: 8 },
+  fieldWrap: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 4,
-  },
-
-  backBtn: {
-    width: 40,
-    height: 40,
+    height: 54,
     borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
+    borderWidth: 1.5,
+    borderColor: "#E5E0F5",
+    backgroundColor: "#FAFAFA",
+    paddingHorizontal: 16,
+  },
+  fieldWrapOk: { borderColor: "#22C55E", backgroundColor: "#F0FDF4" },
+  fieldWrapErr: { borderColor: "#EF4444", backgroundColor: "#FFF5F5" },
+  atPrefix: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#6B46C1",
+    marginRight: 4,
+  },
+  fieldInput: {
+    flex: 1,
+    color: "#111",
+    fontSize: 15,
+    paddingVertical: 0,
+  },
+  helperText: {
+    marginTop: 8,
+    fontSize: 12,
+    color: "#999",
+    paddingHorizontal: 4,
+  },
+  errText: { color: "#EF4444", fontSize: 13, marginBottom: 14 },
+
+  footer: {
+    backgroundColor: "#fff",
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#F0EDF8",
+  },
+  cta: {
+    height: 54,
+    borderRadius: 14,
+    backgroundColor: "#5B3FA0",
     alignItems: "center",
     justifyContent: "center",
+    marginBottom: 10,
   },
-
-  pill: {
-    flexDirection: "row", alignItems: "center", gap: 8,
-    paddingHorizontal: 12, paddingVertical: 8,
-    borderRadius: 999, backgroundColor: "rgba(255,77,109,0.14)",
-    borderWidth: 1, borderColor: "rgba(255,77,109,0.25)",
-  },
-  pillDot: {
-    width: 7, height: 7, borderRadius: 99,
-    backgroundColor: COLORS.primary2,
-    shadowColor: COLORS.primary2, shadowOpacity: 0.35,
-    shadowRadius: 10, shadowOffset: { width: 0, height: 6 },
-  },
-  pillText: { color: COLORS.ink, fontWeight: "900", fontSize: 12, letterSpacing: 0.25 },
-
-  spark: {
-    width: 40, height: 40, borderRadius: 16,
-    backgroundColor: "rgba(255,255,255,0.10)",
-    borderWidth: 1, borderColor: COLORS.borderSoft,
-    alignItems: "center", justifyContent: "center",
-  },
-
-  h1: { color: COLORS.ink, fontSize: 34, fontWeight: "900", letterSpacing: -1.1, lineHeight: 40 },
-  h2: { color: COLORS.muted, fontSize: 14, fontWeight: "700", lineHeight: 20 },
-
-  // CARD
-  card: {
-    backgroundColor: COLORS.card,
-    borderRadius: 28, padding: 18,
-    borderWidth: 1, borderColor: COLORS.border,
-    shadowColor: "#000", shadowOpacity: 0.35,
-    shadowRadius: 26, shadowOffset: { width: 0, height: 16 }, elevation: 6,
-  },
-
-  label: { color: COLORS.inkSoft, fontWeight: "900", fontSize: 11, letterSpacing: 1, marginBottom: 10 },
-
-  inputWrap: {
-    height: 56, borderRadius: 18,
-    flexDirection: "row", alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderWidth: 1.5,
-  },
-  prefixBox: {
-    width: 40, height: 56,
-    alignItems: "center", justifyContent: "center",
-    borderRightWidth: 1, borderRightColor: "rgba(255,255,255,0.08)",
-  },
-  prefix: { color: COLORS.primary, fontWeight: "900", fontSize: 18 },
-
-  input: {
-    flex: 1,
-    color: COLORS.ink, fontWeight: "900", fontSize: 16,
-    paddingHorizontal: 12, paddingVertical: 0,
-    letterSpacing: 0.3,
-  },
-  suffixBox: {
-    width: 46, height: 56,
-    alignItems: "center", justifyContent: "center",
-  },
-
-  hint: { fontSize: 12, fontWeight: "800", marginTop: 8, letterSpacing: 0.1 },
-  hintGrey: { fontSize: 12, fontWeight: "700", color: COLORS.muted, marginTop: 8 },
-
-  rulesRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 12 },
-  ruleChip: {
-    paddingHorizontal: 10, paddingVertical: 5,
-    borderRadius: 8, backgroundColor: "rgba(255,255,255,0.06)",
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.08)",
-  },
-  ruleChipTxt: { color: COLORS.muted, fontSize: 11, fontWeight: "700" },
-
-  // ALERT
-  alert: {
-    marginTop: 14, borderRadius: 18, padding: 12,
-    flexDirection: "row", gap: 10, alignItems: "center",
-    backgroundColor: "rgba(251,113,133,0.10)",
-    borderWidth: 1, borderColor: "rgba(251,113,133,0.24)",
-  },
-  alertIcon: {
-    width: 36, height: 36, borderRadius: 14,
-    backgroundColor: "rgba(251,113,133,0.14)",
-    alignItems: "center", justifyContent: "center",
-  },
-  alertText: { color: "#FFE4EA", fontWeight: "900", flex: 1, lineHeight: 18 },
-
-  // CTA
-  cta: {
-    marginTop: 18, height: 56, borderRadius: 18,
-    backgroundColor: COLORS.primary,
-    alignItems: "center", justifyContent: "center",
-    flexDirection: "row", gap: 10,
-    shadowColor: COLORS.primary, shadowOpacity: 0.35,
-    shadowRadius: 18, shadowOffset: { width: 0, height: 12 }, elevation: 8,
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.16)",
-  },
-  ctaDisabled: { opacity: 0.45 },
-  ctaText: { color: "#fff", fontWeight: "900", fontSize: 16, letterSpacing: 0.3 },
-  ctaIcon: {
-    width: 36, height: 36, borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.16)",
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.18)",
-    alignItems: "center", justifyContent: "center",
-  },
+  ctaDisabled: { backgroundColor: "#C5B8E8" },
+  ctaText: { color: "#fff", fontWeight: "800", fontSize: 16 },
+  skipBtn: { alignItems: "center", paddingVertical: 6 },
+  skipText: { color: "#999", fontSize: 14, fontWeight: "600" },
 });

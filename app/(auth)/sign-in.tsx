@@ -1,33 +1,41 @@
 // app/(auth)/sign-in.tsx
-import React, { useMemo, useState } from "react";
+import { useState } from "react";
 import {
   View,
   Text,
+  useWindowDimensions,
   TextInput,
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  SafeAreaView,
   ScrollView,
+  Alert,
+  Image,
 } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useSignIn } from "@clerk/clerk-expo";
 import Ionicons from "@expo/vector-icons/Ionicons";
 
+import heroImage from "../../assets/IMG_0016.png";
+
 export default function SignInScreen() {
   const router = useRouter();
   const { signIn, setActive, isLoaded } = useSignIn();
+  const insets = useSafeAreaInsets();
+  const { width: screenW, height: screenH } = useWindowDimensions();
 
+  const [showEmailLogin, setShowEmailLogin] = useState(false);
   const [emailAddress, setEmailAddress] = useState("");
   const [password, setPassword] = useState("");
-
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [showPw, setShowPw] = useState(false);
 
-  const emailOk = useMemo(() => emailAddress.trim().includes("@"), [emailAddress]);
+  const emailOk = emailAddress.trim().includes("@");
   const canSubmit = !!emailAddress.trim() && !!password && emailOk && !submitting;
 
   const pickErr = (e: any, fallback: string) =>
@@ -35,16 +43,10 @@ export default function SignInScreen() {
 
   const onSignInPress = async () => {
     if (!isLoaded || !signIn || !setActive) return;
-
     setSubmitting(true);
     setErr(null);
-
     try {
-      const res = await signIn.create({
-        identifier: emailAddress.trim(),
-        password,
-      });
-
+      const res = await signIn.create({ identifier: emailAddress.trim(), password });
       if (res.status === "complete") {
         await setActive({ session: res.createdSessionId });
         router.replace("/");
@@ -58,358 +60,427 @@ export default function SignInScreen() {
     }
   };
 
-  return (
-    <SafeAreaView style={styles.safe}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.select({ ios: "padding", android: undefined })}
-      >
-        <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
-          {/* Hero */}
-          <View style={styles.hero}>
-            <View style={styles.heroTop}>
-              <View style={styles.badge}>
-                <Ionicons name="flame" size={16} color={COLORS.primary} />
-                <Text style={styles.badgeText}>Welcome back</Text>
-              </View>
+  // ── Email login form ────────────────────────────────────────────────────────
+  if (showEmailLogin) {
+    return (
+      <SafeAreaView style={styles.safeLight}>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.select({ ios: "padding", android: undefined })}
+        >
+          <ScrollView
+            contentContainerStyle={styles.loginPage}
+            keyboardShouldPersistTaps="handled"
+          >
+            <TouchableOpacity
+              style={styles.closeBtn}
+              onPress={() => setShowEmailLogin(false)}
+              hitSlop={10}
+            >
+              <Ionicons name="close" size={20} color="#666" />
+            </TouchableOpacity>
 
-              {/* <TouchableOpacity
-                activeOpacity={0.85}
-                onPress={() => router.push("/(auth)/sign-up")}
-                style={styles.heroLinkPill}
-              >
-                <Text style={styles.heroLinkText}>Sign up</Text>
-                <Ionicons name="arrow-forward" size={16} color={COLORS.ink} />
-              </TouchableOpacity> */}
-            </View>
+            <Text style={styles.loginTitle}>Welcome back</Text>
+            <Text style={styles.loginSubtitle}>Sign in to continue meeting people.</Text>
 
-            <Text style={styles.h1}>Sign in</Text>
-            <Text style={styles.h2}>Pick up where you left off.</Text>
-          </View>
-
-          {/* Glass surface */}
-          <View style={styles.surface}>
-            {/* Email */}
-            <View style={styles.group}>
-              <Text style={styles.label}>Email</Text>
-              <View style={[styles.inputWrap, emailAddress.trim() && (emailOk ? styles.ok : styles.bad)]}>
-                <View style={styles.leftIcon}>
-                  <Ionicons name="mail-outline" size={18} color={COLORS.muted} />
-                </View>
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>Email address</Text>
+              <View style={styles.fieldWrap}>
                 <TextInput
                   value={emailAddress}
                   onChangeText={setEmailAddress}
                   autoCapitalize="none"
                   autoCorrect={false}
                   keyboardType="email-address"
-                  placeholder="you@email.com"
-                  placeholderTextColor={COLORS.placeholder}
-                  style={styles.input}
+                  placeholder="example@email.com"
+                  placeholderTextColor="#aaa"
+                  style={styles.fieldInput}
                 />
-                <View style={styles.rightIcon}>
-                  {emailAddress.trim().length > 0 ? (
-                    <Ionicons
-                      name={emailOk ? "checkmark-circle" : "alert-circle"}
-                      size={18}
-                      color={emailOk ? COLORS.success : COLORS.danger}
-                    />
-                  ) : (
-                    <View style={{ width: 18 }} />
-                  )}
-                </View>
               </View>
             </View>
 
-            {/* Password */}
-            <View style={styles.group}>
-              <Text style={styles.label}>Password</Text>
-              <View style={styles.inputWrap}>
-                <View style={styles.leftIcon}>
-                  <Ionicons name="lock-closed-outline" size={18} color={COLORS.muted} />
-                </View>
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>Password</Text>
+              <View style={styles.fieldWrap}>
                 <TextInput
                   value={password}
                   onChangeText={setPassword}
                   secureTextEntry={!showPw}
-                  placeholder="••••••••"
-                  placeholderTextColor={COLORS.placeholder}
-                  style={styles.input}
+                  placeholderTextColor="#aaa"
+                  style={[styles.fieldInput, { flex: 1 }]}
                 />
                 <TouchableOpacity
                   onPress={() => setShowPw((s) => !s)}
-                  activeOpacity={0.85}
+                  style={styles.eyeBtn}
                   hitSlop={10}
-                  style={[styles.rightIcon, styles.iconTap]}
                 >
                   <Ionicons
                     name={showPw ? "eye-off-outline" : "eye-outline"}
-                    size={18}
-                    color={COLORS.inkSoft}
+                    size={20}
+                    color="#888"
                   />
                 </TouchableOpacity>
               </View>
             </View>
 
-            {!!err && (
-              <View style={styles.alert}>
-                <View style={styles.alertIcon}>
-                  <Ionicons name="warning-outline" size={18} color={COLORS.danger} />
-                </View>
-                <Text style={styles.alertText}>{err}</Text>
-              </View>
-            )}
+            {!!err && <Text style={styles.errText}>{err}</Text>}
 
             <TouchableOpacity
               onPress={onSignInPress}
-              activeOpacity={0.92}
               disabled={!canSubmit}
-              style={[styles.cta, !canSubmit && styles.ctaDisabled]}
+              style={[styles.emailActionBtn, !canSubmit && { opacity: 0.5 }]}
             >
               {submitting ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <>
-                  <Text style={styles.ctaText}>Sign in</Text>
-                  <View style={styles.ctaIcon}>
-                    <Ionicons name="log-in-outline" size={18} color="#fff" />
-                  </View>
-                </>
+                <Text style={styles.emailActionBtnText}>Log in</Text>
               )}
             </TouchableOpacity>
 
-            <View style={styles.dividerRow}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>or</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
             <TouchableOpacity
-              onPress={() => router.push("/(auth)/sign-up")}
-              activeOpacity={0.9}
-              style={styles.secondary}
+              style={styles.switchLink}
+              onPress={() => { setShowEmailLogin(false); router.push("/(auth)/sign-up"); }}
             >
-              <Ionicons name="sparkles-outline" size={18} color={COLORS.ink} />
-              <Text style={styles.secondaryText}>Create a new account</Text>
+              <Text style={styles.switchLinkText}>Don't have an account? <Text style={{ color: "#2D1F4B", fontWeight: "700" }}>Sign up</Text></Text>
             </TouchableOpacity>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    );
+  }
+
+  // ── Landing screen ──────────────────────────────────────────────────────────
+  return (
+    <View style={[styles.safe, { width: screenW, height: screenH }]}>
+      {/* Full-bleed hero image — starts from very top, no margin */}
+      <Image
+        source={heroImage}
+        style={[styles.heroImage, { width: screenW, height: screenH * 0.7 }]}
+        resizeMode="cover"
+      />
+
+      {/* Multi-stop gradient: barely dark at top → fully dark at bottom */}
+      <LinearGradient
+        colors={[
+          "rgba(8,4,20,0.08)",
+          "rgba(8,4,20,0)",
+          "rgba(8,4,20,0.55)",
+          "rgba(8,4,20,0.88)",
+          "rgba(8,4,20,0.97)",
+        ]}
+        locations={[0, 0.18, 0.52, 0.75, 1]}
+        style={StyleSheet.absoluteFill}
+      />
+
+      {/* Logo — top-left, respects safe area */}
+      <View style={[styles.logoOverlay, { paddingTop: insets.top + 14 }]}>
+        <View style={styles.logoRow}>
+          <View style={styles.logoMark}>
+            <Text style={styles.logoLetter}>M</Text>
+          </View>
+          <View style={styles.logoTextWrap}>
+            <Text style={styles.logoTextMy}>my</Text>
+            <Text style={styles.logoTextApp}>app</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Bottom panel — tagline + buttons, pinned to bottom */}
+      <View style={[styles.bottomPanel, { paddingBottom: insets.bottom + 28 }]}>
+
+        {/* Tagline */}
+        <View style={styles.taglineBlock}>
+          <Text style={styles.taglineEyebrow}>THE PEOPLE</Text>
+          <Text style={styles.taglineHero}>platform</Text>
+          <Text style={styles.taglineSub}>
+            Real meetups. Real people. Near you.
+          </Text>
+        </View>
+
+        {/* Buttons */}
+        <View style={styles.buttonsArea}>
+
+          {/* Google */}
+          <TouchableOpacity
+            style={styles.googleBtn}
+            activeOpacity={0.85}
+            onPress={() => Alert.alert("Coming soon", "Google sign-in not yet configured.")}
+          >
+            <View style={styles.googleIconCircle}>
+              <Text style={styles.googleG}>G</Text>
+            </View>
+            <Text style={styles.googleBtnText}>Continue with Google</Text>
+          </TouchableOpacity>
+
+          {/* Apple */}
+          <TouchableOpacity
+            style={styles.appleBtn}
+            activeOpacity={0.85}
+            onPress={() => Alert.alert("Coming soon", "Apple sign-in not yet configured.")}
+          >
+            <Ionicons name="logo-apple" size={20} color="#fff" />
+            <Text style={styles.appleBtnText}>Continue with Apple</Text>
+          </TouchableOpacity>
+
+          {/* Divider */}
+          <View style={styles.orRow}>
+            <View style={styles.orLine} />
+            <Text style={styles.orText}>or</Text>
+            <View style={styles.orLine} />
           </View>
 
-          {/* <Text style={styles.footer}>Secure sign-in powered by Clerk.</Text> */}
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+          {/* Sign up with email — primary CTA */}
+          <TouchableOpacity
+            style={styles.signUpEmailBtn}
+            activeOpacity={0.85}
+            onPress={() => router.push("/(auth)/sign-up")}
+          >
+            <Ionicons name="mail-outline" size={18} color="#fff" />
+            <Text style={styles.signUpEmailBtnText}>Sign up with email</Text>
+          </TouchableOpacity>
+
+          {/* Log in link */}
+          <TouchableOpacity
+            style={styles.logInLink}
+            activeOpacity={0.85}
+            onPress={() => setShowEmailLogin(true)}
+          >
+            <Text style={styles.logInLinkText}>Already have an account? <Text style={styles.logInLinkBold}>Log in</Text></Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
   );
 }
 
-/** Same “Tinder/Bumble-ish” palette used in your sign-up tweak */
-const COLORS = {
-  bgTop: "#0B0B12",
-  bgBottom: "#0F172A",
-  card: "rgba(255,255,255,0.10)",
-  card2: "rgba(255,255,255,0.14)",
-  ink: "#FFFFFF",
-  inkSoft: "rgba(255,255,255,0.78)",
-  muted: "rgba(255,255,255,0.62)",
-  placeholder: "rgba(255,255,255,0.45)",
-  border: "rgba(255,255,255,0.12)",
-  borderSoft: "rgba(255,255,255,0.08)",
-  primary: "#FF4D6D",
-  primary2: "#FF8A00",
-  primarySoft: "rgba(255,77,109,0.18)",
-  success: "#22C55E",
-  danger: "#FB7185",
-};
-
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  safe: { flex: 1, backgroundColor: COLORS.bgTop },
+  // ── Landing ────────────────────────────────────────────────────────────────
+  safe: { flex: 1, backgroundColor: "#080414" },
+  heroImage: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
 
-  page: {
-    flexGrow: 1,
-    paddingHorizontal: 18,
-    paddingTop: 10,
-    paddingBottom: 18,
+  // Logo
+  logoOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 22,
+  },
+  logoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  logoMark: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.95)",
+    alignItems: "center",
     justifyContent: "center",
-    gap: 16,
-    backgroundColor: COLORS.bgTop,
+    shadowColor: "#A855F7",
+    shadowOpacity: 0.45,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
   },
-
-  // HERO
-  hero: { paddingHorizontal: 2, gap: 10 },
-  heroTop: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
+  logoLetter: { color: "#4A3268", fontWeight: "900", fontSize: 20 },
+  logoTextWrap: { flexDirection: "row", alignItems: "baseline", gap: 1 },
+  logoTextMy: {
+    color: "rgba(255,255,255,0.65)",
+    fontWeight: "300",
+    fontSize: 22,
+    letterSpacing: 1,
   },
-
-  badge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: "rgba(255,77,109,0.14)",
-    borderWidth: 1,
-    borderColor: "rgba(255,77,109,0.25)",
-  },
-  badgeText: { color: COLORS.ink, fontWeight: "800", fontSize: 12, letterSpacing: 0.3 },
-
-  heroLinkPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.10)",
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  heroLinkText: { color: COLORS.ink, fontWeight: "800", fontSize: 12 },
-
-  h1: {
-    color: COLORS.ink,
-    fontSize: 34,
+  logoTextApp: {
+    color: "#fff",
     fontWeight: "900",
-    letterSpacing: -1.1,
-    lineHeight: 40,
+    fontSize: 22,
+    letterSpacing: -0.5,
   },
-  h2: { color: COLORS.muted, fontSize: 14, fontWeight: "700", lineHeight: 20 },
 
-  // SURFACE
-  surface: {
-    backgroundColor: COLORS.card,
-    borderRadius: 28,
-    padding: 18,
+  // Bottom panel
+  bottomPanel: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 22,
+    gap: 24,
+  },
+
+  taglineBlock: { gap: 4 },
+
+  taglineEyebrow: {
+    color: "rgba(255,255,255,0.5)",
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 6,
+  },
+  taglineHero: {
+    color: "#fff",
+    fontSize: 68,
+    fontWeight: "900",
+    fontStyle: "italic",
+    letterSpacing: -3,
+    lineHeight: 70,
+    textShadowColor: "#C084FC",
+    textShadowRadius: 48,
+    textShadowOffset: { width: 0, height: 0 },
+  },
+  taglineSub: {
+    color: "rgba(255,255,255,0.55)",
+    fontSize: 14,
+    fontWeight: "500",
+    letterSpacing: 0.2,
+    marginTop: 4,
+  },
+
+  buttonsArea: { gap: 10 },
+
+  googleBtn: {
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.12)",
     borderWidth: 1,
-    borderColor: COLORS.border,
-    shadowColor: "#000",
-    shadowOpacity: 0.35,
-    shadowRadius: 26,
-    shadowOffset: { width: 0, height: 16 },
-    elevation: 6,
-  },
-
-  group: { marginTop: 12 },
-  label: { color: COLORS.inkSoft, fontWeight: "800", marginBottom: 8, fontSize: 12 },
-
-  inputWrap: {
-    height: 56,
-    borderRadius: 18,
+    borderColor: "rgba(255,255,255,0.2)",
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
+    justifyContent: "center",
+    gap: 10,
   },
-  leftIcon: { width: 46, height: 56, alignItems: "center", justifyContent: "center", opacity: 0.9 },
-  rightIcon: { width: 46, height: 56, alignItems: "center", justifyContent: "center", opacity: 0.95 },
+  googleIconCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  googleG: { color: "#4285F4", fontWeight: "900", fontSize: 12 },
+  googleBtnText: { color: "#fff", fontWeight: "600", fontSize: 15 },
 
-  input: {
-    flex: 1,
-    color: COLORS.ink,
+  appleBtn: {
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+  },
+  appleBtnText: { color: "#fff", fontWeight: "600", fontSize: 15 },
+
+  orRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginVertical: 2,
+  },
+  orLine: { flex: 1, height: 1, backgroundColor: "rgba(255,255,255,0.18)" },
+  orText: { color: "rgba(255,255,255,0.4)", fontWeight: "600", fontSize: 12 },
+
+  signUpEmailBtn: {
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: "#2D1F4B",
+    borderWidth: 1,
+    borderColor: "rgba(168,85,247,0.35)",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+  },
+  signUpEmailBtnText: { color: "#fff", fontWeight: "700", fontSize: 15 },
+
+  logInLink: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 4,
+  },
+  logInLinkText: {
+    color: "rgba(255,255,255,0.5)",
+    fontWeight: "500",
+    fontSize: 14,
+  },
+  logInLinkBold: {
+    color: "rgba(255,255,255,0.9)",
+    fontWeight: "700",
+    textDecorationLine: "underline",
+  },
+
+  // ── Email login form ───────────────────────────────────────────────────────
+  safeLight: { flex: 1, backgroundColor: "#f5f5f5" },
+  loginPage: {
+    flexGrow: 1,
+    paddingHorizontal: 24,
+    paddingTop: 20,
+    paddingBottom: 36,
+  },
+  closeBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#e0e0e0",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 24,
+  },
+  loginTitle: {
+    fontSize: 28,
     fontWeight: "800",
+    color: "#111",
+    marginBottom: 6,
+    letterSpacing: -0.5,
+  },
+  loginSubtitle: {
+    fontSize: 15,
+    color: "#666",
+    marginBottom: 36,
+    lineHeight: 22,
+  },
+  fieldGroup: { marginBottom: 20 },
+  fieldLabel: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#111",
+    marginBottom: 8,
+  },
+  fieldWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    height: 52,
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: "#ddd",
+    backgroundColor: "#fff",
+    paddingHorizontal: 18,
+  },
+  fieldInput: {
+    flex: 1,
+    color: "#111",
     fontSize: 15,
     paddingVertical: 0,
-    paddingRight: 8,
-    letterSpacing: 0.2,
   },
-
-  iconTap: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
+  eyeBtn: { paddingLeft: 8 },
+  errText: { color: "#e53935", fontSize: 13, marginBottom: 14, marginLeft: 4 },
+  emailActionBtn: {
+    height: 52,
+    borderRadius: 28,
+    backgroundColor: "#2D1F4B",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.10)",
+    marginTop: 8,
+    marginBottom: 16,
   },
-
-  ok: { borderColor: "rgba(34,197,94,0.35)", backgroundColor: "rgba(34,197,94,0.06)" },
-  bad: { borderColor: "rgba(251,113,133,0.35)", backgroundColor: "rgba(251,113,133,0.06)" },
-
-  // ALERT
-  alert: {
-    marginTop: 14,
-    borderRadius: 18,
-    padding: 12,
-    flexDirection: "row",
-    gap: 10,
-    alignItems: "center",
-    backgroundColor: "rgba(251,113,133,0.10)",
-    borderWidth: 1,
-    borderColor: "rgba(251,113,133,0.24)",
-  },
-  alertIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 14,
-    backgroundColor: "rgba(251,113,133,0.14)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  alertText: { color: "#FFE4EA", fontWeight: "800", flex: 1, lineHeight: 18 },
-
-  // CTA
-  cta: {
-    marginTop: 16,
-    height: 56,
-    borderRadius: 18,
-    backgroundColor: COLORS.primary,
-    alignItems: "center",
-    justifyContent: "center",
-    flexDirection: "row",
-    gap: 10,
-    shadowColor: COLORS.primary,
-    shadowOpacity: 0.35,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 8,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.16)",
-  },
-  ctaDisabled: { opacity: 0.5 },
-  ctaText: { color: "#fff", fontWeight: "900", fontSize: 16, letterSpacing: 0.3 },
-  ctaIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.16)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  // DIVIDER
-  dividerRow: { marginTop: 14, flexDirection: "row", alignItems: "center", gap: 10 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: "rgba(255,255,255,0.12)" },
-  dividerText: { color: COLORS.muted, fontWeight: "800", fontSize: 12 },
-
-  // SECONDARY
-  secondary: {
-    marginTop: 12,
-    height: 56,
-    borderRadius: 18,
-    backgroundColor: "rgba(255,255,255,0.10)",
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    alignItems: "center",
-    justifyContent: "center",
-    flexDirection: "row",
-    gap: 10,
-  },
-  secondaryText: { color: COLORS.ink, fontWeight: "900" },
-
-  footer: {
-    color: "rgba(255,255,255,0.55)",
-    textAlign: "center",
-    fontWeight: "700",
-    fontSize: 12,
-    paddingHorizontal: 10,
-    marginTop: 2,
-    lineHeight: 18,
-  },
+  emailActionBtnText: { color: "#fff", fontWeight: "700", fontSize: 16 },
+  switchLink: { alignItems: "center", paddingVertical: 6 },
+  switchLinkText: { fontSize: 14, color: "#888" },
 });

@@ -338,161 +338,240 @@
 //   footer:{textAlign:"center",color:C.hint,fontSize:12,fontWeight:"600",marginTop:30},
 // });
 import React, { useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, Platform, Alert, ActivityIndicator } from "react-native";
+import { 
+    View, Text, StyleSheet, TouchableOpacity, ScrollView, 
+    SafeAreaView, Platform, Alert, ActivityIndicator, 
+    Dimensions 
+} from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useRouter } from "expo-router";
 import Constants from "expo-constants";
 import { useAuth } from "@clerk/clerk-expo";
 import { apiFetch } from "../../../lib/apiFetch";
+import * as Haptics from "expo-haptics";
 
-const C = {
-  bg: "#F7F8FA", card: "#FFFFFF", cardBorder: "#EAECF0",
-  ink: "#0D1117", muted: "#656D76", hint: "#AFB8C1",
-  green: "#22C55E", greenBg: "#DCFCE7", greenBorder: "#86EFAC", greenText: "#15803D",
-  teal: "#0EA5E9", tealBg: "#E0F2FE",
-  amber: "#F59E0B", amberBg: "#FEF3C7",
-  danger: "#EF4444", dangerBg: "#FEF2F2",
+const { width: W } = Dimensions.get("window");
+
+const COLORS = {
+    purple: "#6366F1",
+    purpleBg: "#EEF2FF",
+    bg: "#F9FAFB",
+    card: "#FFFFFF",
+    text: "#111827",
+    muted: "#6B7280",
+    lightMuted: "#9CA3AF",
+    border: "#F3F4F6",
+    danger: "#EF4444",
+    dangerBg: "#FEF2F2",
+    font: "Outfit_500Medium",
+    fontBold: "Outfit_700Bold",
+    fontExtraBold: "Outfit_800ExtraBold",
 };
 
 export default function Security() {
-  const router = useRouter(); const { userId, signOut } = useAuth();
-  const API_BASE = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
-  const EVENT_API_KEY = (Constants.expoConfig?.extra as any)?.eventApiKey as string | undefined;
-  const [deleting, setDeleting] = useState(false); const [loggingOut, setLoggingOut] = useState(false);
+    const router = useRouter();
+    const { userId, signOut } = useAuth();
+    
+    const API_BASE = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
+    const EVENT_API_KEY = (Constants.expoConfig?.extra as any)?.eventApiKey as string | undefined;
+    
+    const [deleting, setDeleting] = useState(false);
+    const [loggingOut, setLoggingOut] = useState(false);
 
-  const handleDelete = () => Alert.alert("Delete Account", "Permanently deletes your account and all data.", [
-    { text: "Cancel", style: "cancel" },
-    { text: "Delete Forever", style: "destructive", onPress: async () => {
-      setDeleting(true);
-      try { if (API_BASE && userId) await apiFetch(`${API_BASE}/api/users/delete-account`, { method: "DELETE", headers: { "Content-Type": "application/json", ...(EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {}) }, body: JSON.stringify({ clerkUserId: userId }) }); } catch {}
-      finally { setDeleting(false); await signOut(); router.replace("/sign-in" as any); }
-    }},
-  ]);
+    const handleDelete = () => {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        Alert.alert(
+            "Delete Account", 
+            "This will permanently delete your account and all associated data. This action cannot be undone.", 
+            [
+                { text: "Cancel", style: "cancel" },
+                { 
+                    text: "Delete Forever", 
+                    style: "destructive", 
+                    onPress: async () => {
+                        setDeleting(true);
+                        try {
+                            if (API_BASE && userId) {
+                                await apiFetch(`${API_BASE}/api/users/delete-account`, { 
+                                    method: "DELETE", 
+                                    headers: { 
+                                        "Content-Type": "application/json", 
+                                        ...(EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {}) 
+                                    }, 
+                                    body: JSON.stringify({ clerkUserId: userId }) 
+                                });
+                            }
+                        } catch {}
+                        finally {
+                            setDeleting(false);
+                            await signOut();
+                            router.replace("/sign-in" as any);
+                        }
+                    } 
+                },
+            ]
+        );
+    };
 
-  const handleLogoutAll = () => Alert.alert("Log Out All Devices", "Signs you out on all devices including this one.", [
-    { text: "Cancel", style: "cancel" },
-    { text: "Log Out All", style: "destructive", onPress: async () => { setLoggingOut(true); try { await signOut(); router.replace("/sign-in" as any); } catch {} finally { setLoggingOut(false); } } },
-  ]);
+    const handleLogoutAll = () => {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        Alert.alert(
+            "Log Out All Devices", 
+            "Signs you out on all devices including this one. You will need to sign back in.", 
+            [
+                { text: "Cancel", style: "cancel" },
+                { 
+                    text: "Log Out All", 
+                    style: "destructive", 
+                    onPress: async () => {
+                        setLoggingOut(true);
+                        try {
+                            await signOut();
+                            router.replace("/sign-in" as any);
+                        } catch {}
+                        finally { setLoggingOut(false); }
+                    } 
+                },
+            ]
+        );
+    };
 
-  const BLOCKS = [
-    {
-      icon: "shield-checkmark-outline" as const, iconBg: C.greenBg, iconColor: C.green,
-      label: "Two-Factor Auth", isDanger: false, onPress: undefined,
-      content: () => (
-        <View style={S.rowLayout}>
-          <View style={{ flex: 1 }}>
-            <Text style={S.blockValue}>Managed via Clerk</Text>
-            <Text style={S.blockHint}>Configure in your Clerk account settings</Text>
-          </View>
-          <Ionicons name="open-outline" size={16} color={C.hint} />
-        </View>
-      ),
-    },
-    {
-      icon: "key-outline" as const, iconBg: C.tealBg, iconColor: C.teal,
-      label: "Change Password", isDanger: false,
-      onPress: () => Alert.alert("Change Password", "Password management is handled through Clerk.", [{ text: "OK" }]),
-      content: () => (
-        <View style={S.rowLayout}>
-          <Text style={[S.blockValue, { flex: 1 }]}>Update your password</Text>
-          <Ionicons name="chevron-forward" size={16} color={C.hint} />
-        </View>
-      ),
-    },
-    {
-      icon: "lock-closed-outline" as const, iconBg: C.amberBg, iconColor: C.amber,
-      label: "Login Activity", isDanger: false,
-      onPress: () => Alert.alert("Login Activity", "View active sessions in your Clerk account dashboard.", [{ text: "OK" }]),
-      content: () => (
-        <View style={S.rowLayout}>
-          <Text style={[S.blockValue, { flex: 1 }]}>Check active sessions</Text>
-          <Ionicons name="chevron-forward" size={16} color={C.hint} />
-        </View>
-      ),
-    },
-    {
-      icon: "exit-outline" as const, iconBg: C.greenBg, iconColor: C.green,
-      label: "Log Out All Devices", isDanger: false, onPress: handleLogoutAll,
-      content: () => (
-        <View style={S.rowLayout}>
-          {loggingOut
-            ? <ActivityIndicator color={C.green} style={{ flex: 1 }} />
-            : <><Text style={[S.blockValue, { flex: 1 }]}>Force sign out everywhere</Text><Ionicons name="chevron-forward" size={16} color={C.hint} /></>
-          }
-        </View>
-      ),
-    },
-    {
-      icon: "trash-outline" as const, iconBg: C.dangerBg, iconColor: C.danger,
-      label: "Danger Zone", isDanger: true, onPress: handleDelete,
-      content: () => (deleting
-        ? <ActivityIndicator color={C.danger} />
-        : <Text style={[S.blockValue, { color: C.danger }]}>Delete Account Permanently</Text>
-      ),
-    },
-  ];
-
-  return (
-    <SafeAreaView style={S.safe}>
-      <ScrollView style={S.container} contentContainerStyle={S.content}>
-        <View style={S.header}>
-          <TouchableOpacity onPress={() => router.back()} style={S.backBtn}>
-            <Ionicons name="chevron-back" size={22} color={C.ink} />
-          </TouchableOpacity>
-          <Text style={S.title}>Security</Text>
-          <View style={{ width: 44 }} />
-        </View>
-
-        <View style={S.intro}>
-          <Text style={S.introH}>Account Safety</Text>
-          <Text style={S.introS}>Manage your security preferences.</Text>
-        </View>
-
-        <View style={S.formArea}>
-          {BLOCKS.map(b => (
-            <TouchableOpacity
-              key={b.label}
-              style={[S.block, b.isDanger && { borderColor: C.danger + "44" }]}
-              activeOpacity={b.onPress ? 0.8 : 1}
-              onPress={b.onPress}
-              disabled={!b.onPress}
-            >
-              <View style={S.blockHeader}>
-                <View style={[S.iconCircle, { backgroundColor: b.iconBg }]}>
-                  <Ionicons name={b.icon} size={14} color={b.iconColor} />
+    const SecurityBlock = ({ icon, label, children, onPress, danger = false, iconColor = COLORS.purple }: any) => (
+        <TouchableOpacity 
+            style={[S.block, danger && { borderColor: COLORS.danger + "30" }]} 
+            activeOpacity={onPress ? 0.8 : 1} 
+            onPress={() => {
+                if (onPress) {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    onPress();
+                }
+            }}
+            disabled={!onPress}
+        >
+            <View style={S.blockHeader}>
+                <View style={[S.iconCircle, { backgroundColor: (danger ? COLORS.danger : iconColor) + "10" }]}>
+                    <Ionicons name={icon} size={16} color={danger ? COLORS.danger : iconColor} />
                 </View>
-                <Text style={[S.blockLabel, b.isDanger && { color: C.danger }]}>{b.label}</Text>
-              </View>
-              {b.content()}
-            </TouchableOpacity>
-          ))}
-        </View>
+                <Text style={[S.blockLabel, danger && { color: COLORS.danger }]}>{label}</Text>
+            </View>
+            {children}
+        </TouchableOpacity>
+    );
 
-        <View style={S.footerRow}>
-          <Ionicons name="lock-closed-outline" size={13} color={C.hint} />
-          <Text style={S.footer}>End-to-End Encrypted</Text>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
-  );
+    return (
+        <SafeAreaView style={S.safe}>
+            <View style={S.headerRow}>
+                <TouchableOpacity onPress={() => router.back()} style={S.backBtn}>
+                    <Ionicons name="arrow-back" size={22} color={COLORS.purple} />
+                </TouchableOpacity>
+                <Text style={S.headerTitle}>Security</Text>
+                <View style={{ width: 42 }} />
+            </View>
+
+            <ScrollView 
+                style={S.container} 
+                contentContainerStyle={S.content} 
+                showsVerticalScrollIndicator={false}
+            >
+                <View style={S.intro}>
+                    <Text style={S.introH}>Account Safety</Text>
+                    <Text style={S.introS}>Manage your security preferences and active sessions.</Text>
+                </View>
+
+                <View style={S.formArea}>
+                    <SecurityBlock icon="shield-checkmark-outline" label="Two-Factor Auth">
+                        <View style={S.rowLayout}>
+                            <View style={{ flex: 1 }}>
+                                <Text style={S.blockValue}>Managed via Clerk</Text>
+                                <Text style={S.blockHint}>Configure in your account dashboard</Text>
+                            </View>
+                            <Ionicons name="open-outline" size={18} color={COLORS.lightMuted} />
+                        </View>
+                    </SecurityBlock>
+
+                    <SecurityBlock 
+                        icon="key-outline" label="Change Password" 
+                        onPress={() => Alert.alert("Change Password", "Password management is handled through Clerk. Check your email for reset instructions.", [{ text: "OK" }])}
+                    >
+                        <View style={S.rowLayout}>
+                            <Text style={[S.blockValue, { flex: 1 }]}>Update your password</Text>
+                            <Ionicons name="chevron-forward" size={18} color={COLORS.lightMuted} />
+                        </View>
+                    </SecurityBlock>
+
+                    <SecurityBlock 
+                        icon="lock-closed-outline" label="Login Activity" 
+                        onPress={() => Alert.alert("Login Activity", "View active sessions in your account dashboard.", [{ text: "OK" }])}
+                    >
+                        <View style={S.rowLayout}>
+                            <Text style={[S.blockValue, { flex: 1 }]}>Check active sessions</Text>
+                            <Ionicons name="chevron-forward" size={18} color={COLORS.lightMuted} />
+                        </View>
+                    </SecurityBlock>
+
+                    <SecurityBlock icon="exit-outline" label="Log Out All Devices" onPress={handleLogoutAll}>
+                        <View style={S.rowLayout}>
+                            {loggingOut ? (
+                                <ActivityIndicator color={COLORS.purple} style={{ flex: 1 }} />
+                            ) : (
+                                <>
+                                    <Text style={[S.blockValue, { flex: 1 }]}>Force sign out everywhere</Text>
+                                    <Ionicons name="chevron-forward" size={18} color={COLORS.lightMuted} />
+                                </>
+                            )}
+                        </View>
+                    </SecurityBlock>
+
+                    <SecurityBlock 
+                        icon="trash-outline" label="Danger Zone" 
+                        onPress={handleDelete} danger
+                    >
+                        {deleting ? (
+                            <ActivityIndicator color={COLORS.danger} />
+                        ) : (
+                            <Text style={[S.blockValue, { color: COLORS.danger }]}>Delete Account Permanently</Text>
+                        )}
+                    </SecurityBlock>
+                </View>
+
+                <View style={S.footerRow}>
+                    <Ionicons name="lock-closed-outline" size={14} color={COLORS.lightMuted} />
+                    <Text style={S.footer}>End-to-End Encrypted</Text>
+                </View>
+            </ScrollView>
+        </SafeAreaView>
+    );
 }
 
 const S = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: C.bg }, container: { flex: 1 }, content: { padding: 20, paddingBottom: 60 },
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 24, marginTop: Platform.OS === "android" ? 10 : 0 },
-  backBtn: { width: 42, height: 42, borderRadius: 12, backgroundColor: C.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: C.cardBorder },
-  title: { fontSize: 17, fontWeight: "800", color: C.ink },
-  intro: { marginBottom: 24, paddingLeft: 2 },
-  introH: { fontSize: 26, fontWeight: "900", color: C.ink, letterSpacing: -0.5 },
-  introS: { fontSize: 14, fontWeight: "500", color: C.muted, marginTop: 4 },
-  formArea: { gap: 10 },
-  block: { backgroundColor: C.card, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: C.cardBorder },
-  blockHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 },
-  iconCircle: { width: 26, height: 26, borderRadius: 8, alignItems: "center", justifyContent: "center" },
-  blockLabel: { fontSize: 11, fontWeight: "800", color: C.muted, textTransform: "uppercase", letterSpacing: 1 },
-  blockValue: { fontSize: 14, fontWeight: "700", color: C.ink },
-  blockHint: { fontSize: 12, fontWeight: "500", color: C.muted, marginTop: 2 },
-  rowLayout: { flexDirection: "row", alignItems: "center" },
-  footerRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, marginTop: 28 },
-  footer: { textAlign: "center", color: C.hint, fontSize: 12, fontWeight: "600" },
+    safe: { flex: 1, backgroundColor: COLORS.bg },
+    container: { flex: 1 },
+    headerRow: {
+        flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+        paddingHorizontal: 20, paddingTop: Platform.OS === "ios" ? 10 : 20, paddingBottom: 10,
+    },
+    backBtn: {
+        width: 42, height: 42, borderRadius: 14,
+        alignItems: "center", justifyContent: "center",
+        backgroundColor: "#fff", borderWidth: 1, borderColor: COLORS.border,
+    },
+    headerTitle: { fontSize: 18, fontFamily: COLORS.fontExtraBold, color: COLORS.purple },
+    content: { padding: 20, paddingBottom: 60 },
+    intro: { marginBottom: 32, paddingLeft: 2 },
+    introH: { fontSize: 32, fontFamily: COLORS.fontExtraBold, color: COLORS.text, letterSpacing: -0.5 },
+    introS: { fontSize: 14, fontFamily: COLORS.font, color: COLORS.muted, marginTop: 4, lineHeight: 20 },
+    formArea: { gap: 16 },
+    block: { 
+        backgroundColor: COLORS.card, borderRadius: 24, padding: 20, 
+        borderWidth: 1, borderColor: COLORS.border,
+        shadowColor: COLORS.purple, shadowOpacity: 0.03, shadowRadius: 10, shadowOffset: { width: 0, height: 4 },
+    },
+    blockHeader: { flexDirection: "row", alignItems: "center", marginBottom: 12, gap: 10 },
+    iconCircle: { width: 34, height: 34, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+    blockLabel: { fontSize: 11, fontFamily: COLORS.fontExtraBold, color: COLORS.muted, textTransform: "uppercase", letterSpacing: 1 },
+    blockValue: { fontSize: 16, fontFamily: COLORS.fontBold, color: COLORS.text },
+    blockHint: { fontSize: 12, fontFamily: COLORS.font, color: COLORS.muted, marginTop: 2 },
+    rowLayout: { flexDirection: "row", alignItems: "center" },
+    footerRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 40 },
+    footer: { textAlign: "center", color: COLORS.lightMuted, fontSize: 13, fontFamily: COLORS.fontBold },
 });

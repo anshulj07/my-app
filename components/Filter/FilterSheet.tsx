@@ -1,46 +1,38 @@
 // components/Filter/FilterSheet.tsx
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity,
   StyleSheet, Platform, Modal,
-  PanResponder, Dimensions, LayoutAnimation, UIManager,
+  PanResponder, Dimensions, Animated, StatusBar
 } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
-
-if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 
 const { width: SW, height: SH } = Dimensions.get("window");
 
-// ─────────────────────────────────────────────────────────────
-//  TOKENS
-// ─────────────────────────────────────────────────────────────
 const C = {
-  bg:      "#FFFFFF",
-  primary: "#22C55E",
-  primaryLt: "rgba(34, 197, 94, 0.08)",
-  ink:     "#121212",
-  ink2:    "#444444",
-  muted:   "#8E8E93",
-  border:  "#F2F2F7",
-  surface: "#F9F9F9",
+  bg:      "#F8FAFF",
   white:   "#FFFFFF",
+  primary: "#5252E2",
+  primaryLt: "#EEF2FF",
+  ink:     "#1A1C2E",
+  ink2:    "#4B4E6D",
+  muted:   "#8F94B1",
+  border:  "#EAEFF5",
+  accent:  "#5252E2",
 };
 
 // ─────────────────────────────────────────────────────────────
 //  PRICE SLIDER
 // ─────────────────────────────────────────────────────────────
-const TRACK_W = SW - 80; 
+const TRACK_W = SW - 64; 
 const P_MAX   = 5000;
 
 function PriceSlider({ low, high, onChange }: { low: number; high: number; onChange: (l: number, h: number) => void }) {
   const [lowX,  setLowX]  = useState((low / P_MAX) * TRACK_W);
   const [highX, setHighX] = useState((high / P_MAX) * TRACK_W);
 
-  React.useEffect(() => {
+  useEffect(() => {
     setLowX((low / P_MAX) * TRACK_W);
     setHighX((high / P_MAX) * TRACK_W);
   }, [low, high]);
@@ -49,7 +41,7 @@ function PriceSlider({ low, high, onChange }: { low: number; high: number; onCha
     onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder:  () => true,
     onPanResponderMove: (_e, gs) => {
-      const nx = Math.max(0, Math.min(highX - 20, lowX + gs.dx));
+      const nx = Math.max(0, Math.min(highX - 30, lowX + gs.dx));
       setLowX(nx);
       onChange(Math.round((nx / TRACK_W) * P_MAX), high);
     },
@@ -59,7 +51,7 @@ function PriceSlider({ low, high, onChange }: { low: number; high: number; onCha
     onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder:  () => true,
     onPanResponderMove: (_e, gs) => {
-      const nx = Math.max(lowX + 20, Math.min(TRACK_W, highX + gs.dx));
+      const nx = Math.max(lowX + 30, Math.min(TRACK_W, highX + gs.dx));
       setHighX(nx);
       onChange(low, Math.round((nx / TRACK_W) * P_MAX));
     },
@@ -67,40 +59,39 @@ function PriceSlider({ low, high, onChange }: { low: number; high: number; onCha
 
   return (
     <View style={SL.container}>
-      <View style={SL.labelRow}>
-        <View style={SL.priceBox}><Text style={SL.priceLabel}>Min</Text><Text style={SL.priceVal}>₹{low}</Text></View>
-        <View style={SL.priceBox}><Text style={[SL.priceLabel, { textAlign: "right" }]}>Max</Text><Text style={[SL.priceVal, { textAlign: "right" }]}>₹{high === P_MAX ? `${high}+` : high}</Text></View>
-      </View>
       <View style={SL.trackContainer}>
         <View style={SL.trackBg} />
         <View style={[SL.trackFill, { left: lowX, width: Math.max(0, highX - lowX) }]} />
-        <View {...lowPR.panHandlers}  style={[SL.thumb, { left: lowX - 14 }]} />
-        <View {...highPR.panHandlers} style={[SL.thumb, { left: highX - 14 }]} />
+        <View {...lowPR.panHandlers}  style={[SL.thumb, { left: lowX - 12 }]} />
+        <View {...highPR.panHandlers} style={[SL.thumb, { left: highX - 12 }]} />
+      </View>
+      <View style={SL.ticks}>
+        {[0, 1000, 2000, 3000, 4000, 5000].map(v => (
+          <Text key={v} style={SL.tickTxt}>₹{v === 5000 ? "5000+" : v}</Text>
+        ))}
       </View>
     </View>
   );
 }
 
 const SL = StyleSheet.create({
-  container: { marginTop: 10 },
-  labelRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 20 },
-  priceBox: { flex: 1 },
-  priceLabel: { fontSize: 11, color: C.muted, fontWeight: "700", textTransform: "uppercase", marginBottom: 4 },
-  priceVal: { fontSize: 18, fontWeight: "800", color: C.ink },
-  trackContainer: { height: 40, justifyContent: "center" },
-  trackBg:   { position: "absolute", left: 0, right: 0, height: 6, backgroundColor: C.border, borderRadius: 3 },
+  container: { marginTop: 15 },
+  trackContainer: { height: 30, justifyContent: "center" },
+  trackBg:   { position: "absolute", left: 0, right: 0, height: 6, backgroundColor: "#E6EAF5", borderRadius: 3 },
   trackFill: { position: "absolute", height: 6, backgroundColor: C.primary, borderRadius: 3 },
   thumb:     {
-    position: "absolute", width: 28, height: 28, borderRadius: 14,
-    backgroundColor: C.white, borderWidth: 1, borderColor: "rgba(0,0,0,0.05)",
-    shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 6, elevation: 5,
+    position: "absolute", width: 24, height: 24, borderRadius: 12,
+    backgroundColor: C.white, borderWidth: 2, borderColor: C.primary,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3,
   },
+  ticks: { flexDirection: "row", justifyContent: "space-between", marginTop: 8 },
+  tickTxt: { fontSize: 11, fontFamily: "Outfit_500Medium", color: C.muted },
 });
 
 // ─────────────────────────────────────────────────────────────
 //  CALENDAR
 // ─────────────────────────────────────────────────────────────
-const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const DAYS_H = ["S","M","T","W","T","F","S"];
 
 function Calendar({ year, month, start, end, onPrev, onNext, onDay }: any) {
@@ -116,27 +107,33 @@ function Calendar({ year, month, start, end, onPrev, onNext, onDay }: any) {
   return (
     <View style={CAL.wrap}>
       <View style={CAL.nav}>
-        <TouchableOpacity onPress={onPrev} style={CAL.arrow}><Ionicons name="chevron-back" size={18} color={C.ink} /></TouchableOpacity>
         <Text style={CAL.monthYear}>{MONTHS[month]} {year}</Text>
-        <TouchableOpacity onPress={onNext} style={CAL.arrow}><Ionicons name="chevron-forward" size={18} color={C.ink} /></TouchableOpacity>
-      </View>
-      <View style={CAL.dayHRow}>{DAYS_H.map((d, i) => <Text key={i} style={CAL.dayH}>{d}</Text>)}</View>
-      {weeks.map((wk, wi) => (
-        <View key={wi} style={CAL.weekRow}>
-          {wk.map((day, di) => {
-            if (!day) return <View key={di} style={CAL.cell} />;
-            const active = day === start || day === end;
-            const range = start && end && day > Math.min(start, end) && day < Math.max(start, end);
-            return (
-              <TouchableOpacity key={di} style={CAL.cell} onPress={() => onDay(day)} activeOpacity={0.8}>
-                <View style={[CAL.dayCircle, active && CAL.dayActive, range && CAL.dayRange]}>
-                  <Text style={[CAL.dayTxt, active && CAL.dayActiveTxt, range && CAL.dayRangeTxt]}>{day}</Text>
-                </View>
-              </TouchableOpacity>
-            );
-          })}
+        <View style={CAL.arrows}>
+          <TouchableOpacity onPress={onPrev} style={CAL.arrow}><Ionicons name="chevron-back" size={18} color={C.ink} /></TouchableOpacity>
+          <TouchableOpacity onPress={onNext} style={CAL.arrow}><Ionicons name="chevron-forward" size={18} color={C.ink} /></TouchableOpacity>
         </View>
-      ))}
+      </View>
+      <View style={CAL.box}>
+        <View style={CAL.dayHRow}>{DAYS_H.map((d, i) => <Text key={i} style={CAL.dayH}>{d}</Text>)}</View>
+        {weeks.map((wk, wi) => (
+          <View key={wi} style={CAL.weekRow}>
+            {wk.map((day, di) => {
+              if (!day) return <View key={di} style={CAL.cell} />;
+              const isStart = day === start;
+              const isEnd   = day === end;
+              const active  = isStart || isEnd;
+              const range   = start && end && day > Math.min(start, end) && day < Math.max(start, end);
+              return (
+                <TouchableOpacity key={di} style={CAL.cell} onPress={() => onDay(day)} activeOpacity={0.8}>
+                  <View style={[CAL.dayCircle, active && CAL.dayActive, range && CAL.dayRange]}>
+                    <Text style={[CAL.dayTxt, active && CAL.dayActiveTxt, range && CAL.dayRangeTxt]}>{day}</Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        ))}
+      </View>
     </View>
   );
 }
@@ -144,98 +141,174 @@ function Calendar({ year, month, start, end, onPrev, onNext, onDay }: any) {
 const CAL = StyleSheet.create({
   wrap: { marginTop: 10 },
   nav: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 15 },
-  monthYear: { fontSize: 15, fontWeight: "800", color: C.ink },
-  arrow: { width: 32, height: 32, borderRadius: 10, backgroundColor: C.surface, alignItems: "center", justifyContent: "center" },
-  dayHRow: { flexDirection: "row", marginBottom: 10 },
-  dayH: { flex: 1, textAlign: "center", fontSize: 12, fontWeight: "700", color: C.muted },
-  weekRow: { flexDirection: "row", marginBottom: 2 },
-  cell: { flex: 1, alignItems: "center", justifyContent: "center", height: 38 },
-  dayCircle: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },
+  monthYear: { fontSize: 15, fontFamily: "Outfit_600SemiBold", color: C.ink },
+  arrows: { flexDirection: "row", gap: 15 },
+  arrow: { padding: 4 },
+  box: { backgroundColor: C.white, borderRadius: 20, padding: 15, shadowColor: "#000", shadowOpacity: 0.03, shadowRadius: 10, elevation: 2 },
+  dayHRow: { flexDirection: "row", marginBottom: 15 },
+  dayH: { flex: 1, textAlign: "center", fontSize: 12, fontFamily: "Outfit_500Medium", color: C.muted },
+  weekRow: { flexDirection: "row", marginBottom: 4 },
+  cell: { flex: 1, alignItems: "center", justifyContent: "center", height: 40 },
+  dayCircle: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   dayActive: { backgroundColor: C.primary },
-  dayRange: { backgroundColor: C.primaryLt, borderRadius: 0, width: "100%" },
-  dayTxt: { fontSize: 13, fontWeight: "600", color: C.ink },
-  dayActiveTxt: { color: C.white, fontWeight: "800" },
-  dayRangeTxt: { color: C.primary, fontWeight: "700" },
+  dayRange: { backgroundColor: "#EEF2FF", borderRadius: 0, width: "100%" },
+  dayTxt: { fontSize: 14, fontFamily: "Outfit_500Medium", color: C.ink },
+  dayActiveTxt: { color: C.white, fontFamily: "Outfit_700Bold" },
+  dayRangeTxt: { color: C.ink },
 });
 
 // ─────────────────────────────────────────────────────────────
 //  SHEET COMPONENT
 // ─────────────────────────────────────────────────────────────
-const QUICK_PRICES = [
-  { label: "Free", low: 0, high: 0 },
-  { label: "Under ₹500", low: 0, high: 500 },
-  { label: "₹500 - ₹1k", low: 500, high: 1000 },
-  { label: "₹1k - ₹2k", low: 1000, high: 2000 },
+const CATS = [
+  { label: "Social", icon: "🎡" },
+  { label: "Fitness", icon: "🏋️" },
+  { label: "Wellness", icon: "🧘" },
+  { label: "Food", icon: "🍴" },
+  { label: "Outdoor", icon: "🧗" },
 ];
-const CATEGORIES = ["Social", "Fitness", "Wellness", "Food", "Tech", "Music"];
 
-export default function FilterSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  const [kind, setKind] = useState("All");
-  const [priceLow, setPriceLow] = useState(0);
-  const [priceHigh, setPriceHigh] = useState(5000);
+export type FilterData = {
+  kind: string;
+  cat: string;
+  priceLow: number;
+  priceHigh: number;
+  dateFrom: number | null;
+  dateTo: number | null;
+};
+
+export default function FilterSheet({ 
+  visible, 
+  onClose,
+  initialFilters,
+  onApply
+}: { 
+  visible: boolean; 
+  onClose: () => void;
+  initialFilters?: Partial<FilterData>;
+  onApply?: (data: FilterData) => void;
+}) {
+  const [kind, setKind] = useState(initialFilters?.kind || "All");
+  const [cat, setCat] = useState(initialFilters?.cat || "All");
+  const [priceLow, setPriceLow] = useState(initialFilters?.priceLow ?? 0);
+  const [priceHigh, setPriceHigh] = useState(initialFilters?.priceHigh ?? 5000);
   const [calMonth, setCalMonth] = useState(new Date().getMonth());
   const [calYear, setCalYear] = useState(new Date().getFullYear());
-  const [dateFrom, setDateFrom] = useState<number | null>(null);
-  const [dateTo, setDateTo] = useState<number | null>(null);
+  const [dateFrom, setDateFrom] = useState<number | null>(initialFilters?.dateFrom ?? null);
+  const [dateTo, setDateTo] = useState<number | null>(initialFilters?.dateTo ?? null);
+
+  const sheetAnim = useRef(new Animated.Value(SH)).current;
+
+  useEffect(() => {
+    if (visible) Animated.spring(sheetAnim, { toValue: SH * 0.1, useNativeDriver: false, friction: 8 }).start();
+    else Animated.timing(sheetAnim, { toValue: SH, duration: 250, useNativeDriver: false }).start();
+  }, [visible]);
+
+  useEffect(() => {
+    if (visible && initialFilters) {
+      setKind(initialFilters.kind || "All");
+      setCat(initialFilters.cat || "All");
+      setPriceLow(initialFilters.priceLow ?? 0);
+      setPriceHigh(initialFilters.priceHigh ?? 5000);
+      setDateFrom(initialFilters.dateFrom ?? null);
+      setDateTo(initialFilters.dateTo ?? null);
+    }
+  }, [visible, initialFilters]);
+
+  const pan = useRef(PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onPanResponderMove: (_e, gs) => { sheetAnim.setValue(Math.max(0, SH * 0.1 + gs.dy)); },
+    onPanResponderRelease: (_e, gs) => {
+      if (gs.dy < -50) Animated.spring(sheetAnim, { toValue: 0, useNativeDriver: false }).start();
+      else if (gs.dy > 150) onClose();
+      else Animated.spring(sheetAnim, { toValue: SH * 0.1, useNativeDriver: false }).start();
+    }
+  })).current;
 
   const handleDay = (d: number) => {
     if (!dateFrom || (dateFrom && dateTo)) { setDateFrom(d); setDateTo(null); }
     else { d < dateFrom ? (setDateTo(dateFrom), setDateFrom(d)) : setDateTo(d); }
   };
 
+  const handleApply = () => {
+    onApply?.({ kind, cat, priceLow, priceHigh, dateFrom, dateTo });
+    onClose();
+  };
+
+  const handleReset = () => {
+    setKind("All");
+    setCat("All");
+    setPriceLow(0);
+    setPriceHigh(5000);
+    setDateFrom(null);
+    setDateTo(null);
+  };
+
+  if (!visible) return null;
+
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
       <View style={FS.root}>
         <TouchableOpacity style={FS.backdrop} activeOpacity={1} onPress={onClose} />
         
-        <View style={FS.sheet}>
-          <View style={FS.grabber} />
+        <Animated.View style={[FS.sheet, { top: sheetAnim }]}>
+          <View {...pan.panHandlers} style={FS.dragArea}>
+            <View style={FS.grabber} />
+          </View>
           
           <View style={FS.header}>
+            <TouchableOpacity onPress={onClose} style={FS.closeBtn}><Ionicons name="close" size={24} color={C.ink} /></TouchableOpacity>
             <Text style={FS.headerTitle}>Filters</Text>
-            <TouchableOpacity onPress={() => { setKind("All"); setPriceLow(0); setPriceHigh(5000); setDateFrom(null); setDateTo(null); }}>
+            <TouchableOpacity onPress={handleReset}>
               <Text style={FS.resetTxt}>Reset</Text>
             </TouchableOpacity>
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={FS.scroll}>
+            
             {/* Categories */}
             <View style={FS.sec}>
               <Text style={FS.secTitle}>Categories</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={FS.pillRow}>
-                {CATEGORIES.map(c => (
-                  <TouchableOpacity key={c} style={FS.pill}><Text style={FS.pillTxt}>{c}</Text></TouchableOpacity>
-                ))}
-              </ScrollView>
+              <View style={FS.catGrid}>
+                {["All", "Social", "Fitness", "Wellness", "Food", "Outdoor", "Activity"].map(item => {
+                  const active = cat === item;
+                  const icons: any = { All: "🌐", Social: "🎡", Fitness: "🏋️", Wellness: "🧘", Food: "🍴", Outdoor: "🧗", Activity: "🚴" };
+                  return (
+                    <TouchableOpacity key={item} onPress={() => setCat(item)} style={[FS.catPill, active && FS.catPillOn]}>
+                      <Text style={FS.catIcon}>{icons[item]}</Text>
+                      <Text style={[FS.catTxt, active && FS.catTxtOn]}>{item}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
             </View>
 
             {/* Event Type */}
             <View style={FS.sec}>
               <Text style={FS.secTitle}>Event Type</Text>
-              <View style={FS.grid}>
-                {["All", "Free", "Paid", "Service"].map(k => (
-                  <TouchableOpacity key={k} onPress={() => setKind(k)} style={[FS.gridItem, kind === k && FS.gridItemOn]}>
-                    <Text style={[FS.gridTxt, kind === k && FS.gridTxtOn]}>{k}</Text>
-                  </TouchableOpacity>
-                ))}
+              <View style={FS.segment}>
+                {["All", "Free", "Paid", "Service"].map(k => {
+                  const active = kind === k;
+                  return (
+                    <TouchableOpacity key={k} onPress={() => setKind(k)} style={[FS.segItem, active && FS.segItemOn]}>
+                      <Text style={[FS.segTxt, active && FS.segTxtOn]}>{k}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             </View>
 
-            {/* Price */}
+            {/* Price Range */}
             <View style={FS.sec}>
-              <Text style={FS.secTitle}>Price Range</Text>
-              <View style={FS.quickRow}>
-                {QUICK_PRICES.map(qp => (
-                  <TouchableOpacity key={qp.label} onPress={() => { setPriceLow(qp.low); setPriceHigh(qp.high); }} style={[FS.qPill, priceLow === qp.low && priceHigh === qp.high && FS.qPillOn]}>
-                    <Text style={[FS.qPillTxt, priceLow === qp.low && priceHigh === qp.high && FS.qPillTxtOn]}>{qp.label}</Text>
-                  </TouchableOpacity>
-                ))}
+              <View style={FS.rowBetween}>
+                <Text style={FS.secTitle}>Price Range</Text>
+                <View style={FS.valPill}><Text style={FS.valPillTxt}>₹{priceLow} - ₹{priceHigh === 5000 ? "5000+" : priceHigh}</Text></View>
               </View>
               <PriceSlider low={priceLow} high={priceHigh} onChange={(l, h) => { setPriceLow(l); setPriceHigh(h); }} />
             </View>
 
-            {/* Date */}
-            <View style={[FS.sec, { borderBottomWidth: 0 }]}>
+            {/* Date Range */}
+            <View style={FS.sec}>
               <Text style={FS.secTitle}>Date Range</Text>
               <Calendar
                 year={calYear} month={calMonth} start={dateFrom} end={dateTo}
@@ -244,51 +317,74 @@ export default function FilterSheet({ visible, onClose }: { visible: boolean; on
                 onDay={handleDay}
               />
             </View>
+
           </ScrollView>
 
+
           <View style={FS.footer}>
-            <TouchableOpacity style={FS.applyBtn} onPress={onClose}>
-              <LinearGradient colors={["#22C55E", "#16A34A"]} style={FS.gradient}>
-                <Text style={FS.applyBtnTxt}>Apply Filters</Text>
-              </LinearGradient>
+            <TouchableOpacity style={FS.applyBtn} onPress={handleApply}>
+              <Text style={FS.applyBtnTxt}>Apply Filters</Text>
+              <Ionicons name="filter" size={18} color="#FFF" style={{ marginLeft: 8 }} />
             </TouchableOpacity>
           </View>
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );
 }
 
+
 const FS = StyleSheet.create({
-  root: { flex: 1, justifyContent: "flex-end" },
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.4)" },
+  root: { flex: 1 },
+  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(26,28,46,0.6)" },
   sheet: {
-    height: "85%", backgroundColor: C.bg,
-    borderTopLeftRadius: 32, borderTopRightRadius: 32,
-    shadowColor: "#000", shadowOffset: { width: 0, height: -10 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 20,
+    position: "absolute", left: 0, right: 0, bottom: 0,
+    backgroundColor: C.bg, borderTopLeftRadius: 35, borderTopRightRadius: 35,
+    shadowColor: "#000", shadowOffset: { width: 0, height: -10 }, shadowOpacity: 0.1, shadowRadius: 25, elevation: 25,
+    overflow: "hidden"
   },
-  grabber: { width: 40, height: 4, borderRadius: 2, backgroundColor: C.border, alignSelf: "center", marginTop: 12 },
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 24, paddingTop: 20, paddingBottom: 15 },
-  headerTitle: { fontSize: 20, fontWeight: "900", color: C.ink },
-  resetTxt: { fontSize: 14, fontWeight: "700", color: C.primary },
-  scroll: { paddingHorizontal: 24, paddingBottom: 100 },
-  sec: { paddingTop: 20, paddingBottom: 24, borderBottomWidth: 1, borderBottomColor: C.border },
-  secTitle: { fontSize: 16, fontWeight: "900", color: C.ink, marginBottom: 16 },
-  pillRow: { gap: 8 },
-  pill: { paddingHorizontal: 18, paddingVertical: 8, borderRadius: 12, backgroundColor: C.surface, borderWidth: 1, borderColor: C.border },
-  pillTxt: { fontSize: 13, fontWeight: "700", color: C.ink2 },
-  grid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  gridItem: { flex: 1, minWidth: "45%", paddingVertical: 12, borderRadius: 14, backgroundColor: C.surface, alignItems: "center", borderWidth: 1, borderColor: C.border },
-  gridItemOn: { backgroundColor: C.ink, borderColor: C.ink },
-  gridTxt: { fontSize: 14, fontWeight: "800", color: C.ink2 },
-  gridTxtOn: { color: C.white },
-  quickRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 16 },
-  qPill: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: C.surface, borderWidth: 1, borderColor: C.border },
-  qPillOn: { backgroundColor: C.primaryLt, borderColor: C.primary },
-  qPillTxt: { fontSize: 12, fontWeight: "700", color: C.muted },
-  qPillTxtOn: { color: C.primary, fontWeight: "800" },
-  footer: { position: "absolute", bottom: 0, left: 0, right: 0, paddingHorizontal: 24, paddingBottom: Platform.OS === "ios" ? 34 : 20, paddingTop: 15, backgroundColor: "rgba(255,255,255,0.9)" },
-  applyBtn: { height: 56, borderRadius: 18, overflow: "hidden" },
-  gradient: { flex: 1, alignItems: "center", justifyContent: "center" },
-  applyBtnTxt: { fontSize: 16, fontWeight: "900", color: C.white },
+  dragArea: { width: "100%", paddingVertical: 12, alignItems: "center" },
+  grabber: { width: 40, height: 5, borderRadius: 3, backgroundColor: "#D1D9E6" },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingBottom: 20 },
+  headerTitle: { fontSize: 18, fontFamily: "Outfit_700Bold", color: C.ink },
+  closeBtn: { padding: 4 },
+  resetTxt: { fontSize: 14, fontFamily: "Outfit_600SemiBold", color: C.muted },
+
+  scroll: { paddingHorizontal: 20, paddingBottom: 130 },
+  sec: { paddingVertical: 20, borderBottomWidth: 1.5, borderBottomColor: "#F0F3F9" },
+  secTitle: { fontSize: 16, fontFamily: "Outfit_700Bold", color: C.ink },
+  
+  catGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 15 },
+  catPill: { 
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, backgroundColor: "#E9F0FF" 
+  },
+  catPillOn: { backgroundColor: C.primary },
+  catIcon: { fontSize: 16 },
+  catTxt: { fontSize: 14, fontFamily: "Outfit_600SemiBold", color: C.ink2 },
+  catTxtOn: { color: C.white },
+
+  segment: { flexDirection: "row", backgroundColor: "#F0F3F9", borderRadius: 15, padding: 5, marginTop: 15 },
+  segItem: { flex: 1, paddingVertical: 10, alignItems: "center", borderRadius: 12 },
+  segItemOn: { backgroundColor: C.primary, shadowColor: C.primary, shadowOpacity: 0.2, shadowRadius: 10, elevation: 4 },
+  segTxt: { fontSize: 14, fontFamily: "Outfit_600SemiBold", color: C.muted },
+  segTxtOn: { color: C.white },
+
+  rowBetween: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  valPill: { backgroundColor: "#E9EDF7", paddingHorizontal: 12, paddingVertical: 4, borderRadius: 10 },
+  valPillTxt: { fontSize: 13, fontFamily: "Outfit_600SemiBold", color: C.primary },
+
+  radiusVal: { fontSize: 13, fontFamily: "Outfit_600SemiBold", color: C.muted },
+  radSlider: { height: 30, justifyContent: "center", marginTop: 10 },
+  radTrack: { height: 4, backgroundColor: "#E6EAF5", borderRadius: 2 },
+  radFill: { position: "absolute", height: 4, backgroundColor: C.primary, borderRadius: 2 },
+  radThumb: { position: "absolute", width: 20, height: 20, borderRadius: 10, backgroundColor: C.primary, borderWidth: 3, borderColor: "#FFF" },
+
+  footer: { position: "absolute", bottom: 0, left: 0, right: 0, paddingHorizontal: 20, paddingBottom: Platform.OS === "ios" ? 40 : 25, paddingTop: 15, backgroundColor: "#FFF" },
+  applyBtn: { 
+    height: 60, borderRadius: 20, backgroundColor: C.primary,
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    shadowColor: C.primary, shadowOpacity: 0.3, shadowRadius: 15, elevation: 8
+  },
+  applyBtnTxt: { fontSize: 16, fontFamily: "Outfit_800ExtraBold", color: C.white },
 });

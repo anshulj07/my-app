@@ -1,31 +1,27 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   View, Text, TouchableOpacity, Animated, ScrollView, Image,
-  Modal, ActivityIndicator, Platform, StyleSheet, Dimensions
+  Modal, ActivityIndicator, Platform, StyleSheet, Dimensions, StatusBar, Share
 } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import Constants from "expo-constants";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { apiFetch } from "../../lib/apiFetch";
+import AttendanceSheet from "../MyBookings/AttendanceSheet";
 
-// ─────────────────────────────────────────────
-//  DESIGN TOKENS
-// ─────────────────────────────────────────────
+
+const { width: SW } = Dimensions.get("window");
+
 const C = {
-  bg:          "#FFFBF5",
-  card:        "#FFFFFF",
-  cardBorder:  "#F0EBE3",
-  inputBg:     "#FAF7F2",
-  ink:         "#1C1A17",
-  muted:       "#8A8278",
-  hint:        "#BCB6AD",
-  teal:        "#3ECFB2",
-  tealBg:      "#E8FAF7",
-  amber:       "#F59E0B",
-  amberBg:     "#FFFBEB",
-  amberText:   "#92400E",
-  green:       "#34D399",
-  greenBg:     "#ECFDF5",
-  greenText:   "#065F46",
+  bg:          "#F7F8F4",
+  white:       "#FFFFFF",
+  ink:         "#191919",
+  muted:       "#888888",
+  accent:      "#6C63FF",
+  accentLight: "#EEF2FF",
+  border:      "#EEEEEE",
+  gold:        "#F59E0B",
+  blue:        "#3B82F6",
 };
 
 export interface SummaryEventData {
@@ -35,6 +31,9 @@ export interface SummaryEventData {
   kind: "free" | "paid" | "service";
   priceCents?: number | null;
   attendees?: any[];
+  location?: { formattedAddress?: string; city?: string };
+  bannerUri?: string;
+  bannerImage?: string;
 }
 
 interface HistorySummaryModalProps {
@@ -44,9 +43,12 @@ interface HistorySummaryModalProps {
 }
 
 export default function HistorySummaryModal({ visible, onClose, event: e }: HistorySummaryModalProps) {
+  const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(true);
   const [reviews, setReviews] = useState<any[]>([]);
+  const [showAttendance, setShowAttendance] = useState(false);
   const slideY = useRef(new Animated.Value(Dimensions.get("window").height)).current;
+
 
   const API_BASE = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
   const EVENT_API_KEY = (Constants.expoConfig?.extra as any)?.eventApiKey as string | undefined;
@@ -59,7 +61,6 @@ export default function HistorySummaryModal({ visible, onClose, event: e }: Hist
       fetchReviews();
     } else {
       Animated.timing(slideY, { toValue: Dimensions.get("window").height, duration: 250, useNativeDriver: true }).start();
-      setReviews([]);
     }
   }, [visible, e]);
 
@@ -76,195 +77,235 @@ export default function HistorySummaryModal({ visible, onClose, event: e }: Hist
     }
   };
 
+  const handleShare = async () => {
+    try {
+      await Share.share({
+        title: e?.title || "Event Summary",
+        message: `Check out the summary for ${e?.title}!`,
+      });
+    } catch {}
+  };
+
   if (!e) return null;
 
   const attendees = Array.isArray(e.attendees) ? e.attendees : [];
   const checkedIn = attendees.filter((a: any) => a.checkedIn).length;
-  const total = attendees.length;
+  const totalGuests = attendees.length || 0;
+  const progress = totalGuests > 0 ? Math.min(1, checkedIn / totalGuests) : 0;
   const avgRating = reviews.length > 0 ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(1) : "0.0";
-  const estimatedRevenue = e.kind === "paid" ? checkedIn * ((e.priceCents || 0) / 100) : 0;
-
-  const renderStars = (rating: number, size = 16) => (
-    <View style={{ flexDirection: "row", gap: 2 }}>
-      {[1, 2, 3, 4, 5].map((s) => (
-        <Ionicons key={s} name={s <= rating ? "star" : "star-outline"} size={size} color={s <= rating ? C.amber : C.hint} />
-      ))}
-    </View>
-  );
+  const revenue = e.priceCents ? ((e.priceCents * checkedIn) / 100).toFixed(0) : "0";
+  
+  const banner = e.bannerUri || e.bannerImage || "";
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
       <View style={S.overlay}>
         <Animated.View style={[S.sheet, { transform: [{ translateY: slideY }] }]}>
-          {/* Header */}
-          <View style={S.header}>
-            <TouchableOpacity onPress={onClose} style={S.backBtn}>
-              <Ionicons name="arrow-back" size={22} color={C.ink} />
+          <StatusBar barStyle="dark-content" />
+          
+          {/* HEADER */}
+          <View style={[S.header, { paddingTop: insets.top + 10 }]}>
+            <TouchableOpacity onPress={onClose} style={S.iconBtn}>
+              <Ionicons name="arrow-back" size={24} color={C.ink} />
             </TouchableOpacity>
-            <View style={{ flex: 1 }}>
-              <Text style={S.headerTitle} numberOfLines={1}>{e.title}</Text>
-              <Text style={S.headerSub}>MEETUP SUMMARY</Text>
-            </View>
-            <View style={S.endedBadge}>
-              <Text style={S.endedText}>CONCLUDED</Text>
-            </View>
+            <Text style={S.headerTitle}>Summary</Text>
+            <TouchableOpacity onPress={handleShare} style={S.iconBtn}>
+              <Ionicons name="share-outline" size={24} color={C.ink} />
+            </TouchableOpacity>
           </View>
 
-          <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 60 }}>
-            {/* Stats Overview */}
-            <View style={S.statsGrid}>
-              <View style={S.statCard}>
-                <View style={[S.iconBox, { backgroundColor: C.tealBg }]}>
-                  <Ionicons name="people" size={20} color={C.teal} />
-                </View>
-                <Text style={S.statValue}>{checkedIn}<Text style={{ fontSize: 13, color: C.hint }}>/{total}</Text></Text>
-                <Text style={S.statLabel}>Guests Checked-in</Text>
-              </View>
-              <View style={S.statCard}>
-                <View style={[S.iconBox, { backgroundColor: C.amberBg }]}>
-                  <Ionicons name="star" size={20} color={C.amber} />
-                </View>
-                <Text style={S.statValue}>{avgRating}</Text>
-                {renderStars(Math.round(Number(avgRating)), 12)}
-                <Text style={S.statLabel}>Avg Experience</Text>
-              </View>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 60 }}>
+            
+            {/* HERO IMAGE */}
+            <View style={S.heroContainer}>
+               {banner ? (
+                 <Image source={{ uri: banner }} style={S.heroImg} />
+               ) : (
+                 <View style={[S.heroImg, { backgroundColor: '#E2E8F0', justifyContent: 'center', alignItems: 'center' }]}>
+                    <Text style={{ fontSize: 80 }}>{e.emoji || "📍"}</Text>
+                 </View>
+               )}
+               <View style={S.concludedBadge}>
+                 <Text style={S.concludedText}>Concluded</Text>
+               </View>
             </View>
 
-            {/* Revenue Highlights (if paid) */}
-            {e.kind === "paid" && (
-              <View style={S.revenueCard}>
-                <View style={S.revInfo}>
-                  <Text style={S.revLabel}>Total Revenue Generated</Text>
-                  <Text style={S.revValue}>₹{estimatedRevenue.toFixed(0)}</Text>
-                </View>
-                <View style={[S.iconBox, { backgroundColor: C.greenBg, width: 48, height: 48 }]}>
-                  <Ionicons name="wallet" size={22} color={C.green} />
-                </View>
-              </View>
-            )}
+            {/* TITLE & LOC */}
+            <View style={S.infoSection}>
+               <Text style={S.title}>{e.title}</Text>
+               <View style={S.locRow}>
+                  <Ionicons name="location-outline" size={16} color={C.muted} />
+                  <Text style={S.locText}>{e.location?.formattedAddress || "Venue Location"}</Text>
+               </View>
+            </View>
 
-            {/* Feedback Section */}
-            <View style={S.feedbackSection}>
-              <Text style={S.sectionTitle}>Guest Feedback ({reviews.length})</Text>
-              {loading ? (
-                <ActivityIndicator size="large" color={C.teal} style={{ marginTop: 20 }} />
-              ) : reviews.length === 0 ? (
-                <View style={S.emptyFeedback}>
-                  <Text style={{ fontSize: 40, marginBottom: 10 }}>📝</Text>
-                  <Text style={S.emptyFeedbackTitle}>No reviews yet</Text>
-                  <Text style={S.emptyFeedbackSub}>Ratings will appear here as guests submit them.</Text>
-                </View>
-              ) : (
-                <View style={{ gap: 14 }}>
-                  {reviews.map((r, i) => {
-                    const attendee = attendees.find(a => a.clerkId === r.reviewerId || a.clerkUserId === r.reviewerId);
-                    return (
-                      <View key={i} style={S.reviewCard}>
-                        <View style={S.reviewHeader}>
-                          <View style={S.reviewerAvatar}>
-                            <Text style={S.avatarText}>{(attendee?.name || "G")[0]}</Text>
-                          </View>
-                          <View style={{ flex: 1 }}>
-                            <Text style={S.reviewerName}>{attendee?.name || "Guest"}</Text>
-                            <Text style={S.reviewDate}>{new Date(r.createdAt).toLocaleDateString()}</Text>
-                          </View>
-                          {renderStars(r.rating, 14)}
+            {/* STATS CARDS */}
+            <View style={S.statsGrid}>
+               {/* Attendance */}
+               <TouchableOpacity 
+                 style={S.statCard} 
+                 activeOpacity={0.7}
+                 onPress={() => setShowAttendance(true)}
+               >
+                  <View style={S.statHeader}>
+                    <Text style={S.statLabel}>Attendance</Text>
+                    <Ionicons name="people" size={16} color={C.accent} />
+                  </View>
+                  <Text style={S.statMain}>{checkedIn} <Text style={S.statSub}>/ {totalGuests} guests</Text></Text>
+                  <View style={S.progressBg}>
+                    <View style={[S.progressFill, { width: `${progress * 100}%` }]} />
+                  </View>
+               </TouchableOpacity>
+
+
+               {/* Earnings / Revenue */}
+               <View style={[S.statCard, S.engagementCard]}>
+                  <View style={S.statHeader}>
+                    <Text style={[S.statLabel, { color: '#fff' }]}>Total Earnings</Text>
+                    <Ionicons name="wallet" size={16} color="#fff" />
+                  </View>
+                  <Text style={[S.statMain, { color: '#fff' }]}>₹{revenue}</Text>
+                  <Text style={S.statHint}>{checkedIn} paid check-ins</Text>
+               </View>
+            </View>
+
+            {/* RATING & ENGAGEMENT */}
+            <View style={S.ratingCard}>
+               <View style={{ flex: 1 }}>
+                  <Text style={S.statLabel}>Avg. Rating</Text>
+                  <View style={S.ratingRow}>
+                    <Text style={S.ratingMain}>{avgRating}</Text>
+                    <View style={S.starsRow}>
+                       {[1,2,3,4,5].map(s => <Ionicons key={s} name="star" size={14} color={s <= Math.round(Number(avgRating)) ? C.gold : C.border} />)}
+                    </View>
+                  </View>
+               </View>
+               <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                  <Text style={S.statLabel}>Engagement</Text>
+                  <View style={[S.row, { marginTop: 5 }]}>
+                    <Ionicons name="trending-up" size={18} color={C.accent} />
+                    <Text style={[S.statMain, { marginLeft: 5, fontSize: 24 }]}>High</Text>
+                  </View>
+               </View>
+            </View>
+
+            {/* FEEDBACK SECTION */}
+            <View style={S.feedbackHeader}>
+               <Text style={S.sectionTitle}>Guest Feedback ({reviews.length})</Text>
+               <TouchableOpacity><Text style={S.seeAll}>See All</Text></TouchableOpacity>
+            </View>
+
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false} 
+              contentContainerStyle={{ paddingHorizontal: 20, gap: 15 }}
+            >
+              {reviews.length > 0 ? reviews.map((r, i) => (
+                <View key={i} style={S.feedbackCard}>
+                   <View style={S.feedbackUser}>
+                      <Image source={{ uri: r.userAvatar || `https://i.pravatar.cc/100?u=${i}` }} style={S.feedbackAvatar} />
+                      <View>
+                        <Text style={S.feedbackName}>{r.userName || "Guest"}</Text>
+                        <View style={S.starsRow}>
+                           {[1,2,3,4,5].map(s => <Ionicons key={s} name="star" size={10} color={s <= r.rating ? C.gold : C.border} />)}
                         </View>
-                        {!!r.comment && (
-                          <Text style={S.reviewComment}>"{r.comment}"</Text>
-                        )}
-
-                        {/* Review Images */}
-                        {Array.isArray(r.images) && r.images.length > 0 && (
-                          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={S.reviewImagesScroll} contentContainerStyle={{ gap: 8 }}>
-                            {r.images.map((imgUrl: string, imgIdx: number) => (
-                              <View key={imgIdx} style={S.reviewImageWrap}>
-                                <Image source={{ uri: imgUrl }} style={S.reviewImage} />
-                              </View>
-                            ))}
-                          </ScrollView>
-                        )}
                       </View>
-                    );
-                  })}
+                   </View>
+                   <Text style={S.feedbackComment} numberOfLines={3}>"{r.comment}"</Text>
+                </View>
+              )) : (
+                <View style={[S.feedbackCard, { width: SW - 40, alignItems: 'center' }]}>
+                   <Text style={{ color: C.muted }}>No feedback yet</Text>
                 </View>
               )}
-            </View>
+            </ScrollView>
+
           </ScrollView>
+
         </Animated.View>
       </View>
+
+      <AttendanceSheet 
+        visible={showAttendance}
+        onClose={() => setShowAttendance(false)}
+        attendees={attendees}
+      />
     </Modal>
   );
 }
 
 const S = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)" },
-  sheet:   { flex: 1, backgroundColor: C.bg, marginTop: Platform.OS === "ios" ? 44 : 20, borderTopLeftRadius: 30, borderTopRightRadius: 30, overflow: 'hidden' },
+  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)" },
+  sheet:   { flex: 1, backgroundColor: C.bg, marginTop: Platform.OS === "ios" ? 0 : 0 },
+  row:     { flexDirection: "row", alignItems: "center" },
 
-  header: {
-    flexDirection: "row", alignItems: "center", gap: 14,
-    paddingHorizontal: 20, paddingVertical: 20,
-    borderBottomWidth: 1.5, borderBottomColor: C.cardBorder,
-    backgroundColor: C.card,
-  },
-  backBtn: {
-    width: 44, height: 44, borderRadius: 12,
-    backgroundColor: C.card, borderWidth: 1.5, borderColor: C.cardBorder,
-    alignItems: "center", justifyContent: "center",
-  },
-  headerTitle: { fontSize: 20, fontWeight: "900", color: C.ink, letterSpacing: -0.5 },
-  headerSub:   { color: C.muted, fontSize: 11, fontWeight: "800", letterSpacing: 0.5, marginTop: 2 },
-  endedBadge: {
-    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8,
-    backgroundColor: C.inputBg, borderWidth: 1, borderColor: C.cardBorder,
-  },
-  endedText: { color: C.hint, fontSize: 10, fontWeight: "900" },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 15, backgroundColor: C.bg },
+  iconBtn: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
+  headerTitle: { fontSize: 18, fontWeight: "800", color: C.ink },
 
-  statsGrid: { flexDirection: "row", gap: 14, padding: 20 },
-  statCard: {
-    flex: 1, backgroundColor: C.card, borderRadius: 24, padding: 20,
-    borderWidth: 1.5, borderColor: C.cardBorder,
-    alignItems: "center", justifyContent: "center",
+  heroContainer: { marginHorizontal: 20, marginTop: 15, height: 200, borderRadius: 32, overflow: "hidden" },
+  heroImg: { width: "100%", height: "100%" },
+  concludedBadge: { 
+    position: "absolute", top: 15, left: 15, 
+    backgroundColor: C.accent + "CC", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 
   },
-  iconBox: {
-    width: 40, height: 40, borderRadius: 12,
-    alignItems: "center", justifyContent: "center", marginBottom: 12,
-  },
-  statValue: { fontSize: 26, fontWeight: "900", color: C.ink, marginBottom: 4 },
-  statLabel: { fontSize: 11, fontWeight: "700", color: C.muted, textAlign: "center" },
+  concludedText: { color: "#fff", fontSize: 10, fontWeight: "900", textTransform: "uppercase" },
 
-  revenueCard: {
-    flexDirection: "row", alignItems: "center", gap: 16,
-    marginHorizontal: 20, marginBottom: 24, padding: 20,
-    backgroundColor: C.card, borderRadius: 24,
-    borderWidth: 1.5, borderColor: C.cardBorder,
-  },
-  revInfo:  { flex: 1 },
-  revLabel: { fontSize: 11, fontWeight: "800", color: C.muted, marginBottom: 4, textTransform: "uppercase" },
-  revValue: { fontSize: 24, fontWeight: "900", color: C.greenText },
+  infoSection: { paddingHorizontal: 25, marginTop: 20 },
+  title: { fontSize: 28, fontWeight: "900", color: C.ink },
+  locRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 5 },
+  locText: { fontSize: 14, color: C.muted, fontWeight: "600" },
 
-  feedbackSection: { paddingHorizontal: 20 },
-  sectionTitle:    { fontSize: 12, fontWeight: "800", color: C.muted, textTransform: "uppercase", letterSpacing: 1.2, marginBottom: 16 },
+  statsGrid: { flexDirection: "row", gap: 15, paddingHorizontal: 25, marginTop: 25 },
+  statCard: { flex: 1, backgroundColor: C.white, borderRadius: 24, padding: 15, shadowColor: "#000", shadowOpacity: 0.03, shadowRadius: 10, elevation: 2 },
+  engagementCard: { backgroundColor: C.accent },
+  statHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 },
+  statLabel: { fontSize: 12, fontWeight: "800", color: C.muted },
+  statMain: { fontSize: 20, fontWeight: "900", color: C.ink },
+  statSub: { fontSize: 12, color: C.muted, fontWeight: "600" },
+  statHint: { fontSize: 10, color: "#EEF2FF", fontWeight: "700", marginTop: 5 },
   
-  reviewCard: {
-    backgroundColor: C.card, padding: 16, borderRadius: 20,
-    borderWidth: 1.5, borderColor: C.cardBorder,
-    marginBottom: 12,
-  },
-  reviewHeader: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 10 },
-  reviewerAvatar: {
-    width: 36, height: 36, borderRadius: 12,
-    backgroundColor: C.inputBg, alignItems: "center", justifyContent: "center",
-  },
-  avatarText: { color: C.ink, fontSize: 14, fontWeight: "900" },
-  reviewerName: { fontSize: 14, fontWeight: "800", color: C.ink },
-  reviewDate: { fontSize: 11, color: C.hint, marginTop: 2 },
-  reviewComment: { fontSize: 13, color: C.muted, fontStyle: "italic", lineHeight: 20, marginTop: 4 },
-  reviewImagesScroll: { marginTop: 12 },
-  reviewImageWrap: { width: 90, height: 90, borderRadius: 12, overflow: "hidden", backgroundColor: C.inputBg, borderWidth: 1, borderColor: C.cardBorder },
-  reviewImage: { width: "100%", height: "100%" },
+  progressBg: { height: 6, backgroundColor: C.accentLight, borderRadius: 3, marginTop: 12, overflow: "hidden" },
+  progressFill: { height: "100%", backgroundColor: C.accent, borderRadius: 3 },
 
-  emptyFeedback: { alignItems: "center", paddingVertical: 40 },
-  emptyFeedbackTitle: { fontSize: 16, fontWeight: "800", color: C.ink, marginBottom: 4 },
-  emptyFeedbackSub: { fontSize: 13, color: C.muted, textAlign: "center", paddingHorizontal: 40 },
+  ratingCard: { 
+    flexDirection: "row", alignItems: "center", backgroundColor: C.white, 
+    marginHorizontal: 25, marginTop: 15, padding: 20, borderRadius: 24,
+    shadowColor: "#000", shadowOpacity: 0.03, shadowRadius: 10, elevation: 2 
+  },
+  ratingRow: { flexDirection: "row", alignItems: "baseline", gap: 10, marginTop: 5 },
+  ratingMain: { fontSize: 32, fontWeight: "900", color: C.ink },
+  starsRow: { flexDirection: "row", gap: 2 },
+  
+  miniChart: { flexDirection: "row", alignItems: "flex-end", gap: 4, height: 40 },
+  chartBar: { width: 6, borderRadius: 3 },
+
+  feedbackHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 25, marginTop: 30, marginBottom: 15 },
+  sectionTitle: { fontSize: 16, fontWeight: "900", color: C.ink },
+  seeAll: { fontSize: 12, fontWeight: "800", color: C.accent },
+
+  feedbackCard: { 
+    width: SW * 0.7, backgroundColor: C.white, borderRadius: 24, padding: 15,
+    borderWidth: 1, borderColor: C.border 
+  },
+  feedbackUser: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 },
+  feedbackAvatar: { width: 36, height: 36, borderRadius: 18 },
+  feedbackName: { fontSize: 13, fontWeight: "800", color: C.ink },
+  feedbackComment: { fontSize: 12, color: C.muted, lineHeight: 18, fontStyle: "italic" },
+
+  footer: { 
+    position: "absolute", bottom: 0, left: 0, right: 0, 
+    backgroundColor: C.bg, paddingHorizontal: 25, paddingTop: 15, gap: 12 
+  },
+  outlineBtn: { 
+    height: 56, borderRadius: 18, borderWidth: 2, borderColor: C.accent, 
+    alignItems: "center", justifyContent: "center" 
+  },
+  outlineBtnText: { color: C.accent, fontSize: 16, fontWeight: "800" },
+  solidBtn: { 
+    height: 56, borderRadius: 18, backgroundColor: C.accent, 
+    alignItems: "center", justifyContent: "center",
+    shadowColor: C.accent, shadowOpacity: 0.2, shadowRadius: 10, elevation: 5
+  },
+  solidBtnText: { color: "#fff", fontSize: 16, fontWeight: "800" },
 });

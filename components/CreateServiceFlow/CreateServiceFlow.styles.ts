@@ -3,22 +3,24 @@ import { StyleSheet, Dimensions, Platform } from "react-native";
 const { height: H } = Dimensions.get("window");
 
 export const C = {
-  bg: "#FFFFFF",
-  purple: "#7C4DFF",
-  purpleBg: "#F0EEFF",
-  purpleText: "#7C4DFF",
-  border: "#E0E0E0",
-  text: "#1A1A1A",
-  muted: "#757575",
-  progressBg: "#EEEEEE",
-  white: "#FFFFFF",
-  overlay: "rgba(0,0,0,0.5)",
-  greyLight: "#F5F5F5",
-  success: "#4CAF50",
-  amber: "#FFB300",
-  amberBg: "#FFF8E1",
-  error: "#F44336",
-  inputBorder: "#F0F0F0",
+  bg:       "#FFFFFF",
+  purple:   "#6C63FF",      // Modern Indigo
+  purpleBg: "#F5F3FF",
+  purpleText: "#4F46E5",
+  border:   "#F1F5F9",
+  text:     "#0F172A",      // Slate 900
+  muted:    "#64748B",      // Slate 500
+  hint:     "#94A3B8",      // Slate 400
+  progressBg: "#F1F5F9",
+  white:    "#FFFFFF",
+  overlay:  "rgba(15, 23, 42, 0.6)",
+  greyLight: "#F8FAFC",
+  success:  "#10B981",      // Emerald 500
+  amber:    "#F59E0B",      // Amber 500
+  amberBg:  "#FFFBEB",
+  error:    "#EF4444",      // Red 500
+  inputBorder: "#E2E8F0",
+  glass:    "rgba(255,255,255,0.8)",
 };
 
 export const styles = StyleSheet.create({
@@ -82,33 +84,36 @@ export const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: 24,
-    paddingTop: 32,
+    paddingTop: 24,
   },
   title: {
     fontSize: 28,
-    fontWeight: "800",
+    fontFamily: "Outfit_800ExtraBold",
     color: C.text,
     marginBottom: 8,
     lineHeight: 34,
+    letterSpacing: -0.5,
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 15,
+    fontFamily: "Outfit_500Medium",
     color: C.muted,
     marginBottom: 24,
+    lineHeight: 22,
   },
   sectionDivider: {
     height: 1,
-    backgroundColor: "#F5F5F5",
+    backgroundColor: C.border,
     marginVertical: 16,
   },
 
   // Form
   label: {
     fontSize: 12,
-    fontWeight: "800",
-    color: C.text,
+    fontFamily: "Outfit_700Bold",
+    color: C.muted,
     textTransform: "uppercase",
-    letterSpacing: 1,
+    letterSpacing: 1.2,
     marginBottom: 12,
   },
   inputWrapper: {
@@ -116,15 +121,17 @@ export const styles = StyleSheet.create({
   },
   textInput: {
     fontSize: 16,
+    fontFamily: "Outfit_600SemiBold",
     color: C.text,
-    fontWeight: "600",
     padding: 16,
     backgroundColor: C.greyLight,
-    borderRadius: 16,
+    borderRadius: 20,
     minHeight: 56,
+    borderWidth: 1,
+    borderColor: C.inputBorder,
   },
   textArea: {
-    minHeight: 100,
+    minHeight: 120,
     textAlignVertical: "top",
   },
   
@@ -159,14 +166,14 @@ export const styles = StyleSheet.create({
     position: 'absolute',
     left: 20,
     color: C.muted,
-    fontWeight: '500',
+    fontFamily: "Outfit_500Medium",
     zIndex: 1,
   },
   labelFloating: {
     top: -12,
     left: 12,
     fontSize: 13,
-    fontWeight: '700',
+    fontFamily: "Outfit_700Bold",
     color: C.purple,
     backgroundColor: C.white,
     paddingHorizontal: 6,
@@ -179,7 +186,7 @@ export const styles = StyleSheet.create({
   },
   textInputFloating: {
     fontSize: 17,
-    fontWeight: '600',
+    fontFamily: "Outfit_600SemiBold",
     color: C.text,
     paddingTop: 6,
     textAlignVertical: 'center',
@@ -187,7 +194,7 @@ export const styles = StyleSheet.create({
   errorText: {
     color: C.error,
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: "Outfit_600SemiBold",
     marginTop: 6,
     marginLeft: 4,
   },
@@ -250,11 +257,12 @@ export const styles = StyleSheet.create({
   },
   previewName: {
     fontSize: 18,
-    fontWeight: "700",
+    fontFamily: "Outfit_700Bold",
     color: C.text,
   },
   previewLocation: {
     fontSize: 14,
+    fontFamily: "Outfit_500Medium",
     color: C.muted,
     marginTop: 2,
   },
@@ -308,12 +316,13 @@ export const styles = StyleSheet.create({
   },
   methodTitle: {
     fontSize: 15,
-    fontWeight: "700",
+    fontFamily: "Outfit_700Bold",
     color: C.text,
     marginBottom: 4,
   },
   methodSub: {
     fontSize: 12,
+    fontFamily: "Outfit_500Medium",
     color: C.muted,
     lineHeight: 16,
   },
@@ -350,23 +359,24 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   currencySymbol: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: C.text,
+    fontSize: 24,
+    fontFamily: "Outfit_700Bold",
+    color: C.purple,
     marginRight: 12,
   },
   rateInputSeparator: {
-    width: 1,
-    height: 24,
-    backgroundColor: "#DDD",
+    width: 1.5,
+    height: 32,
+    backgroundColor: C.border,
     marginRight: 12,
   },
   rateInput: {
     flex: 1,
-    fontSize: 24,
-    fontWeight: "700",
+    fontSize: 32,
+    fontFamily: "Outfit_800ExtraBold",
     color: C.text,
     paddingVertical: 16,
+    letterSpacing: -1,
   },
 
   quickFillRow: {
@@ -498,7 +508,7 @@ export const styles = StyleSheet.create({
   },
   calendarToggleText: {
     fontSize: 16,
-    fontWeight: "700",
+    fontFamily: "Outfit_700Bold",
     color: C.purple,
   },
   calendarContainer: {
@@ -545,7 +555,7 @@ export const styles = StyleSheet.create({
   },
   dayCellText: {
     fontSize: 14,
-    fontWeight: "600",
+    fontFamily: "Outfit_600SemiBold",
     color: C.text,
   },
   dayCellToday: {
@@ -682,12 +692,13 @@ export const styles = StyleSheet.create({
   },
   optionTitle: {
     fontSize: 17,
-    fontWeight: "700",
+    fontFamily: "Outfit_700Bold",
     color: C.text,
     marginBottom: 4,
   },
   optionSub: {
     fontSize: 14,
+    fontFamily: "Outfit_500Medium",
     color: C.muted,
     lineHeight: 18,
   },
@@ -787,16 +798,36 @@ export const styles = StyleSheet.create({
     padding: 24,
     paddingBottom: Platform.OS === "ios" ? 40 : 24,
     borderTopWidth: 1,
-    borderTopColor: "#F0F0F0",
+    borderTopColor: C.border,
+    backgroundColor: C.bg,
   },
   continueBtn: {
     backgroundColor: C.purple,
-    height: 56,
-    borderRadius: 16,
+    height: 60,
+    borderRadius: 22,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
+    shadowColor: C.purple,
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
+  },
+  continueBtnDisabled: {
+    backgroundColor: C.border,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  continueBtnText: {
+    fontSize: 18,
+    fontFamily: "Outfit_700Bold",
+    color: C.white,
+    letterSpacing: 0.5,
+  },
+  continueBtnTextDisabled: {
+    color: C.hint,
   },
   continueBtnDisabled: {
     backgroundColor: "#E0E0E0",

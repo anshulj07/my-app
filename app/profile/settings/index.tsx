@@ -1,198 +1,4 @@
-// import {
-//     View,
-//     Text,
-//     StyleSheet,
-//     TouchableOpacity,
-//     ScrollView,
-//     SafeAreaView,
-//     Platform,
-// } from "react-native";
-// import { Link } from "expo-router";
-// import Ionicons from "@expo/vector-icons/Ionicons";
-
-// const COLORS = {
-//     bg: "#FFF7FA",
-//     card: "#FFFFFF",
-//     text: "#111827",
-//     muted: "#6B7280",
-//     brand: "#FF4D6D",
-//     brandSoft: "#FFF1F5",
-//     border: "#F1F5F9",
-// };
-
-// export default function SettingsIndex() {
-//     return (
-//         <SafeAreaView style={styles.safe}>
-//             <ScrollView
-//                 style={styles.container}
-//                 contentContainerStyle={styles.content}
-//                 showsVerticalScrollIndicator={false}
-//             >
-//                 {/* Header */}
-//                 <View style={styles.header}>
-//                     <Text style={styles.title}>Settings</Text>
-//                     <Text style={styles.subtitle}>Configure your app experience</Text>
-//                 </View>
-
-//                 {/* Profile Section */}
-//                 <Section title="Profile">
-//                     <NavItem
-//                         href="/profile/settings/PersonalInfo"
-//                         icon="person-circle-outline"
-//                         label="Personal Information"
-//                         hint="Name, email, and location"
-//                     />
-//                     <NavItem
-//                         href="/profile/settings/Preferences"
-//                         icon="options-outline"
-//                         label="Preferences"
-//                         hint="App theme and notifications"
-//                     />
-//                     <NavItem
-//                         href="/profile/settings/History"
-//                         icon="time-outline"
-//                         label="History"
-//                         hint="Your past activity and events"
-//                         isLast
-//                     />
-//                 </Section>
-
-//                 {/* Account Section */}
-//                 <Section title="Account">
-//                     <NavItem
-//                         href="/profile/settings/AccountSettings"
-//                         icon="settings-outline"
-//                         label="Account Settings"
-//                         hint="Privacy and connections"
-//                     />
-//                     <NavItem
-//                         href="/profile/settings/Security"
-//                         icon="shield-checkmark-outline"
-//                         label="Security"
-//                         hint="2FA and login activity"
-//                         isLast
-//                     />
-//                 </Section>
-
-//                 {/* Community Section */}
-//                 <Section title="Community">
-//                     <NavItem
-//                         href="/profile/settings/Social"
-//                         icon="people-outline"
-//                         label="Social & Community"
-//                         hint="Friends and social feed"
-//                         isLast
-//                     />
-//                 </Section>
-
-//                 <View style={styles.footer}>
-//                    <Text style={styles.footerText}>Meetup v1.0.4</Text>
-//                 </View>
-//             </ScrollView>
-//         </SafeAreaView>
-//     );
-// }
-
-// /* ---------------- UI Components ---------------- */
-
-// const Section = ({ title, children }: any) => (
-//     <View style={styles.section}>
-//         <Text style={styles.sectionTitle}>{title}</Text>
-//         <View style={styles.card}>{children}</View>
-//     </View>
-// );
-
-// const NavItem = ({ href, icon, label, hint, isLast }: any) => (
-//     <Link href={href} asChild>
-//         <TouchableOpacity style={StyleSheet.flatten([styles.item, isLast && styles.itemLast])} activeOpacity={0.7}>
-//             <View style={styles.iconBox}>
-//                 <Ionicons name={icon} size={22} color={COLORS.brand} />
-//             </View>
-//             <View style={styles.itemBody}>
-//                 <Text style={styles.label}>{label}</Text>
-//                 <Text style={styles.hint}>{hint}</Text>
-//             </View>
-//             <Ionicons name="chevron-forward" size={18} color="#CBD5E1" />
-//         </TouchableOpacity>
-//     </Link>
-// );
-
-// const styles = StyleSheet.create({
-//     safe: { flex: 1, backgroundColor: COLORS.bg },
-//     container: { flex: 1 },
-//     content: { padding: 20, paddingBottom: 40 },
-//     header: { marginBottom: 32, paddingLeft: 4 },
-//     title: {
-//         fontSize: 32,
-//         fontWeight: "900",
-//         color: COLORS.text,
-//         letterSpacing: -1,
-//         marginTop: Platform.OS === "android" ? 10 : 0,
-//     },
-//     subtitle: {
-//         fontSize: 16,
-//         fontWeight: "600",
-//         color: COLORS.muted,
-//         marginTop: 4,
-//     },
-//     section: { marginBottom: 28 },
-//     sectionTitle: {
-//         fontSize: 13,
-//         fontWeight: "800",
-//         color: COLORS.muted,
-//         textTransform: "uppercase",
-//         letterSpacing: 1,
-//         marginBottom: 12,
-//         marginLeft: 6,
-//     },
-//     card: {
-//         backgroundColor: COLORS.card,
-//         borderRadius: 24,
-//         overflow: "hidden",
-//         borderWidth: 1,
-//         borderColor: COLORS.border,
-//         shadowColor: "#000",
-//         shadowOpacity: 0.04,
-//         shadowRadius: 12,
-//         shadowOffset: { width: 0, height: 6 },
-//     },
-//     item: {
-//         flexDirection: "row",
-//         alignItems: "center",
-//         padding: 18,
-//         borderBottomWidth: 1,
-//         borderBottomColor: COLORS.border,
-//     },
-//     itemLast: { borderBottomWidth: 0 },
-//     iconBox: {
-//         width: 44,
-//         height: 44,
-//         borderRadius: 14,
-//         backgroundColor: COLORS.brandSoft,
-//         alignItems: "center",
-//         justifyContent: "center",
-//         marginRight: 16,
-//     },
-//     itemBody: { flex: 1 },
-//     label: {
-//         fontSize: 16,
-//         fontWeight: "700",
-//         color: COLORS.text,
-//         marginBottom: 2,
-//     },
-//     hint: {
-//         fontSize: 13,
-//         fontWeight: "600",
-//         color: COLORS.muted,
-//     },
-//     footer: { marginTop: 10, alignItems: "center" },
-//     footerText: {
-//         fontSize: 12,
-//         fontWeight: "700",
-//         color: COLORS.muted,
-//         opacity: 0.6,
-//     },
-// });
+import React, { useEffect, useState, useCallback } from "react";
 import {
     View,
     Text,
@@ -201,87 +7,181 @@ import {
     ScrollView,
     SafeAreaView,
     Platform,
+    Dimensions,
 } from "react-native";
-import { Link } from "expo-router";
+import { useRouter } from "expo-router";
+import { useUser, useClerk, useAuth } from "@clerk/clerk-expo";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import { Image } from "expo-image";
+import * as Haptics from "expo-haptics";
+import Constants from "expo-constants";
+import { LinearGradient } from "expo-linear-gradient";
+import { apiFetch } from "../../../lib/apiFetch";
+
+const { width: W } = Dimensions.get("window");
 
 const COLORS = {
-    bg:        "#F7F8FA",   // warm cream
-    card:      "#FFFFFF",
-    text:      "#1C1A17",
-    muted:     "#6f6f6e",
-    brand:     "#5ecf3e",   // teal
-    brandSoft: "#f2fae8",   // teal pastel
-    border:    "#eef0e3",   // warm border
+    purple: "#6366F1",
+    purpleBg: "#EEF2FF",
+    bg: "#F9FAFB",
+    card: "#FFFFFF",
+    text: "#111827",
+    muted: "#6B7280",
+    lightMuted: "#9CA3AF",
+    border: "#F3F4F6",
+    red: "#EF4444",
+    redBg: "#FEF2F2",
+    font: "Outfit_500Medium",
+    fontBold: "Outfit_700Bold",
+    fontExtraBold: "Outfit_800ExtraBold",
 };
 
 export default function SettingsIndex() {
+    const router = useRouter();
+    const { user } = useUser();
+    const { userId } = useAuth();
+    const { signOut } = useClerk();
+
+    const [profile, setProfile] = useState<any>(null);
+    const [loading, setLoading] = useState(false);
+
+    const API_BASE      = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
+    const EVENT_API_KEY = (Constants.expoConfig?.extra as any)?.eventApiKey as string | undefined;
+
+    const fetchProfile = useCallback(async () => {
+        if (!API_BASE || !userId) return;
+        setLoading(true);
+        try {
+            const res = await apiFetch(`${API_BASE}/api/profile?clerkUserId=${encodeURIComponent(userId)}`, {
+                headers: EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {},
+            });
+            const json = await res.json();
+            if (res.ok) setProfile(json);
+        } catch (err) {
+            console.error("Settings fetch error:", err);
+        } finally {
+            setLoading(false);
+        }
+    }, [API_BASE, EVENT_API_KEY, userId]);
+
+    useEffect(() => { fetchProfile(); }, [fetchProfile]);
+
+    const handleLogout = async () => {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        await signOut();
+        router.replace("/(auth)/sign-in");
+    };
+
+    const name     = profile?.name || user?.fullName || "User Name";
+    const username = profile?.username || user?.username || user?.firstName?.toLowerCase() || "user";
+    const avatar   = profile?.avatar || user?.imageUrl;
+
     return (
-        <SafeAreaView style={styles.safe}>
+        <SafeAreaView style={S.safe}>
+            <View style={S.headerRow}>
+                <TouchableOpacity onPress={() => router.back()} style={S.backBtn}>
+                    <Ionicons name="arrow-back" size={22} color={COLORS.purple} />
+                </TouchableOpacity>
+            </View>
+
             <ScrollView
-                style={styles.container}
-                contentContainerStyle={styles.content}
+                style={S.container}
+                contentContainerStyle={S.content}
                 showsVerticalScrollIndicator={false}
             >
-                {/* Header */}
-                <View style={styles.header}>
-                    <Text style={styles.title}>Settings</Text>
-                    <Text style={styles.subtitle}>Configure your app experience</Text>
+                {/* Header Title */}
+                <View style={S.titleSection}>
+                    <Text style={S.title}>Settings</Text>
+                    <Text style={S.subtitle}>Manage your account preferences and social connections.</Text>
+                </View>
+
+                {/* User Profile Card */}
+                <View style={S.profileCard}>
+                    <View style={S.avatarWrapper}>
+                        {avatar ? (
+                            <Image 
+                                source={{ uri: avatar }} 
+                                style={S.avatar} 
+                            />
+                        ) : (
+                            <LinearGradient colors={["#6366F1", "#A855F7"]} style={S.avatar}>
+                                <Ionicons name="person" size={28} color="#fff" style={{ opacity: 0.8 }} />
+                            </LinearGradient>
+                        )}
+                        <TouchableOpacity 
+                            style={S.editBadge}
+                            onPress={() => router.push("/profile/settings/PersonalInfo")}
+                        >
+                            <Ionicons name="pencil" size={12} color="#fff" />
+                        </TouchableOpacity>
+                    </View>
+                    <View style={S.profileInfo}>
+                        <Text style={S.profileName}>{name}</Text>
+                        <Text style={S.profileUsername}>
+                            @{username} • {profile?.isVerified ? "Verified Member" : "Community Member"}
+                        </Text>
+                    </View>
                 </View>
 
                 {/* Profile Section */}
-                <Section title="Profile">
+                <Section title="PROFILE">
                     <NavItem
-                        href="/profile/settings/PersonalInfo"
-                        icon="person-circle-outline"
+                        onPress={() => router.push("/profile/settings/PersonalInfo")}
+                        icon="person-outline"
                         label="Personal Information"
-                        hint="Name, email, and location"
+                        hint="Email, phone, and address"
                     />
                     <NavItem
-                        href="/profile/settings/Preferences"
+                        onPress={() => router.push("/profile/settings/Preferences")}
                         icon="options-outline"
                         label="Preferences"
-                        hint="App theme and notifications"
+                        hint="Language, currency, and theme"
                     />
                     <NavItem
-                        href="/profile/settings/History"
+                        onPress={() => router.push("/profile/settings/History")}
                         icon="time-outline"
                         label="History"
-                        hint="Your past activity and events"
+                        hint="Past trips and activity log"
                         isLast
                     />
                 </Section>
 
                 {/* Account Section */}
-                <Section title="Account">
+                <Section title="ACCOUNT">
                     <NavItem
-                        href="/profile/settings/AccountSettings"
+                        onPress={() => router.push("/profile/settings/AccountSettings")}
                         icon="settings-outline"
                         label="Account Settings"
-                        hint="Privacy and connections"
+                        hint="Manage your subscription"
                     />
                     <NavItem
-                        href="/profile/settings/Security"
+                        onPress={() => router.push("/profile/settings/Security")}
                         icon="shield-checkmark-outline"
                         label="Security"
-                        hint="2FA and login activity"
+                        hint="Passwords and 2FA"
                         isLast
                     />
                 </Section>
 
                 {/* Community Section */}
-                <Section title="Community">
+                <Section title="COMMUNITY">
                     <NavItem
-                        href="/profile/settings/Social"
+                        onPress={() => router.push("/profile/settings/Social")}
                         icon="people-outline"
                         label="Social & Community"
-                        hint="Friends and social feed"
+                        hint="Privacy and visibility settings"
                         isLast
                     />
                 </Section>
 
-                <View style={styles.footer}>
-                   <Text style={styles.footerText}>Meetup v1.0.4</Text>
+                {/* Logout Button */}
+                <TouchableOpacity style={S.logoutBtn} onPress={handleLogout}>
+                    <Ionicons name="log-out-outline" size={20} color={COLORS.red} />
+                    <Text style={S.logoutText}>Logout</Text>
+                </TouchableOpacity>
+
+                <View style={S.footer}>
+                   <Text style={S.footerText}>NomadMeet v2.4.1 (Build 882)</Text>
                 </View>
             </ScrollView>
         </SafeAreaView>
@@ -291,54 +191,94 @@ export default function SettingsIndex() {
 /* ---------------- UI Components ---------------- */
 
 const Section = ({ title, children }: any) => (
-    <View style={styles.section}>
-        <Text style={styles.sectionTitle}>{title}</Text>
-        <View style={styles.card}>{children}</View>
+    <View style={S.section}>
+        <Text style={S.sectionTitle}>{title}</Text>
+        <View style={S.card}>{children}</View>
     </View>
 );
 
-const NavItem = ({ href, icon, label, hint, isLast }: any) => (
-    <Link href={href} asChild>
-        <TouchableOpacity style={StyleSheet.flatten([styles.item, isLast && styles.itemLast])} activeOpacity={0.7}>
-            <View style={styles.iconBox}>
-                <Ionicons name={icon} size={22} color={COLORS.brand} />
-            </View>
-            <View style={styles.itemBody}>
-                <Text style={styles.label}>{label}</Text>
-                <Text style={styles.hint}>{hint}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color="#d8d4ce" />
-        </TouchableOpacity>
-    </Link>
+const NavItem = ({ onPress, icon, label, hint, isLast }: any) => (
+    <TouchableOpacity 
+        style={[S.item, isLast && S.itemLast]} 
+        activeOpacity={0.7}
+        onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            onPress();
+        }}
+    >
+        <View style={S.iconBox}>
+            <Ionicons name={icon} size={20} color={COLORS.purple} />
+        </View>
+        <View style={S.itemBody}>
+            <Text style={S.label}>{label}</Text>
+            <Text style={S.hint}>{hint}</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={16} color={COLORS.lightMuted} />
+    </TouchableOpacity>
 );
 
-const styles = StyleSheet.create({
+const S = StyleSheet.create({
     safe: { flex: 1, backgroundColor: COLORS.bg },
     container: { flex: 1 },
-    content: { padding: 20, paddingBottom: 40 },
-    header: { marginBottom: 32, paddingLeft: 4 },
+    headerRow: {
+        paddingHorizontal: 20,
+        paddingTop: Platform.OS === "ios" ? 10 : 20,
+        paddingBottom: 10,
+    },
+    backBtn: {
+        width: 42, height: 42, borderRadius: 14,
+        alignItems: "center", justifyContent: "center",
+        backgroundColor: "#fff", borderWidth: 1, borderColor: COLORS.border,
+    },
+    content: { padding: 20, paddingBottom: 60 },
+    titleSection: { marginBottom: 24 },
     title: {
         fontSize: 32,
-        fontWeight: "900",
+        fontFamily: COLORS.fontExtraBold,
         color: COLORS.text,
-        letterSpacing: -1,
-        marginTop: Platform.OS === "android" ? 10 : 0,
+        marginBottom: 8,
     },
     subtitle: {
-        fontSize: 16,
-        fontWeight: "600",
+        fontSize: 14,
+        fontFamily: COLORS.font,
         color: COLORS.muted,
-        marginTop: 4,
+        lineHeight: 20,
     },
+    profileCard: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: "#fff",
+        padding: 20,
+        borderRadius: 24,
+        marginBottom: 30,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+        shadowColor: "#000",
+        shadowOpacity: 0.04,
+        shadowRadius: 10,
+        shadowOffset: { width: 0, height: 4 },
+    },
+    avatarWrapper: { position: "relative" },
+    avatar: { width: 64, height: 64, borderRadius: 32, backgroundColor: COLORS.border },
+    editBadge: {
+        position: "absolute", bottom: 0, right: 0,
+        width: 22, height: 22, borderRadius: 11,
+        backgroundColor: COLORS.purple,
+        alignItems: "center", justifyContent: "center",
+        borderWidth: 2, borderColor: "#fff",
+    },
+    profileInfo: { marginLeft: 16, flex: 1 },
+    profileName: { fontSize: 18, fontFamily: COLORS.fontBold, color: COLORS.text, marginBottom: 2 },
+    profileUsername: { fontSize: 13, fontFamily: COLORS.font, color: COLORS.muted },
+    
     section: { marginBottom: 28 },
     sectionTitle: {
-        fontSize: 13,
-        fontWeight: "800",
-        color: COLORS.muted,
-        textTransform: "uppercase",
+        fontSize: 12,
+        fontFamily: COLORS.fontExtraBold,
+        color: COLORS.purple,
         letterSpacing: 1,
         marginBottom: 12,
-        marginLeft: 6,
+        marginLeft: 4,
     },
     card: {
         backgroundColor: COLORS.card,
@@ -346,45 +286,42 @@ const styles = StyleSheet.create({
         overflow: "hidden",
         borderWidth: 1,
         borderColor: COLORS.border,
-        shadowColor: "#000",
-        shadowOpacity: 0.04,
-        shadowRadius: 12,
-        shadowOffset: { width: 0, height: 6 },
     },
     item: {
         flexDirection: "row",
         alignItems: "center",
-        padding: 18,
+        padding: 16,
         borderBottomWidth: 1,
         borderBottomColor: COLORS.border,
     },
     itemLast: { borderBottomWidth: 0 },
     iconBox: {
-        width: 44,
-        height: 44,
-        borderRadius: 14,
-        backgroundColor: COLORS.brandSoft,
+        width: 40,
+        height: 40,
+        borderRadius: 12,
+        backgroundColor: COLORS.purpleBg,
         alignItems: "center",
         justifyContent: "center",
         marginRight: 16,
     },
     itemBody: { flex: 1 },
-    label: {
-        fontSize: 16,
-        fontWeight: "700",
-        color: COLORS.text,
-        marginBottom: 2,
+    label: { fontSize: 15, fontFamily: COLORS.fontBold, color: COLORS.text, marginBottom: 2 },
+    hint: { fontSize: 12, fontFamily: COLORS.font, color: COLORS.muted },
+    
+    logoutBtn: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: COLORS.redBg,
+        padding: 16,
+        borderRadius: 20,
+        marginTop: 10,
+        borderWidth: 1,
+        borderColor: "rgba(239, 68, 68, 0.1)",
+        gap: 10,
     },
-    hint: {
-        fontSize: 13,
-        fontWeight: "600",
-        color: COLORS.muted,
-    },
-    footer: { marginTop: 10, alignItems: "center" },
-    footerText: {
-        fontSize: 12,
-        fontWeight: "700",
-        color: COLORS.muted,
-        opacity: 0.6,
-    },
-});
+    logoutText: { fontSize: 15, fontFamily: COLORS.fontBold, color: COLORS.red },
+    
+    footer: { marginTop: 30, alignItems: "center" },
+    footerText: { fontSize: 12, fontFamily: COLORS.font, color: COLORS.muted, opacity: 0.7 },
+});

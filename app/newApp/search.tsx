@@ -343,14 +343,7 @@ function PersonCard({ item, onPress, onMessage }: {
           {uname ? `@${uname}` : item.profile?.about || "Member"}
         </Text>
       </View>
-      <TouchableOpacity
-        style={S.msgBtn}
-        onPress={e => { e.stopPropagation?.(); onMessage(); }}
-        activeOpacity={0.85} hitSlop={8}
-      >
-        <Ionicons name="chatbubble-outline" size={14} color={C.tealText} />
-        <Text style={S.msgText}>Message</Text>
-      </TouchableOpacity>
+      {/* Message button removed per request */}
     </TouchableOpacity>
   );
 }

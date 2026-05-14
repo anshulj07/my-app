@@ -1,14 +1,14 @@
 import { StyleSheet } from "react-native";
 
 export const COLORS = {
-  bg: "#FFF7FA",
+  bg: "#F7F8F4",
   card: "#FFFFFF",
-  text: "#111827",
-  muted: "#6B7280",
-  brand: "#FF4D6D",
-  brandSoft: "#FFF1F5",
-  ring: "#FFD1DC",
-  danger: "#EF4444",
+  text: "#191919",
+  muted: "#888888",
+  brand: "#6C63FF",
+  brandSoft: "#EEF2FF",
+  ring: "#E0E7FF",
+  danger: "#FF4B6E",
 };
 
 export const styles = StyleSheet.create({
@@ -70,7 +70,7 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 999,
-    backgroundColor: "#FFE4EA",
+    backgroundColor: COLORS.brandSoft,
     borderWidth: 1,
     borderColor: COLORS.ring,
   },
@@ -157,7 +157,7 @@ export const styles = StyleSheet.create({
   photoBox: {
     borderRadius: 16,
     borderWidth: 2,
-    borderColor: "#FFB3C1",
+    borderColor: COLORS.brand,
     borderStyle: "dashed",
     backgroundColor: COLORS.brandSoft,
     alignItems: "center",

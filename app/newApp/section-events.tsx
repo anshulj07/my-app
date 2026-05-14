@@ -20,7 +20,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { formatEventDateTime } from "../../lib/dateUtils";
 import { TripEvent } from "./trip";
-import PersonBookingSheet from "../../components/ClickPin/PersonBookingSheet";
 import type { EventPin } from "../../components/Map/MapView";
 
 // ─────────────────────────────────────────────────────────────
@@ -287,12 +286,17 @@ export default function SectionEventsScreen() {
   const [sortMode,   setSortMode]   = useState<SortMode>("topRated");
   const [catFilter,  setCatFilter]  = useState("All");
   const [wishlist,   setWishlist]   = useState<Set<string>>(new Set());
-  const [selectedEvent, setSelectedEvent] = useState<EventPin | null>(null);
-  const [sheetVisible, setSheetVisible] = useState(false);
 
   const toggleWish = useCallback((id: string) => {
     setWishlist(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   }, []);
+
+  const handleEventPress = (ev: TripEvent) => {
+    router.push({
+      pathname: "/newApp/event-detail",
+      params: { eventId: ev._id, title: ev.title, emoji: ev.emoji }
+    });
+  };
 
   // Derive category chips from events (unique tags/kinds)
   const cats = useMemo(() => {
@@ -401,20 +405,11 @@ export default function SectionEventsScreen() {
               idx={i}
               wished={wishlist.has(ev._id)}
               onWish={() => toggleWish(ev._id)}
-              onPress={() => {
-                setSelectedEvent(ev as any);
-                setSheetVisible(true);
-              }}
+              onPress={() => handleEventPress(ev)}
             />
           ))
         )}
       </ScrollView>
-
-      <PersonBookingSheet
-        visible={sheetVisible}
-        onClose={() => setSheetVisible(false)}
-        person={selectedEvent}
-      />
     </View>
   );
 }

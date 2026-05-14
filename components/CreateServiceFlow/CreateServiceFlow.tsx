@@ -170,7 +170,7 @@ function FloatingLabelInput({ label, value, onChangeText, placeholder, error, mu
       inputRange: [0, 1],
       outputRange: [16, 12],
     }),
-    fontWeight: (isFocused || value.length > 0 ? '700' : '500') as any,
+    fontFamily: (isFocused || value.length > 0 ? "Outfit_700Bold" : "Outfit_500Medium") as any,
   };
 
   const isFilled = value.length > 0;
@@ -225,46 +225,50 @@ function SuccessView({ selectedLoc, cityName, rate, user, onShare, onClose, bann
         <Ionicons name="checkmark" size={48} color={C.white} />
       </View>
 
-      <Text style={styles.successTitle}>You're Live! 🎉</Text>
-      <Text style={styles.successSub}>
+      <Text style={[styles.successTitle, { fontFamily: "Outfit_800ExtraBold" }]}>You're Live! 🎉</Text>
+      <Text style={[styles.successSub, { fontFamily: "Outfit_500Medium" }]}>
         Your companion profile is now visible to everyone in {selectedLoc?.city || cityName}.
       </Text>
 
-      <View style={styles.successCardPreview}>
-        <Text style={styles.successPreviewLabel}>YOUR NEW CARD</Text>
-        <View style={styles.miniCard}>
+      <View style={[styles.successCardPreview, { borderRadius: 32, padding: 24 }]}>
+        <Text style={[styles.successPreviewLabel, { fontFamily: "Outfit_700Bold", letterSpacing: 1.5 }]}>YOUR NEW CARD</Text>
+        <View style={[styles.miniCard, { backgroundColor: C.greyLight, borderRadius: 24, padding: 16 }]}>
           {bannerUri ? (
-            <View style={{ height: 120, borderRadius: 16, overflow: 'hidden', marginBottom: 16 }}>
+            <View style={{ height: 140, borderRadius: 20, overflow: 'hidden', marginBottom: 16 }}>
                <Image source={{ uri: bannerUri }} style={{ width: '100%', height: '100%' }} />
             </View>
-          ) : null}
+          ) : (
+            <View style={{ height: 100, borderRadius: 20, backgroundColor: C.border, alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+               <Ionicons name="image-outline" size={32} color={C.muted} />
+            </View>
+          )}
           <View style={styles.previewUserRow}>
             {user?.imageUrl ? (
-              <Image source={{ uri: user.imageUrl }} style={styles.previewAvatar} />
+              <Image source={{ uri: user.imageUrl }} style={[styles.previewAvatar, { width: 56, height: 56, borderRadius: 28 }]} />
             ) : (
-              <View style={styles.previewAvatar} />
+              <View style={[styles.previewAvatar, { width: 56, height: 56, borderRadius: 28, backgroundColor: C.purpleBg }]} />
             )}
             <View>
-              <Text style={styles.previewName}>{user?.firstName || "User"}</Text>
-              <Text style={styles.previewLocation}>{selectedLoc?.city || cityName} • ₹{rate}/hr</Text>
+              <Text style={[styles.previewName, { fontFamily: "Outfit_700Bold", fontSize: 20 }]}>{user?.firstName || "User"}</Text>
+              <Text style={[styles.previewLocation, { fontFamily: "Outfit_600SemiBold", color: C.purple }]}>{selectedLoc?.city || cityName} • ₹{rate}/hr</Text>
             </View>
           </View>
-          <View style={styles.chipContainer}>
-             <View style={styles.chip}>
+          <View style={[styles.chipContainer, { marginTop: 12 }]}>
+             <View style={[styles.chip, { backgroundColor: C.purpleBg, borderRadius: 12, paddingHorizontal: 12 }]}>
                <Ionicons name="flash" size={12} color={C.purple} />
-               <Text style={styles.chipText}>New Companion</Text>
+               <Text style={[styles.chipText, { color: C.purpleText, fontFamily: "Outfit_700Bold" }]}>New Companion</Text>
              </View>
           </View>
         </View>
       </View>
 
-      <View style={styles.successActions}>
-        <TouchableOpacity onPress={onShare} style={styles.shareBtnPremium}>
+      <View style={[styles.successActions, { gap: 16, marginTop: 32 }]}>
+        <TouchableOpacity onPress={onShare} style={[styles.shareBtnPremium, { height: 60, borderRadius: 22, backgroundColor: C.purple }]}>
           <Ionicons name="share-social" size={20} color={C.white} />
-          <Text style={styles.shareBtnTextPremium}>Share</Text>
+          <Text style={[styles.shareBtnTextPremium, { fontFamily: "Outfit_700Bold", fontSize: 16 }]}>Share Profile</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={onClose} style={styles.doneBtnPremium}>
-          <Text style={styles.doneBtnTextPremium}>Got it</Text>
+        <TouchableOpacity onPress={onClose} style={[styles.doneBtnPremium, { height: 60, borderRadius: 22, borderWidth: 1.5, borderColor: C.border }]}>
+          <Text style={[styles.doneBtnTextPremium, { fontFamily: "Outfit_700Bold", fontSize: 16, color: C.text }]}>Finish</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -1131,20 +1135,29 @@ export default function CreateServiceFlow({
                   <View style={styles.navRow}>
                     <TouchableOpacity onPress={handleBack} style={styles.backBtn}>
                       <Ionicons name="chevron-back" size={24} color={C.text} />
-                      <Text style={styles.backText}>Back</Text>
+                      <Text style={[styles.backText, { fontFamily: "Outfit_600SemiBold" }]}>Back</Text>
                     </TouchableOpacity>
 
-                    <Text style={styles.stepCount}>{step === 6 ? "Done" : `${step} of 5`}</Text>
+                    <View style={{ alignItems: 'center' }}>
+                      <Text style={[styles.stepCount, { fontFamily: "Outfit_700Bold", color: C.purple, fontSize: 12 }]}>
+                        {step === 6 ? "PREVIEW" : `STEP ${String(step).padStart(2, '0')}`}
+                      </Text>
+                      <Text style={[styles.stepCount, { fontFamily: "Outfit_500Medium", fontSize: 11, marginTop: 1 }]}>
+                        {step === 6 ? "Final Review" : `${step} of 5 steps`}
+                      </Text>
+                    </View>
 
                     <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-                      <Ionicons name="close" size={24} color={C.muted} />
+                      <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: C.greyLight, alignItems: 'center', justifyContent: 'center' }}>
+                        <Ionicons name="close" size={20} color={C.muted} />
+                      </View>
                     </TouchableOpacity>
                   </View>
 
                   {/* Progress Bar */}
-                  <View style={styles.progressContainer}>
+                  <View style={[styles.progressContainer, { height: 4, borderRadius: 2 }]}>
                     <View
-                      style={[styles.progressBar, { width: `${progress}%` }]}
+                      style={[styles.progressBar, { width: `${progress}%`, height: 4, borderRadius: 2 }]}
                     />
                   </View>
                 </View>
@@ -1170,18 +1183,21 @@ export default function CreateServiceFlow({
                     activeOpacity={0.8}
                     style={[
                       styles.continueBtn,
-                      !canContinue && styles.continueBtnDisabled,
-                      step === 6 && { backgroundColor: C.purple }
+                      !canContinue && styles.continueBtnDisabled
                     ]}
                   >
                     {submitting ? (
                       <ActivityIndicator color={C.white} />
                     ) : (
                       <>
-                        <Text style={styles.continueText}>
+                        <Text style={[styles.continueBtnText, !canContinue && styles.continueBtnTextDisabled]}>
                           {step === 6 ? "✨ Go Live" : "Continue"}
                         </Text>
-                        <Ionicons name={step === 6 ? "sparkles" : "arrow-forward"} size={20} color={C.white} />
+                        <Ionicons 
+                          name={step === 6 ? "sparkles" : "arrow-forward"} 
+                          size={20} 
+                          color={!canContinue ? C.hint : C.white} 
+                        />
                       </>
                     )}
                   </TouchableOpacity>

@@ -28,35 +28,33 @@ import type { Suggestion, ListingKind } from "./types";
 const C = {
   bg:          "#FFFFFF",
   card:        "#FFFFFF",
-  cardBorder:  "#F0EBE3",
-  inputBg:     "#FAF7F2",
-  inputBorder: "#E8E0D5",
-  inputFocus:  "#6C5CE7",
-  ink:         "#1C1A17",
-  ink2:        "#3D3A34",
-  muted:       "#8A8278",
-  hint:        "#BCB6AD",
-  teal:        "#3ECFB2",
-  tealBg:      "#E8FAF7",
-  tealText:    "#1A7A6A",
-  coral:       "#FF6F6F",
-  coralBg:     "#FFF0F0",
-  coralText:   "#C0392B",
+  cardBorder:  "#F1F5F9",
+  inputBg:     "#F8FAFC",
+  inputBorder: "#E2E8F0",
+  inputFocus:  "#6366F1",
+  ink:         "#0F172A",
+  ink2:        "#334155",
+  muted:       "#64748B",
+  hint:        "#94A3B8",
+  teal:        "#14B8A6",
+  tealBg:      "#F0FDFA",
+  tealText:    "#0D9488",
+  coral:       "#F43F5E",
+  coralBg:     "#FFF1F2",
+  coralText:   "#E11D48",
   amber:       "#F59E0B",
   amberBg:     "#FFFBEB",
-  amberText:   "#92400E",
-  purple:      "#6C5CE7",
-  purpleBg:    "#F0EEFF",
-  purpleText:  "#4C3DB5",
-  pink:        "#F472B6",
-  pinkBg:      "#FDF2F8",
-  pinkText:    "#9D174D",
-  green:       "#22C55E",
-  greenBg:     "#DCFCE7",
-  greenText:   "#15803D",
-  greenBorder: "#86EFAC",
+  amberText:   "#D97706",
+  purple:      "#6366F1",
+  purpleBg:    "#EEF2FF",
+  purpleText:  "#4F46E5",
+  purpleBorder: "#C7D2FE",
+  green:       "#10B981",
+  greenBg:     "#ECFDF5",
+  greenText:   "#059669",
+  greenBorder: "#A7F3D0",
   error:       "#EF4444",
-  stepIdle:    "#E8E0D5",
+  stepIdle:    "#E2E8F0",
 };
 
 const R = { card: 20, input: 14, pill: 999, tile: 16 };
@@ -100,6 +98,13 @@ const S = StyleSheet.create({
     width: 32, height: 32, borderRadius: 16,
     backgroundColor: C.inputBg, borderWidth: 1.5, borderColor: C.cardBorder,
     alignItems: "center", justifyContent: "center", marginTop: 2,
+  },
+  errorMsg: {
+    color: C.error,
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: 6,
+    marginLeft: 4,
   },
 
   // ── BODY ──
@@ -183,24 +188,48 @@ const S = StyleSheet.create({
   bannerActionBtnOutlineText: { fontSize: 13, fontWeight: "800", color: C.purpleText },
   bannerOverlay: {
     position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.38)", alignItems: "center",
-    justifyContent: "center", flexDirection: "row", gap: 12,
+    backgroundColor: "rgba(15,23,42,0.5)", alignItems: "center",
+    justifyContent: "center", flexDirection: "row", gap: 8, padding: 10,
   },
   bannerOverlayBtn: {
-    flexDirection: "row", alignItems: "center", gap: 6,
-    paddingVertical: 9, paddingHorizontal: 18, borderRadius: R.pill,
-    backgroundColor: "rgba(255,255,255,0.18)",
-    borderWidth: 1.5, borderColor: "rgba(255,255,255,0.35)",
+    flexDirection: "row", alignItems: "center", gap: 5,
+    paddingVertical: 8, paddingHorizontal: 12, borderRadius: R.pill,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    borderWidth: 1.2, borderColor: "rgba(255,255,255,0.4)",
   },
-  bannerOverlayBtnText:   { fontSize: 13, fontWeight: "800", color: "#fff" },
+  bannerOverlayBtnText:   { fontSize: 12, fontWeight: "800", color: "#fff" },
   bannerOverlayBtnDanger: {
-    backgroundColor: "rgba(239,68,68,0.22)", borderColor: "rgba(239,68,68,0.45)",
+    backgroundColor: "rgba(239,68,68,0.3)", borderColor: "rgba(239,68,68,0.5)",
   },
   bannerTip: {
     flexDirection: "row", alignItems: "center", gap: 6,
     marginTop: 10, paddingHorizontal: 4,
   },
   bannerTipText: { fontSize: 11, color: C.muted, fontWeight: "500" },
+
+  // ── FULL SCREEN PREVIEW ──
+  fullScreenContainer: {
+    flex: 1, backgroundColor: "#000",
+    alignItems: "center", justifyContent: "center",
+  },
+  fullScreenImage: { width: "100%", height: "100%" },
+  fullScreenClose: {
+    position: "absolute", top: 50, right: 20,
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    alignItems: "center", justifyContent: "center",
+  },
+  fullScreenActions: {
+    position: "absolute", bottom: 50,
+    flexDirection: "row", gap: 16,
+  },
+  fullScreenBtn: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    backgroundColor: C.purple, paddingHorizontal: 24, paddingVertical: 14,
+    borderRadius: 30, shadowColor: "#000", shadowOpacity: 0.3, shadowRadius: 10,
+    elevation: 10,
+  },
+  fullScreenBtnText: { color: "#fff", fontWeight: "800", fontSize: 15 },
 
   // ── INPUT ──
   inputShell: {
@@ -465,7 +494,7 @@ const S = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
   },
   step1CardActiveGreen: { borderColor: C.green, backgroundColor: C.greenBg },
-  step1CardActiveAmber: { borderColor: C.amber, backgroundColor: C.amberBg },
+  step1CardActivePurple: { borderColor: C.purple, backgroundColor: C.purpleBg },
   step1IconBox: {
     width: 56, height: 56, borderRadius: 18,
     backgroundColor: C.inputBg,
@@ -581,6 +610,7 @@ function BannerImageSection({
   accentColor: string;
 }) {
   const [overlayVisible, setOverlayVisible] = useState(false);
+  const [fullScreenVisible, setFullScreenVisible] = useState(false);
 
   const { openImagePicker, isUploading } = useImageUploader("bannerImage", {
     headers: {
@@ -624,6 +654,10 @@ function BannerImageSection({
             <Pressable style={StyleSheet.absoluteFill} onPress={() => setOverlayVisible(v => !v)} />
             {overlayVisible && (
               <View style={S.bannerOverlay}>
+                <Pressable style={S.bannerOverlayBtn} onPress={() => { setOverlayVisible(false); setFullScreenVisible(true); }}>
+                  <Ionicons name="eye-outline" size={16} color="#fff" />
+                  <Text style={S.bannerOverlayBtnText}>Preview</Text>
+                </Pressable>
                 <Pressable style={S.bannerOverlayBtn} onPress={() => handlePick("gallery")}>
                   <Ionicons name="image-outline" size={16} color="#fff" />
                   <Text style={S.bannerOverlayBtnText}>Change</Text>
@@ -642,7 +676,7 @@ function BannerImageSection({
               <Ionicons name="image-outline" size={28} color={accentColor} />
             </View>
             <Text style={[S.bannerPlaceholderTitle, { color: accentColor }]}>Add a cover photo</Text>
-            <Text style={S.bannerPlaceholderSub}>Give your event a face — 16:9 works best</Text>
+            <Text style={S.bannerPlaceholderSub}>Give your event a face — 16:9 works best.{"\n"}Skip this to auto-generate from the internet.</Text>
           </View>
         )}
       </View>
@@ -663,9 +697,20 @@ function BannerImageSection({
       <View style={S.bannerTip}>
         <Ionicons name="information-circle-outline" size={13} color={C.hint} />
         <Text style={S.bannerTipText}>
-          {bannerUri ? "Tap the image to edit or remove it." : "Optional — your event will still look great without one."}
+          {bannerUri ? "Tap the image to preview, change or remove it." : "If you skip this, we'll find a relevant image for you!"}
         </Text>
       </View>
+
+      {/* Full Screen Preview Modal */}
+      <Modal visible={fullScreenVisible} transparent animationType="fade" onRequestClose={() => setFullScreenVisible(false)}>
+        <View style={S.fullScreenContainer}>
+          <Image source={{ uri: bannerUri || "" }} style={S.fullScreenImage} resizeMode="contain" />
+          
+          <TouchableOpacity style={S.fullScreenClose} onPress={() => setFullScreenVisible(false)}>
+            <Ionicons name="close" size={28} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -675,15 +720,17 @@ function BannerImageSection({
 // ─────────────────────────────────────────────
 function WizardHeader({
   step, stepLabel, title, sub, onBack, onClose, showBack,
+  accentColor = C.green, accentBg = C.greenBg, accentText = C.greenText,
 }: {
   step: number; stepLabel: string; title: string; sub: string;
   onBack: () => void; onClose: () => void; showBack: boolean;
+  accentColor?: string; accentBg?: string; accentText?: string;
 }) {
   return (
     <View style={S.headerWrap}>
       <View style={S.progressRow}>
         {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
-          <View key={i} style={[S.progressSeg, i < step && S.progressSegActive]} />
+          <View key={i} style={[S.progressSeg, i < step && { backgroundColor: accentColor }]} />
         ))}
       </View>
       <View style={S.headerInner}>
@@ -693,7 +740,9 @@ function WizardHeader({
           </Pressable>
         ) : null}
         <View style={{ flex: 1 }}>
-          <View style={S.stepBadge}><Text style={S.stepBadgeText}>{stepLabel}</Text></View>
+          <View style={[S.stepBadge, { backgroundColor: accentBg, borderColor: accentColor + "44" }]}>
+            <Text style={[S.stepBadgeText, { color: accentText }]}>{stepLabel}</Text>
+          </View>
           <Text style={S.headerTitle}>{title}</Text>
           <Text style={S.headerSub}>{sub}</Text>
         </View>
@@ -730,7 +779,6 @@ function ContinueBtn({ label, onPress, color, disabled }: {
 //  MAIN COMPONENT
 // ─────────────────────────────────────────────
 export default function AddEventFields(props: Props) {
-  console.log("📥 PROPS bannerUri:", props.bannerUri);
 
   const {
     emoji, title, kind, onClose, setTitle, setKind,
@@ -752,7 +800,43 @@ export default function AddEventFields(props: Props) {
 
   // ── WIZARD STEP STATE ──
   const [step, setStep] = useState(1);
-  const goNext = () => setStep(s => Math.min(s + 1, TOTAL_STEPS));
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  
+  const handleNext = () => {
+    const nextErrors: Record<string, string> = {};
+
+    if (step === 2 && !title.trim()) {
+      nextErrors.title = "Title is required";
+    }
+    if (step === 3) {
+      if (!dateISO) nextErrors.date = "Date is required";
+      if (!time24) nextErrors.time = "Time is required";
+    }
+    if (step === 4 && !selectedAddress) {
+      nextErrors.location = "Location is required";
+    }
+    if (step === 5) {
+      const isPaid = kind === "event_paid" || kind === "service";
+      if (isPaid && (!priceText.trim() || parseInt(priceText) <= 0)) {
+        nextErrors.price = "Valid price is required";
+      }
+      if (limitEnabled && (!capacityText.trim() || parseInt(capacityText) <= 0)) {
+        nextErrors.capacity = "Valid capacity is required";
+      }
+      if (!description.trim()) {
+        nextErrors.description = "Description is required";
+      }
+    }
+
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
+      return;
+    }
+
+    setErrors({});
+    setStep(s => Math.min(s + 1, TOTAL_STEPS));
+  };
+
   const goBack = () => setStep(s => Math.max(s - 1, 1));
 
   const primaryLabel = useMemo(() => {
@@ -766,7 +850,9 @@ export default function AddEventFields(props: Props) {
     setSlots(slots.includes(slot) ? slots.filter(s => s !== slot) : [...slots, slot]);
   };
 
-  const accent = kind === "service" ? C.purple : kind === "event_paid" ? C.amber : C.green;
+  const accent = C.purple;
+  const accentBg = C.purpleBg;
+  const accentText = C.purpleText;
 
   // ════════════════════════════════════════════
   //  STEP 1 — Event Type
@@ -782,6 +868,7 @@ export default function AddEventFields(props: Props) {
           title="What Kind of Event?"
           sub="Choose your event type — it shapes the whole experience."
           onBack={goBack} onClose={onClose} showBack={false}
+          accentColor={accent} accentBg={accentBg} accentText={accentText}
         />
         <ScrollView style={{ backgroundColor: C.bg }} contentContainerStyle={{ padding: 18, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
           {!isServiceMode ? (
@@ -790,17 +877,17 @@ export default function AddEventFields(props: Props) {
               <TouchableOpacity
                 activeOpacity={0.9}
                 onPress={() => setKind("event_free")}
-                style={[S.step1Card, kind === "event_free" && S.step1CardActiveGreen]}
+                style={[S.step1Card, kind === "event_free" && S.step1CardActivePurple]}
               >
                 <View style={[S.step1IconBox, kind === "event_free" && { backgroundColor: "#fff" }]}>
-                  <Ionicons name="people" size={28} color={kind === "event_free" ? C.green : C.muted} />
+                  <Ionicons name="people" size={28} color={kind === "event_free" ? C.purple : C.muted} />
                 </View>
                 <View style={S.step1TextContent}>
                   <Text style={S.step1Name}>Free Event</Text>
                   <Text style={S.step1Sub}>Open to everyone. Best for meetups, hangouts, and community vibes.</Text>
                 </View>
                 {kind === "event_free" && (
-                  <View style={[S.step1Check, { backgroundColor: C.green }]}>
+                  <View style={[S.step1Check, { backgroundColor: C.purple }]}>
                     <Ionicons name="checkmark" size={14} color="#fff" />
                   </View>
                 )}
@@ -810,17 +897,17 @@ export default function AddEventFields(props: Props) {
               <TouchableOpacity
                 activeOpacity={0.9}
                 onPress={() => setKind("event_paid")}
-                style={[S.step1Card, kind === "event_paid" && S.step1CardActiveAmber]}
+                style={[S.step1Card, kind === "event_paid" && S.step1CardActivePurple]}
               >
                 <View style={[S.step1IconBox, kind === "event_paid" && { backgroundColor: "#fff" }]}>
-                  <Ionicons name="ticket" size={28} color={kind === "event_paid" ? C.amber : C.muted} />
+                  <Ionicons name="ticket" size={28} color={kind === "event_paid" ? C.purple : C.muted} />
                 </View>
                 <View style={S.step1TextContent}>
                   <Text style={S.step1Name}>Paid Event</Text>
                   <Text style={S.step1Sub}>Charge a ticket price. Earn from your passion and expertise.</Text>
                 </View>
                 {kind === "event_paid" && (
-                  <View style={[S.step1Check, { backgroundColor: C.amber }]}>
+                  <View style={[S.step1Check, { backgroundColor: C.purple }]}>
                     <Ionicons name="checkmark" size={14} color="#fff" />
                   </View>
                 )}
@@ -836,7 +923,7 @@ export default function AddEventFields(props: Props) {
             </View>
           )}
           <View style={{ marginTop: 10 }}>
-             <ContinueBtn label="Continue" onPress={goNext} color={accent} />
+             <ContinueBtn label="Continue" onPress={handleNext} color={accent} />
           </View>
         </ScrollView>
       </>
@@ -854,6 +941,7 @@ export default function AddEventFields(props: Props) {
           title="Name your Event"
           sub="Give it a title that makes people stop scrolling."
           onBack={goBack} onClose={onClose} showBack
+          accentColor={accent} accentBg={accentBg} accentText={accentText}
         />
         <ScrollView style={{ backgroundColor: C.bg }} contentContainerStyle={S.body}
           showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
@@ -863,8 +951,8 @@ export default function AddEventFields(props: Props) {
           <View style={[S.card, { overflow: "visible" }]}>
             <View style={S.cardInner}>
               <View style={S.cardTitleRow}>
-                <View style={[S.cardIconBox, { backgroundColor: C.greenBg }]}>
-                  <Ionicons name="image-outline" size={18} color={C.green} />
+                <View style={[S.cardIconBox, { backgroundColor: accentBg }]}>
+                  <Ionicons name="image-outline" size={18} color={accent} />
                 </View>
                 <Text style={S.cardTitle}>Event banner</Text>
               </View>
@@ -878,24 +966,25 @@ export default function AddEventFields(props: Props) {
           <View style={S.card}>
             <View style={S.cardInner}>
               <View style={S.cardTitleRow}>
-                <View style={[S.cardIconBox, { backgroundColor: kind === "service" ? C.purpleBg : C.greenBg }]}>
+                <View style={[S.cardIconBox, { backgroundColor: C.purpleBg }]}>
                   <Ionicons name={kind === "service" ? "construct-outline" : "create-outline"} size={18}
-                    color={kind === "service" ? C.purple : C.green} />
+                    color={C.purple} />
                 </View>
                 <Text style={S.cardTitle}>{kind === "service" ? "Name your service" : "Name your event"}</Text>
               </View>
-              <View style={S.inputShell}>
-                <Ionicons name="pencil-outline" size={16} color={C.hint} />
+              <View style={[S.inputShell, errors.title && { borderColor: C.error + "44", backgroundColor: C.error + "08" }]}>
+                <Ionicons name="pencil-outline" size={16} color={errors.title ? C.error : C.hint} />
                 <TextInput
-                  value={title} onChangeText={setTitle}
+                  value={title} onChangeText={(t) => { setTitle(t); if (errors.title) setErrors(e => ({ ...e, title: "" })); }}
                   placeholder={kind === "service" ? "e.g., Yoga session, Photography" : "e.g., Saturday coffee meetup"}
                   placeholderTextColor={C.hint} style={S.textInput} returnKeyType="done"
                 />
               </View>
+              {!!errors.title && <Text style={S.errorMsg}>{errors.title}</Text>}
             </View>
           </View>
 
-          <ContinueBtn label="Continue" onPress={goNext} color={accent} disabled={!title.trim()} />
+          <ContinueBtn label="Continue" onPress={handleNext} color={accent} />
         </ScrollView>
       </>
     );
@@ -912,6 +1001,7 @@ export default function AddEventFields(props: Props) {
           title="Pick a Date & Time"
           sub="When's the party? Set it in stone."
           onBack={goBack} onClose={onClose} showBack
+          accentColor={accent} accentBg={accentBg} accentText={accentText}
         />
         <ScrollView style={{ backgroundColor: C.bg }} contentContainerStyle={S.body} showsVerticalScrollIndicator={false}>
 
@@ -924,8 +1014,8 @@ export default function AddEventFields(props: Props) {
               }}
               style={S.toggleRow}
             >
-              <View style={[S.toggleIconBox, { backgroundColor: C.amberBg }]}>
-                <Ionicons name="calendar-outline" size={18} color={C.amber} />
+              <View style={[S.toggleIconBox, { backgroundColor: accentBg }]}>
+                <Ionicons name="calendar-outline" size={18} color={accent} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={S.toggleTitle}>Date &amp; time</Text>
@@ -939,12 +1029,12 @@ export default function AddEventFields(props: Props) {
                 {/* Row 1: Start Date */}
                 <View style={S.whenGrid}>
                   <Pressable
-                    onPress={() => setDateOpen(true)}
-                    style={[S.whenTile, dateISO ? { borderColor: C.green + "88", backgroundColor: C.greenBg } : {}]}
+                    onPress={() => { setDateOpen(true); if (errors.date) setErrors(e => ({ ...e, date: "" })); }}
+                    style={[S.whenTile, dateISO ? { borderColor: C.green + "88", backgroundColor: C.greenBg } : {}, errors.date && { borderColor: C.error, backgroundColor: C.error + "08" }]}
                   >
                     <View style={S.whenTileTop}>
-                      <View style={[S.whenBadge, { backgroundColor: C.greenBg }]}>
-                        <Ionicons name="calendar-outline" size={14} color={C.green} />
+                      <View style={[S.whenBadge, { backgroundColor: accentBg }]}>
+                        <Ionicons name="calendar-outline" size={14} color={accent} />
                       </View>
                       <Text style={S.whenTileLabel}>Date</Text>
                     </View>
@@ -958,8 +1048,8 @@ export default function AddEventFields(props: Props) {
                 {/* Row 2: Start Time & End Time */}
                 <View style={[S.whenGrid, { marginTop: 12 }]}>
                   <Pressable
-                    onPress={() => setTimeOpen(true)}
-                    style={[S.whenTile, time24 ? { borderColor: C.amber + "88", backgroundColor: C.amberBg } : {}]}
+                    onPress={() => { setTimeOpen(true); if (errors.time) setErrors(e => ({ ...e, time: "" })); }}
+                    style={[S.whenTile, time24 ? { borderColor: C.amber + "88", backgroundColor: C.amberBg } : {}, errors.time && { borderColor: C.error, backgroundColor: C.error + "08" }]}
                   >
                     <View style={S.whenTileTop}>
                       <View style={[S.whenBadge, { backgroundColor: C.amberBg }]}>
@@ -989,6 +1079,13 @@ export default function AddEventFields(props: Props) {
                     <Text style={S.whenTileHint}>Tap to choose</Text>
                   </Pressable>
                 </View>
+
+                {(!!errors.date || !!errors.time) && (
+                  <View style={{ marginTop: 10 }}>
+                    {!!errors.date && <Text style={S.errorMsg}>• {errors.date}</Text>}
+                    {!!errors.time && <Text style={S.errorMsg}>• {errors.time}</Text>}
+                  </View>
+                )}
 
                 {(dateISO || time24 || endTime24) && (
                   <Pressable hitSlop={10} onPress={() => { setDateISO(""); setTime24(""); setEndTime24(""); }} style={S.clearPill}>
@@ -1050,7 +1147,7 @@ export default function AddEventFields(props: Props) {
             </>
           )}
 
-          <ContinueBtn label="Continue" onPress={goNext} color={accent} />
+          <ContinueBtn label="Continue" onPress={handleNext} color={accent} />
         </ScrollView>
 
         {/* Date Modal */}
@@ -1135,6 +1232,7 @@ export default function AddEventFields(props: Props) {
           title="Where's it happening?"
           sub="Pin your event on the map."
           onBack={goBack} onClose={onClose} showBack
+          accentColor={accent} accentBg={accentBg} accentText={accentText}
         />
         <ScrollView style={{ backgroundColor: C.bg }} contentContainerStyle={S.body}
           showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
@@ -1205,8 +1303,8 @@ export default function AddEventFields(props: Props) {
                     <ScrollView style={{ maxHeight: 240 }} keyboardShouldPersistTaps="handled">
                       {suggestions.map(s => (
                         <TouchableOpacity key={s.id} activeOpacity={0.85} onPress={() => onPickSuggestion(s)} style={S.dropdownRow}>
-                          <View style={{ width: 32, height: 32, borderRadius: 9, backgroundColor: C.greenBg, alignItems: "center", justifyContent: "center" }}>
-                            <Ionicons name="location-outline" size={15} color={C.green} />
+                          <View style={{ width: 32, height: 32, borderRadius: 9, backgroundColor: accentBg, alignItems: "center", justifyContent: "center" }}>
+                            <Ionicons name="location-outline" size={15} color={accent} />
                           </View>
                           <View style={{ flex: 1 }}>
                             <Text numberOfLines={1} style={S.dropdownMain}>{s.main}</Text>
@@ -1221,9 +1319,9 @@ export default function AddEventFields(props: Props) {
               )}
 
               {!!selectedAddress && (
-                <View style={S.pillSuccess}>
-                  <Ionicons name="checkmark-circle" size={16} color={C.green} style={{ marginRight: 8 }} />
-                  <Text numberOfLines={1} style={S.pillTextSuccess}>{selectedAddress}</Text>
+                <View style={[S.pillSuccess, { backgroundColor: accentBg, borderColor: accent + "55" }]}>
+                  <Ionicons name="checkmark-circle" size={16} color={accent} style={{ marginRight: 8 }} />
+                  <Text numberOfLines={1} style={[S.pillTextSuccess, { color: accentText }]}>{selectedAddress}</Text>
                 </View>
               )}
               {locLoading && (
@@ -1257,11 +1355,12 @@ export default function AddEventFields(props: Props) {
                   </>
                 )}
               </View>
+              {!!errors.location && <Text style={[S.errorMsg, { marginTop: 10 }]}>{errors.location}</Text>}
               {!!err && <Text style={S.err}>{err}</Text>}
             </View>
           </View>
 
-          <ContinueBtn label="Continue" onPress={goNext} color={accent} />
+          <ContinueBtn label="Continue" onPress={handleNext} color={accent} />
         </ScrollView>
       </>
     );
@@ -1278,6 +1377,7 @@ export default function AddEventFields(props: Props) {
           title={kind === "event_paid" ? "What's the price" : "Attendance & Access"}
           sub={kind === "event_paid" ? "Set the ticket price for your event." : "Control who can join your event."}
           onBack={goBack} onClose={onClose} showBack
+          accentColor={accent} accentBg={accentBg} accentText={accentText}
         />
         <ScrollView style={{ backgroundColor: C.bg }} contentContainerStyle={S.body}
           showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
@@ -1294,10 +1394,10 @@ export default function AddEventFields(props: Props) {
                     </View>
                     <Text style={S.cardTitle}>Ticket Price</Text>
                   </View>
-                  <View style={S.inputShell}>
-                    <Text style={S.pricePrefix}>₹</Text>
+                  <View style={[S.inputShell, errors.price && { borderColor: C.error + "44", backgroundColor: C.error + "08" }]}>
+                    <Text style={[S.pricePrefix, { color: accent }]}>₹</Text>
                     <TextInput
-                      value={priceText} onChangeText={setPriceText}
+                      value={priceText} onChangeText={(t) => { setPriceText(t); if (errors.price) setErrors(e => ({ ...e, price: "" })); }}
                       placeholder={kind === "event_paid" ? "299" : "500"}
                       placeholderTextColor={C.hint}
                       keyboardType={Platform.select({ ios: "decimal-pad", android: "numeric" })}
@@ -1307,14 +1407,15 @@ export default function AddEventFields(props: Props) {
                       <View style={S.goodPill}><Text style={S.goodPillText}>Set</Text></View>
                     )}
                   </View>
+                  {!!errors.price && <Text style={S.errorMsg}>{errors.price}</Text>}
                   {/* Quick price tags */}
                   <View style={S.priceTagRow}>
                     {QUICK_PRICES.map(p => {
                       const active = priceText === p;
                       return (
                         <TouchableOpacity key={p} onPress={() => setPriceText(p)}
-                          style={[S.priceTag, active && S.priceTagActive]} activeOpacity={0.8}>
-                          <Text style={[S.priceTagText, active && S.priceTagTextActive]}>₹{p}</Text>
+                          style={[S.priceTag, active && { borderColor: accent, backgroundColor: accentBg }]} activeOpacity={0.8}>
+                          <Text style={[S.priceTagText, active && { color: accentText, fontWeight: "800" }]}>₹{p}</Text>
                         </TouchableOpacity>
                       );
                     })}
@@ -1347,15 +1448,16 @@ export default function AddEventFields(props: Props) {
                   {limitEnabled && (
                     <View style={{ marginTop: 14 }}>
                       <Text style={S.smallLabel}>Max people</Text>
-                      <View style={S.inputShell}>
+                      <View style={[S.inputShell, errors.capacity && { borderColor: C.error + "44", backgroundColor: C.error + "08" }]}>
                         <Ionicons name="people-outline" size={16} color={C.hint} />
                         <TextInput
-                          value={capacityText} onChangeText={setCapacityText}
+                          value={capacityText} onChangeText={(t) => { setCapacityText(t); if (errors.capacity) setErrors(e => ({ ...e, capacity: "" })); }}
                           placeholder="e.g., 20" placeholderTextColor={C.hint}
                           keyboardType={Platform.select({ ios: "number-pad", android: "numeric" })}
                           style={S.textInput}
                         />
                       </View>
+                      {!!errors.capacity && <Text style={S.errorMsg}>{errors.capacity}</Text>}
                       {!capacityOk && capacityText.length > 0 && (
                         <Text style={S.helper}>Enter a valid number greater than 0.</Text>
                       )}
@@ -1367,39 +1469,27 @@ export default function AddEventFields(props: Props) {
           )}
 
           {/* Description */}
-          <Text style={S.sectionLabel}>Details (optional)</Text>
+          <Text style={S.sectionLabel}>Event Description</Text>
           <View style={S.card}>
-            <Pressable
-              onPress={() => {
-                LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-                setShowDetails(!showDetails);
-              }}
-              style={S.toggleRow}
-            >
-              <View style={[S.toggleIconBox, { backgroundColor: C.purpleBg }]}>
-                <Ionicons name="document-text-outline" size={18} color={C.purple} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={S.toggleTitle}>Description</Text>
-                <Text style={S.toggleSub}>{showDetails ? "Tap to hide" : "Add agenda, rules, what to bring…"}</Text>
-              </View>
-              <View style={[S.chevPill, showDetails && S.chevPillOpen]}>
-                <Ionicons name={showDetails ? "remove-outline" : "add-outline"} size={14}
-                  color={showDetails ? "#fff" : C.muted} />
-              </View>
-            </Pressable>
-            {showDetails && (
-              <View style={S.toggleContent}>
-                <View style={S.descShell}>
-                  <TextInput
-                    value={description} onChangeText={setDescription}
-                    placeholder="Meetup point, what to bring, dress code, links…"
-                    placeholderTextColor={C.hint} multiline textAlignVertical="top"
-                    style={S.descInput} returnKeyType="default"
-                  />
+            <View style={S.cardInner}>
+              <View style={S.cardTitleRow}>
+                <View style={[S.cardIconBox, { backgroundColor: C.purpleBg }]}>
+                  <Ionicons name="document-text-outline" size={18} color={C.purple} />
                 </View>
+                <Text style={S.cardTitle}>Tell them more</Text>
               </View>
-            )}
+              <Text style={S.cardSub}>Add agenda, rules, what to bring, and any other details.</Text>
+
+              <View style={[S.descShell, errors.description && { borderColor: C.error + "44", backgroundColor: C.error + "08" }]}>
+                <TextInput
+                  value={description} onChangeText={(t) => { setDescription(t); if (errors.description) setErrors(e => ({ ...e, description: "" })); }}
+                  placeholder="e.g., Meet at the main gate. Bring water and a positive vibe!"
+                  placeholderTextColor={C.hint} multiline textAlignVertical="top"
+                  style={S.descInput} returnKeyType="default"
+                />
+              </View>
+              {!!errors.description && <Text style={S.errorMsg}>{errors.description}</Text>}
+            </View>
           </View>
 
           {/* Access */}
@@ -1449,7 +1539,7 @@ export default function AddEventFields(props: Props) {
             </>
           )}
 
-          <ContinueBtn label="Continue" onPress={goNext} color={accent} />
+          <ContinueBtn label="Continue" onPress={handleNext} color={accent} />
         </ScrollView>
       </>
     );
@@ -1467,6 +1557,7 @@ export default function AddEventFields(props: Props) {
         title="Preview"
         sub="Review everything before publishing. You can always edit later."
         onBack={goBack} onClose={onClose} showBack
+        accentColor={accent} accentBg={accentBg} accentText={accentText}
       />
       <ScrollView style={{ backgroundColor: C.bg }} contentContainerStyle={S.body} showsVerticalScrollIndicator={false}>
 
@@ -1585,6 +1676,7 @@ export default function AddEventFields(props: Props) {
           </TouchableOpacity>
         </View>
 
+        {!!err && <Text style={[S.err, { textAlign: "center", marginTop: 10, marginBottom: 20 }]}>{err}</Text>}
       </ScrollView>
     </>
   );

@@ -257,138 +257,200 @@
 //   footer:{textAlign:"center",color:C.hint,fontSize:12,fontWeight:"600",marginTop:28},
 // });
 import React from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, Platform, Share, Alert } from "react-native";
+import { 
+    View, Text, StyleSheet, TouchableOpacity, ScrollView, 
+    SafeAreaView, Platform, Share, Alert, Dimensions 
+} from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useRouter } from "expo-router";
+import * as Haptics from "expo-haptics";
 
-const C = {
-  bg: "#F7F8FA", card: "#FFFFFF", cardBorder: "#EAECF0",
-  ink: "#0D1117", muted: "#656D76", hint: "#AFB8C1",
-  green: "#22C55E", greenBg: "#DCFCE7", greenBorder: "#86EFAC", greenText: "#15803D",
-  teal: "#0EA5E9", tealBg: "#E0F2FE",
-  purple: "#8B5CF6", purpleBg: "#EDE9FE",
-  amber: "#F59E0B", amberBg: "#FEF3C7",
+const { width: W } = Dimensions.get("window");
+
+const COLORS = {
+    purple: "#6366F1",
+    purpleBg: "#EEF2FF",
+    bg: "#F9FAFB",
+    card: "#FFFFFF",
+    text: "#111827",
+    muted: "#6B7280",
+    lightMuted: "#9CA3AF",
+    border: "#F3F4F6",
+    green: "#DCFCE7",
+    greenText: "#15803D",
+    font: "Outfit_500Medium",
+    fontBold: "Outfit_700Bold",
+    fontExtraBold: "Outfit_800ExtraBold",
 };
 
-const ROWS = [
-  { icon: "people-outline" as const, iconBg: C.greenBg, iconColor: C.green, label: "Friends & Following", hint: "Manage your connections", href: "/newApp/search" },
-  { icon: "chatbubble-ellipses-outline" as const, iconBg: C.purpleBg, iconColor: C.purple, label: "Messages", hint: "View all conversations", href: "/newApp/chat" },
-  { icon: "star-outline" as const, iconBg: C.amberBg, iconColor: C.amber, label: "Your Events", hint: "Events you created or joined", href: "/newApp/mybookings" },
-  { icon: "notifications-outline" as const, iconBg: C.tealBg, iconColor: C.teal, label: "Notifications", hint: "Activity on your events", href: "/newApp/mybookings" },
+const SOCIAL_ITEMS = [
+    { 
+        icon: "people-outline" as const, 
+        iconBg: "#EEF2FF", iconColor: "#4F46E5", 
+        label: "Friends & Following", hint: "Manage your connections", href: "/newApp/search" 
+    },
+    { 
+        icon: "chatbox-outline" as const, 
+        iconBg: "#E0F2FE", iconColor: "#0284C7", 
+        label: "Messages", hint: "View all conversations", href: "/newApp/chat" 
+    },
+    { 
+        icon: "star-outline" as const, 
+        iconBg: "#FEF2F2", iconColor: "#DC2626", 
+        label: "Your Events", hint: "Events you created or joined", href: "/newApp/mybookings" 
+    },
+    { 
+        icon: "notifications-outline" as const, 
+        iconBg: "#FFF7ED", iconColor: "#EA580C", 
+        label: "Notifications", hint: "Activity on your events", href: "/newApp/mybookings" 
+    },
 ];
 
 export default function Social() {
-  const router = useRouter();
+    const router = useRouter();
 
-  const handleInvite = async () => {
-    try {
-      await Share.share({ title: "Join me on Meetup!", message: "Hey! I'm using Meetup to discover cool local events. Download the app and let's connect!\n\nhttps://meetup.app/invite" });
-    } catch (e: any) {
-      if (e?.message !== "Share cancelled") Alert.alert("Couldn't share", "Please try again.");
-    }
-  };
+    const handleInvite = async () => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        try {
+            await Share.share({ 
+                title: "Join me on Meetup!", 
+                message: "Hey! I'm using Meetup to discover cool local events. Download the app and let's connect!\n\nhttps://meetup.app/invite" 
+            });
+        } catch (e: any) {
+            if (e?.message !== "Share cancelled") Alert.alert("Couldn't share", "Please try again.");
+        }
+    };
 
-  return (
-    <SafeAreaView style={S.safe}>
-      <ScrollView style={S.container} contentContainerStyle={S.content}>
+    return (
+        <SafeAreaView style={S.safe}>
+            <View style={S.headerRow}>
+                <TouchableOpacity onPress={() => router.back()} style={S.backBtn}>
+                    <Ionicons name="arrow-back" size={22} color={COLORS.purple} />
+                </TouchableOpacity>
+                <Text style={S.headerTitle}>Social</Text>
+                <View style={{ width: 42 }} />
+            </View>
 
-        <View style={S.header}>
-          <TouchableOpacity onPress={() => router.back()} style={S.backBtn}>
-            <Ionicons name="chevron-back" size={22} color={C.ink} />
-          </TouchableOpacity>
-          <Text style={S.title}>Social</Text>
-          <View style={{ width: 44 }} />
-        </View>
-
-        <View style={S.intro}>
-          <Text style={S.introH}>Community</Text>
-          <Text style={S.introS}>Manage your connections and social activity.</Text>
-        </View>
-
-        <View style={S.card}>
-          {ROWS.map((r, i) => (
-            <TouchableOpacity
-              key={r.label}
-              style={[S.row, i === ROWS.length - 1 && { borderBottomWidth: 0 }]}
-              activeOpacity={0.7}
-              onPress={() => router.push(r.href as any)}
+            <ScrollView 
+                style={S.container} 
+                contentContainerStyle={S.content} 
+                showsVerticalScrollIndicator={false}
             >
-              <View style={[S.iconBox, { backgroundColor: r.iconBg }]}>
-                <Ionicons name={r.icon} size={18} color={r.iconColor} />
-              </View>
-              <View style={S.rowBody}>
-                <Text style={S.label}>{r.label}</Text>
-                <Text style={S.hint}>{r.hint}</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color={C.hint} />
-            </TouchableOpacity>
-          ))}
-        </View>
+                <View style={S.intro}>
+                    <Text style={S.introH}>Community</Text>
+                    <Text style={S.introS}>Manage your connections and social activity.</Text>
+                </View>
 
-        {/* Invite banner */}
-        <TouchableOpacity style={S.inviteBtn} onPress={handleInvite} activeOpacity={0.9}>
-          <View style={S.inviteIconBox}>
-            <Ionicons name="gift-outline" size={22} color={C.green} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={S.inviteTitle}>Invite Friends</Text>
-            <Text style={S.inviteSub}>Share the app with your network</Text>
-          </View>
-          <Ionicons name="share-outline" size={18} color={C.greenText} />
-        </TouchableOpacity>
+                <View style={S.card}>
+                    {SOCIAL_ITEMS.map((r, i) => (
+                        <TouchableOpacity
+                            key={r.label}
+                            style={[S.row, i === SOCIAL_ITEMS.length - 1 && { borderBottomWidth: 0 }]}
+                            activeOpacity={0.7}
+                            onPress={() => {
+                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                router.push(r.href as any);
+                            }}
+                        >
+                            <View style={[S.iconBox, { backgroundColor: r.iconBg }]}>
+                                <Ionicons name={r.icon} size={20} color={r.iconColor} />
+                            </View>
+                            <View style={S.rowBody}>
+                                <Text style={S.label}>{r.label}</Text>
+                                <Text style={S.hint}>{r.hint}</Text>
+                            </View>
+                            <Ionicons name="chevron-forward" size={18} color={COLORS.lightMuted} />
+                        </TouchableOpacity>
+                    ))}
+                </View>
 
-        {/* Community stats */}
-        <View style={S.statsRow}>
-          <View style={S.statItem}>
-            <Ionicons name="globe-outline" size={18} color={C.teal} />
-            <Text style={S.statLabel}>Global Community</Text>
-          </View>
-          <View style={S.statDivider} />
-          <View style={S.statItem}>
-            <Ionicons name="heart-outline" size={18} color={C.green} />
-            <Text style={S.statLabel}>Meetup Together</Text>
-          </View>
-        </View>
+                <View style={S.inviteCard}>
+                    <View style={S.inviteHeader}>
+                        <View style={S.inviteIconBg}>
+                            <Ionicons name="gift-outline" size={20} color={COLORS.greenText} />
+                        </View>
+                        <Text style={S.inviteTitle}>Invite Friends</Text>
+                    </View>
+                    <Text style={S.inviteSub}>Share the app with your network and earn exclusive badges.</Text>
+                    <TouchableOpacity 
+                        style={S.shareButton} 
+                        onPress={handleInvite}
+                        activeOpacity={0.8}
+                    >
+                        <Text style={S.shareText}>Share Link</Text>
+                    </TouchableOpacity>
+                </View>
 
-        <Text style={S.footer}>Building a global traveler community</Text>
-      </ScrollView>
-    </SafeAreaView>
-  );
+                <View style={S.statsGrid}>
+                    <View style={S.statCard}>
+                        <View style={[S.statIconBox, { backgroundColor: "#EEF2FF" }]}>
+                            <Ionicons name="globe-outline" size={20} color="#4F46E5" />
+                        </View>
+                        <Text style={S.statLabel}>Global Community</Text>
+                    </View>
+                    <View style={S.statCard}>
+                        <View style={[S.statIconBox, { backgroundColor: "#FEF2F2" }]}>
+                            <Ionicons name="heart-outline" size={20} color="#DC2626" />
+                        </View>
+                        <Text style={S.statLabel}>Meetup Together</Text>
+                    </View>
+                </View>
+
+                <Text style={S.footer}>Building a global traveler community.</Text>
+            </ScrollView>
+        </SafeAreaView>
+    );
 }
 
 const S = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: C.bg }, container: { flex: 1 }, content: { padding: 20, paddingBottom: 60 },
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 24, marginTop: Platform.OS === "android" ? 10 : 0 },
-  backBtn: { width: 42, height: 42, borderRadius: 12, backgroundColor: C.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: C.cardBorder },
-  title: { fontSize: 17, fontWeight: "800", color: C.ink },
-  intro: { marginBottom: 20, paddingLeft: 2 },
-  introH: { fontSize: 26, fontWeight: "900", color: C.ink, letterSpacing: -0.5 },
-  introS: { fontSize: 14, fontWeight: "500", color: C.muted, marginTop: 4 },
-  card: {
-    backgroundColor: C.card, borderRadius: 16, overflow: "hidden",
-    borderWidth: 1, borderColor: C.cardBorder, marginBottom: 14,
-    shadowColor: "#000", shadowOpacity: 0.03, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 1,
-  },
-  row: { flexDirection: "row", alignItems: "center", paddingVertical: 13, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: C.cardBorder },
-  iconBox: { width: 38, height: 38, borderRadius: 10, alignItems: "center", justifyContent: "center", marginRight: 14 },
-  rowBody: { flex: 1 },
-  label: { fontSize: 14, fontWeight: "700", color: C.ink, marginBottom: 2 },
-  hint: { fontSize: 12, fontWeight: "500", color: C.muted },
-  inviteBtn: {
-    flexDirection: "row", alignItems: "center", gap: 14,
-    backgroundColor: C.greenBg, borderWidth: 1, borderColor: C.greenBorder,
-    borderRadius: 16, padding: 16, marginBottom: 14,
-  },
-  inviteIconBox: { width: 44, height: 44, borderRadius: 12, backgroundColor: C.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: C.greenBorder },
-  inviteTitle: { fontSize: 15, fontWeight: "800", color: C.greenText, marginBottom: 2 },
-  inviteSub: { fontSize: 12, fontWeight: "500", color: C.green },
-  statsRow: {
-    flexDirection: "row", alignItems: "center",
-    backgroundColor: C.card, borderRadius: 14, borderWidth: 1, borderColor: C.cardBorder,
-    padding: 14, marginBottom: 20,
-  },
-  statItem: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8, justifyContent: "center" },
-  statLabel: { fontSize: 12, fontWeight: "700", color: C.muted },
-  statDivider: { width: 1, height: 24, backgroundColor: C.cardBorder },
-  footer: { textAlign: "center", color: C.hint, fontSize: 12, fontWeight: "600" },
+    safe: { flex: 1, backgroundColor: COLORS.bg },
+    container: { flex: 1 },
+    headerRow: {
+        flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+        paddingHorizontal: 20, paddingTop: Platform.OS === "ios" ? 10 : 20, paddingBottom: 10,
+    },
+    backBtn: {
+        width: 42, height: 42, borderRadius: 14,
+        alignItems: "center", justifyContent: "center",
+        backgroundColor: "#fff", borderWidth: 1, borderColor: COLORS.border,
+    },
+    headerTitle: { fontSize: 18, fontFamily: COLORS.fontExtraBold, color: COLORS.purple },
+    content: { padding: 20, paddingBottom: 60 },
+    intro: { marginBottom: 24, paddingLeft: 2 },
+    introH: { fontSize: 32, fontFamily: COLORS.fontExtraBold, color: COLORS.text, letterSpacing: -0.5 },
+    introS: { fontSize: 14, fontFamily: COLORS.font, color: COLORS.muted, marginTop: 4, lineHeight: 20 },
+    card: {
+        backgroundColor: COLORS.card, borderRadius: 24, overflow: "hidden",
+        borderWidth: 1, borderColor: COLORS.border, marginBottom: 20,
+        shadowColor: "#000", shadowOpacity: 0.03, shadowRadius: 10, shadowOffset: { width: 0, height: 4 },
+    },
+    row: {
+        flexDirection: "row", alignItems: "center",
+        padding: 16, borderBottomWidth: 1, borderBottomColor: COLORS.border,
+    },
+    iconBox: { width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center", marginRight: 16 },
+    rowBody: { flex: 1 },
+    label: { fontSize: 16, fontFamily: COLORS.fontBold, color: COLORS.text },
+    hint: { fontSize: 12, fontFamily: COLORS.font, color: COLORS.muted, marginTop: 2 },
+    inviteCard: {
+        backgroundColor: COLORS.green, borderRadius: 24, padding: 24, marginBottom: 20,
+    },
+    inviteHeader: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 8 },
+    inviteIconBg: { width: 36, height: 36, borderRadius: 10, backgroundColor: "#fff", alignItems: "center", justifyContent: "center" },
+    inviteTitle: { fontSize: 16, fontFamily: COLORS.fontExtraBold, color: COLORS.greenText },
+    inviteSub: { fontSize: 13, fontFamily: COLORS.fontBold, color: COLORS.greenText, opacity: 0.8, lineHeight: 18, marginBottom: 16 },
+    shareButton: {
+        backgroundColor: COLORS.purple, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 20,
+        alignSelf: "flex-start", shadowColor: COLORS.purple, shadowOpacity: 0.2, shadowRadius: 8, shadowOffset: { width: 0, height: 4 },
+    },
+    shareText: { color: "#fff", fontSize: 14, fontFamily: COLORS.fontExtraBold },
+    statsGrid: { flexDirection: "row", gap: 16, marginBottom: 40 },
+    statCard: {
+        flex: 1, backgroundColor: "#fff", borderRadius: 24, padding: 20,
+        alignItems: "center", justifyContent: "center", gap: 12,
+        borderWidth: 1, borderColor: COLORS.border,
+    },
+    statIconBox: { width: 44, height: 44, borderRadius: 16, alignItems: "center", justifyContent: "center" },
+    statLabel: { fontSize: 13, fontFamily: COLORS.fontBold, color: COLORS.text, textAlign: "center" },
+    footer: { textAlign: "center", color: COLORS.lightMuted, fontSize: 12, fontFamily: COLORS.fontBold },
 });

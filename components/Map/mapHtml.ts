@@ -32,18 +32,30 @@ export function buildMapHtml(args: {
       transition:transform 0.25s cubic-bezier(0.34,1.56,0.64,1),box-shadow 0.2s ease,opacity 0.2s ease;
     }
     .ep::after{
-      content:"";position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);
-      width:10px;height:6px;background:#fff;clip-path:polygon(0 0,100% 0,50% 100%);
+      content:"";position:absolute;bottom:-6px;left:50%;
+      width:10px;height:10px;
+      transform: translateX(-50%) translateY(-50%) rotate(45deg);
+      border-bottom-right-radius: 2px;
+      z-index: -1;
     }
-    .ep .em{font-size:18px;line-height:1;flex-shrink:0;}
+    .ep .em{font-size:16px;line-height:1;flex-shrink:0;display:flex;align-items:center;justify-content:center;}
+    .ep .em svg{width:16px;height:16px;}
     .ep .et{
       font-size:12px;font-weight:600;color:#111;
       font-family:-apple-system,system-ui,sans-serif;
       max-width:80px;overflow:hidden;text-overflow:ellipsis;letter-spacing:-0.2px;
     }
-    .ep.free   {border-left:3px solid #16a34a;}
-    .ep.paid   {border-left:3px solid #ea580c;}
-    .ep.service{border-left:3px solid #7c3aed;}
+    .ep.free   { border: 1.5px solid #22C55E; background: #DCFCE7; }
+    .ep.free .et { color: #166534; }
+    .ep.free::after { background: #DCFCE7; border-right: 1.5px solid #22C55E; border-bottom: 1.5px solid #22C55E; }
+
+    .ep.paid   { border: 1.5px solid #F59E0B; background: #FEF3C7; }
+    .ep.paid .et { color: #92400E; }
+    .ep.paid::after { background: #FEF3C7; border-right: 1.5px solid #F59E0B; border-bottom: 1.5px solid #F59E0B; }
+
+    .ep.service{ border: 1.5px solid #8B5CF6; background: #F3E8FF; }
+    .ep.service .et { color: #5B21B6; }
+    .ep.service::after { background: #F3E8FF; border-right: 1.5px solid #8B5CF6; border-bottom: 1.5px solid #8B5CF6; }
     .ep.live{
       border-left:3px solid #ef4444;
       box-shadow:0 2px 10px rgba(239,68,68,0.28),0 0 0 0 rgba(239,68,68,0.4);
@@ -233,6 +245,13 @@ export function buildMapHtml(args: {
       if(k==='service')return cls+'service';
       return cls;
     }
+    function kindIcon(k){
+      if(!k) return '<svg viewBox="0 0 512 512" fill="none" stroke="currentColor" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"><path d="M256 32C167.67 32 96 96.51 96 176c0 128 160 304 160 304s160-176 160-304c0-79.49-71.67-144-160-144zm0 224a64 64 0 1164-64 64.07 64.07 0 01-64 64z"/></svg>';
+      if(k.indexOf('free')>=0) return '<svg viewBox="0 0 512 512" fill="none" stroke="currentColor" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"><path d="M448 160H64a32 32 0 00-32 32v16a32 32 0 0032 32h384a32 32 0 0032-32v-16a32 32 0 00-32-32z"/><path d="M80 240v184a40 40 0 0040 40h272a40 40 0 0040-40V240M256 160V464M256 160c-14.86-53.64-51.52-80-88-80-45.74 0-72 31.84-72 65.5 0 29.23 20.35 48.51 48 48.51 31.42 0 88-34 88-34zM256 160s56.58 34 88 34c27.65 0 48-19.28 48-48.51 0-33.66-26.26-65.5-72-65.5-36.48 0-73.14 26.36-88 80z"/></svg>';
+      if(k.indexOf('paid')>=0) return '<svg viewBox="0 0 512 512" fill="none" stroke="currentColor" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"><rect x="32" y="80" width="448" height="352" rx="48" ry="48"/><path d="M256 304a64 64 0 10-64-64 64 64 0 0064 64z"/><path d="M480 160a80 80 0 01-80-80M32 160a80 80 0 0080-80M480 352a80 80 0 00-80 80M32 352a80 80 0 0180 80"/></svg>';
+      if(k==='service') return '<svg viewBox="0 0 512 512" fill="none" stroke="currentColor" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"><rect x="32" y="128" width="448" height="320" rx="48" ry="48"/><path d="M144 128V96a64 64 0 0164-64h88a64 64 0 0164 64v32M480 240H32M320 240v24a8 8 0 01-8 8H200a8 8 0 01-8-8v-24"/></svg>';
+      return '<svg viewBox="0 0 512 512" fill="none" stroke="currentColor" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"><path d="M256 32C167.67 32 96 96.51 96 176c0 128 160 304 160 304s160-176 160-304c0-79.49-71.67-144-160-144zm0 224a64 64 0 1164-64 64.07 64.07 0 01-64 64z"/></svg>';
+    }
     function kindLabel(k){
       if(!k)return'';
       if(k.indexOf('free')>=0)return'Free';
@@ -314,7 +333,7 @@ export function buildMapHtml(args: {
         var title=ev.title||'';
         var inner=live
           ? '<span class="live-dot"></span><span class="et">LIVE · '+title.slice(0,14)+(title.length>14?'…':'')+'</span>'
-          : '<span class="em">'+(ev.emoji||'📍')+'</span>'+(title.length>0&&title.length<=18?'<span class="et">'+title+'</span>':'');
+          : '<span class="em">'+kindIcon(ev.kind)+'</span>'+(title.length>0&&title.length<=18?'<span class="et">'+title+'</span>':'');
         div.innerHTML=inner;
         rec.div=div;
         div.addEventListener('pointerdown',function(e){e.preventDefault();e.stopPropagation();div.classList.add('pressing');},{passive:false});

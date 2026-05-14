@@ -294,15 +294,17 @@ export default function NewAppLayout() {
           shadowRadius: 12,
           shadowOffset: { width: 0, height: -3 },
         },
-        tabBarActiveTintColor:   C.active,
+        tabBarActiveTintColor:   "#6C63FF",
         tabBarInactiveTintColor: C.inactive,
         tabBarLabelStyle: {
           fontSize:      11,
-          fontWeight:    "800",
+          fontFamily:    "Outfit_800ExtraBold",
           marginTop:     2,
           letterSpacing: 0.1,
         },
         tabBarHideOnKeyboard: true,
+        tabBarPressOpacity: 0.7,
+        tabBarPressColor: "transparent",
       }}
     >
 

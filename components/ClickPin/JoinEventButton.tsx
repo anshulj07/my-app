@@ -10,6 +10,7 @@ import { useAuth, useUser } from "@clerk/clerk-expo";
 import { useRouter } from "expo-router";
 import Constants from "expo-constants";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import * as Location from "expo-location";
 import { apiFetch } from "../../lib/apiFetch";
 import RazorpaySheet, {
   type RazorpayOrderData,
@@ -21,19 +22,23 @@ import PaymentFailureModal from "../Payment/PaymentFailureModal";
 /* ─── tokens ─── */
 const C = {
   bg:          "#FFFFFF",
-  surface:     "#F7F7F7",
-  border:      "rgba(0,0,0,0.08)",
-  ink:         "#0F0F0F",
-  ink2:        "#2C2C2C",
-  muted:       "#717171",
-  hint:        "#C0C0C0",
-  green:       "#1DB954",
-  greenSoft:   "rgba(29,185,84,0.10)",
-  greenBorder: "rgba(29,185,84,0.28)",
-  greenDark:   "#0F9640",
+  surface:     "#F9FAFB",
+  border:      "#F3F4F6",
+  ink:         "#111827",
+  ink2:        "#374151",
+  muted:       "#6B7280",
+  hint:        "#9CA3AF",
+  purple:      "#6366F1", 
+  purpleSoft:  "rgba(99,102,241,0.08)",
+  purpleBorder: "rgba(99,102,241,0.15)",
+  purpleDark:  "#4F46E5",
   amber:       "#F59E0B",
   amberSoft:   "rgba(245,158,11,0.10)",
   red:         "#EF4444",
+  font:        "Outfit_500Medium",
+  fontBold:    "Outfit_700Bold",
+  fontExtraBold: "Outfit_800ExtraBold",
+  fontBlack:   "Outfit_900Black",
 };
 
 type EventKind = "free" | "paid" | "event_free" | "event_paid" | "service";
@@ -54,6 +59,9 @@ type Props = {
   endDate?: string;
   durationHrs?: number;
   customTrigger?: (onPress: () => React.ReactNode) => React.ReactNode;
+  autoOpen?: boolean;
+  eventLat?: number;
+  eventLng?: number;
 };
 
 export default function JoinEventButton({
@@ -71,6 +79,9 @@ export default function JoinEventButton({
   endDate,
   durationHrs = 1,
   customTrigger,
+  autoOpen = false,
+  eventLat,
+  eventLng,
 }: Props) {
   const router    = useRouter();
   const { userId } = useAuth();
@@ -127,6 +138,21 @@ export default function JoinEventButton({
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [bookedSlots,   setBookedSlots]   = useState<any[]>([]);
 
+  // Date selection
+  const [selectedDate, setSelectedDate] = useState(startDate || new Date().toISOString().split("T")[0]);
+
+  // Generate next 14 days
+  const availableDates = useMemo(() => {
+    const dates = [];
+    const today = new Date();
+    for (let i = 0; i < 14; i++) {
+      const d = new Date(today);
+      d.setDate(today.getDate() + i);
+      dates.push(d.toISOString().split("T")[0]);
+    }
+    return dates;
+  }, []);
+
   // Totals
   const subtotal   = pricePerSpot * (kind === "service" ? duration : spots);
   const totalPaise = (subtotal + platformFeeFixed) * 100;
@@ -143,6 +169,30 @@ export default function JoinEventButton({
     } catch { return t24; }
   };
 
+  const startMs = useMemo(() => {
+    const date = (startDate ?? "").trim();
+    const time = (selectedSlot ?? "").trim();
+    if (date && time) { const t = new Date(`${date} ${time}`).getTime(); if (Number.isFinite(t)) return t; }
+    if (date) { const t = new Date(date).getTime(); if (Number.isFinite(t)) return t; }
+    return Number.POSITIVE_INFINITY;
+  }, [startDate, selectedSlot]);
+
+  const showOtp = useMemo(() => {
+    const now = Date.now();
+    return now >= (startMs - 3600000);
+  }, [startMs]);
+
+  const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371; // km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
+
   /* ── auto-fill name ── */
   useEffect(() => {
     if (showModal && user) {
@@ -150,6 +200,13 @@ export default function JoinEventButton({
       if (fullName) setName(fullName);
     }
   }, [showModal, user]);
+
+  /* ── auto-open ── */
+  useEffect(() => {
+    if (autoOpen && !showModal && !joined && !pendingRequest && !loading) {
+      onPress();
+    }
+  }, [autoOpen, joined, pendingRequest, loading]);
 
   /* ── check already joined ── */
   useEffect(() => {
@@ -183,19 +240,31 @@ export default function JoinEventButton({
     setSpots(1);
     setDuration(durationHrs);
     setSelectedSlot(null);
+    setSelectedDate(startDate || new Date().toISOString().split("T")[0]);
     setShowModal(true);
 
     // Fetch booked slots if service
     if (kind === "service" && API_BASE && eventId) {
-      try {
-        const r = await apiFetch(`${API_BASE}/api/bookings/service-bookings?eventId=${eventId}&creatorClerkId=${creatorClerkId}`, {
-          headers: headers,
-        });
-        const j = await r.json().catch(() => null);
-        if (r.ok) setBookedSlots(Array.isArray(j?.bookings) ? j.bookings : []);
-      } catch {}
+      fetchBookedSlots(selectedDate);
     }
   };
+
+  const fetchBookedSlots = async (date: string) => {
+    if (!API_BASE || !eventId) return;
+    try {
+      const r = await apiFetch(`${API_BASE}/api/bookings/service-bookings?eventId=${eventId}&date=${date}`, {
+        headers: headers,
+      });
+      const j = await r.json().catch(() => null);
+      if (r.ok) setBookedSlots(Array.isArray(j?.bookings) ? j.bookings : []);
+    } catch {}
+  };
+
+  useEffect(() => {
+    if (showModal && kind === "service" && selectedDate) {
+      fetchBookedSlots(selectedDate);
+    }
+  }, [selectedDate]);
 
   /* ── Confirm Booking → go to payment or free join ── */
   const handleConfirmBooking = async () => {
@@ -210,6 +279,35 @@ export default function JoinEventButton({
   const doFreeJoin = async () => {
     if (!name.trim()) { Alert.alert("Name required", "Please enter your name to join."); return; }
     Keyboard.dismiss();
+
+    // ── Distance Check for Free Events ──
+    const isFree = kind === "free" || kind === "event_free";
+    if (isFree && eventLat != null && eventLng != null) {
+      setLoading(true);
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert("Location Required", "Please allow location access to join free events.");
+          setLoading(false);
+          return;
+        }
+        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        const dist = getDistance(loc.coords.latitude, loc.coords.longitude, eventLat, eventLng);
+        
+        if (dist > 100) {
+          Alert.alert(
+            "You are too far! 📍",
+            `This event is ${dist.toFixed(0)}km away. Free events are restricted to users within 100km to ensure local community engagement.`,
+            [{ text: "Understood" }]
+          );
+          setLoading(false);
+          return;
+        }
+      } catch (err) {
+        console.log("[JoinEventButton] distance check error:", err);
+      }
+    }
+
     setLoading(true);
     try {
       const email    = user?.primaryEmailAddress?.emailAddress || "";
@@ -263,8 +361,8 @@ export default function JoinEventButton({
           hostId:      creatorClerkId,
           eventId:     eventId,
           type:        kind.includes("service") ? "service" : "event",
-          startDate:   startDate || new Date().toISOString().split("T")[0],
-          endDate:     endDate   || startDate || new Date().toISOString().split("T")[0],
+          startDate:   selectedDate,
+          endDate:     selectedDate,
           pricePerDay: totalPaise, // backend expects the final amount for the order
           bookerName:  name.trim(),
           bookerEmail: user?.primaryEmailAddress?.emailAddress || "",
@@ -419,7 +517,8 @@ export default function JoinEventButton({
         </Pressable>
       )}
 
-      {(joined || pendingRequest) && (
+      {/* ── CANCEL / LEAVE BUTTON (Only if no customTrigger) ── */}
+      {!customTrigger && (joined || pendingRequest) && (
         <TouchableOpacity 
           onPress={handleLeave}
           disabled={loading}
@@ -471,10 +570,37 @@ export default function JoinEventButton({
                 keyboardShouldPersistTaps="handled"
                 contentContainerStyle={M.body}
               >
-                {/* ── SERVICE SLOT SELECTION ── */}
+                {/* ── SERVICE DATE & SLOT SELECTION ── */}
                 {kind === "service" && (
                   <View style={M.section}>
-                    <Text style={M.sectionTitle}>Select Start Time</Text>
+                    <Text style={M.sectionTitle}>Select Date</Text>
+                    <ScrollView 
+                      horizontal 
+                      showsHorizontalScrollIndicator={false} 
+                      contentContainerStyle={M.dateList}
+                    >
+                      {availableDates.map(dateStr => {
+                        const d = new Date(dateStr);
+                        const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
+                        const dayNum  = d.getDate();
+                        const active  = selectedDate === dateStr;
+                        return (
+                          <TouchableOpacity 
+                            key={dateStr}
+                            style={[M.dateBtn, active && M.dateBtnActive]}
+                            onPress={() => {
+                              setSelectedDate(dateStr);
+                              setSelectedSlot(null); // Reset slot on date change
+                            }}
+                          >
+                            <Text style={[M.dateDay, active && M.dateTextActive]}>{dayName}</Text>
+                            <Text style={[M.dateNum, active && M.dateTextActive]}>{dayNum}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+
+                    <Text style={[M.sectionTitle, { marginTop: 20 }]}>Select Start Time</Text>
                     <View style={M.slotsGrid}>
                       {(() => {
                         // For now we just generate some sample hours. 
@@ -556,8 +682,8 @@ export default function JoinEventButton({
                       <View style={M.divider} />
 
                       <View style={M.summaryRow}>
-                        <Text style={[M.summaryLabel, { color: C.ink, fontWeight: "800" }]}>Total</Text>
-                        <Text style={[M.summaryVal, { color: C.green, fontWeight: "900", fontSize: 16 }]}>
+                        <Text style={[M.summaryLabel, { color: C.ink, fontFamily: C.fontBold }]}>Total</Text>
+                        <Text style={[M.summaryVal, { color: C.purple, fontFamily: C.fontBlack, fontSize: 16 }]}>
                           ₹{(subtotal + platformFeeFixed).toFixed(0)}
                         </Text>
                       </View>
@@ -571,7 +697,7 @@ export default function JoinEventButton({
                     <View style={M.freeCard}>
                       <View style={M.freeRow}>
                         <Text style={M.freeLabel}>{eventTitle}</Text>
-                        <Text style={[M.freeVal, { color: C.green }]}>Free</Text>
+                        <Text style={[M.freeVal, { color: C.purple }]}>Free</Text>
                       </View>
                       <View style={M.divider} />
                       <View style={M.freeRow}>
@@ -689,8 +815,8 @@ export default function JoinEventButton({
                     </View>
                     <View style={M.divider} />
                     <View style={M.summaryRow}>
-                      <Text style={[M.summaryLabel, { fontWeight: "800", color: C.ink }]}>Total</Text>
-                      <Text style={[M.summaryVal, { color: C.green, fontWeight: "900", fontSize: 16 }]}>
+                      <Text style={[M.summaryLabel, { fontFamily: C.fontBold, color: C.ink }]}>Total</Text>
+                      <Text style={[M.summaryVal, { color: C.purple, fontFamily: C.fontBlack, fontSize: 16 }]}>
                         ₹{(subtotal + platformFeeFixed).toFixed(0)}
                       </Text>
                     </View>
@@ -745,10 +871,10 @@ export default function JoinEventButton({
               >
                 {/* Big checkmark */}
                 <View style={M.confirmCircle}>
-                  <Ionicons name="checkmark" size={52} color={C.green} />
+                  <Ionicons name="checkmark" size={52} color={C.purple} />
                 </View>
                 <Text style={M.confirmTitle}>Booking Confirmed!</Text>
-                <Text style={M.confirmSub}>Your tickets are ready. Show QR at the entry.</Text>
+                <Text style={M.confirmSub}>Your booking is confirmed! You can view your tickets in My Bookings.</Text>
 
                 {/* Ticket card */}
                 <View style={M.ticketCard}>
@@ -779,7 +905,7 @@ export default function JoinEventButton({
                     </View>
                     <View style={M.ticketCell}>
                       <Text style={M.ticketCellLabel}>Amount</Text>
-                      <Text style={[M.ticketCellVal, { color: C.green }]}>
+                      <Text style={[M.ticketCellVal, { color: C.purple }]}>
                         {isPaid ? `₹${(subtotal + platformFeeFixed).toFixed(0)}` : "Free"}
                       </Text>
                     </View>
@@ -787,29 +913,21 @@ export default function JoinEventButton({
 
                   {/* Barcode area */}
                   <View style={M.barcodeWrap}>
-                    {confirmOtp ? (
-                      <View style={M.otpBox}>
-                        <Text style={M.otpLabel}>Check-in OTP</Text>
-                        <Text style={M.otpCode}>{confirmOtp}</Text>
-                        <Text style={M.otpHint}>Show this code to the host on arrival</Text>
-                      </View>
-                    ) : (
-                      <View style={M.barcodeMock}>
-                        {Array.from({ length: 24 }).map((_, i) => (
-                          <View key={i} style={[M.barcodeBar, { width: [1,2,1,3,1,2,1,1,3,2,1,2,1,1,2,3,1,2,1,1,2,1,3,2][i] * 2, opacity: 0.8 }]} />
-                        ))}
-                      </View>
-                    )}
+                    <View style={M.barcodeMock}>
+                      {Array.from({ length: 24 }).map((_, i) => (
+                        <View key={i} style={[M.barcodeBar, { width: [1,2,1,3,1,2,1,1,3,2,1,2,1,1,2,3,1,2,1,1,2,1,3,2][i] * 2, opacity: 0.8 }]} />
+                      ))}
+                    </View>
+                    <Text style={[M.otpHint, { marginTop: 12, fontWeight: "600" }]}>
+                      Ticket saved to My Bookings
+                    </Text>
                   </View>
                 </View>
 
                 {/* Buttons */}
-                <View style={{ width: "100%", gap: 10, marginTop: 8 }}>
+                <View style={{ width: "100%", marginTop: 8 }}>
                   <TouchableOpacity style={M.confirmBtn} activeOpacity={0.88} onPress={() => setShowModal(false)}>
-                    <Text style={M.confirmBtnText}>Show QR</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={M.cancelBtn} activeOpacity={0.88} onPress={() => setShowModal(false)}>
-                    <Text style={[M.cancelBtnText, { color: C.muted }]}>All Tickets</Text>
+                    <Text style={M.confirmBtnText}>Done</Text>
                   </TouchableOpacity>
                 </View>
 
@@ -867,18 +985,18 @@ export default function JoinEventButton({
 // Main CTA button
 const B = StyleSheet.create({
   cta: {
-    height: 52, borderRadius: 14,
-    backgroundColor: C.green,
+    height: 54, borderRadius: 16,
+    backgroundColor: C.purple,
     alignItems: "center", justifyContent: "center",
     flexDirection: "row", gap: 8,
-    shadowColor: C.green, shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25, shadowRadius: 10, elevation: 6,
+    shadowColor: C.purple, shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3, shadowRadius: 10, elevation: 6,
   },
-  ctaJoined:   { backgroundColor: "rgba(29,185,84,0.7)" },
+  ctaJoined:   { backgroundColor: "rgba(99,102,241,0.7)" },
   ctaPending:  { backgroundColor: C.amber },
   ctaDisabled: { opacity: 0.50 },
   ctaPressed:  { transform: [{ scale: 0.98 }], opacity: 0.94 },
-  ctaText:     { color: "#fff", fontWeight: "800", fontSize: 15 },
+  ctaText:     { color: "#fff", fontFamily: C.fontBold, fontSize: 15 },
   cancelCta: {
     marginTop: 12,
     height: 48, borderRadius: 14,
@@ -886,13 +1004,13 @@ const B = StyleSheet.create({
     backgroundColor: "rgba(239, 68, 68, 0.05)",
     alignItems: "center", justifyContent: "center",
   },
-  cancelCtaText: { color: "#EF4444", fontWeight: "700", fontSize: 14 },
+  cancelCtaText: { color: "#EF4444", fontFamily: C.fontBold, fontSize: 14 },
 });
 
 // Modal
 const M = StyleSheet.create({
   backdrop: {
-    flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end",
+    flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "flex-end",
   },
   sheet: {
     backgroundColor: C.bg,
@@ -912,32 +1030,32 @@ const M = StyleSheet.create({
   },
   headerTitle: {
     flex: 1, textAlign: "center",
-    fontSize: 16, fontWeight: "800", color: C.ink,
+    fontSize: 16, fontFamily: C.fontBold, color: C.ink,
   },
   headerClose: {
-    width: 30, height: 30, borderRadius: 15,
+    width: 32, height: 32, borderRadius: 16,
     backgroundColor: C.surface, alignItems: "center", justifyContent: "center",
   },
 
   body:         { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 20 },
   section:      { marginBottom: 16 },
-  sectionTitle: { fontSize: 13, fontWeight: "700", color: C.muted, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.6 },
+  sectionTitle: { fontSize: 11, fontFamily: C.fontBold, color: C.muted, marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.8 },
 
   /* Spot card */
   spotCard: {
-    backgroundColor: C.surface, borderRadius: 14,
-    borderWidth: 1, borderColor: C.border, padding: 16,
+    backgroundColor: C.surface, borderRadius: 18,
+    borderWidth: 1, borderColor: C.border, padding: 18,
   },
   spotRow:   { flexDirection: "row", alignItems: "center", marginBottom: 12 },
-  spotLabel: { fontSize: 14, fontWeight: "700", color: C.ink },
-  spotPrice: { fontSize: 12, color: C.muted, marginTop: 2 },
+  spotLabel: { fontSize: 14, fontFamily: C.fontBold, color: C.ink },
+  spotPrice: { fontSize: 12, fontFamily: C.font, color: C.muted, marginTop: 2 },
   spotCounter: { flexDirection: "row", alignItems: "center", gap: 14 },
   counterBtn: {
-    width: 30, height: 30, borderRadius: 8,
+    width: 32, height: 32, borderRadius: 10,
     backgroundColor: C.bg, borderWidth: 1, borderColor: C.border,
     alignItems: "center", justifyContent: "center",
   },
-  counterVal: { fontSize: 16, fontWeight: "800", color: C.ink, minWidth: 20, textAlign: "center" },
+  counterVal: { fontSize: 16, fontFamily: C.fontBold, color: C.ink, minWidth: 24, textAlign: "center" },
   divider:    { height: 1, backgroundColor: C.border, marginVertical: 10 },
   summaryRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 },
   summaryLabel: { fontSize: 13, color: C.muted, fontWeight: "500" },
@@ -950,13 +1068,13 @@ const M = StyleSheet.create({
   },
   freeRow:   { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 },
   freeLabel: { fontSize: 13, color: C.muted, fontWeight: "500" },
-  freeVal:   { fontSize: 13, color: C.ink2, fontWeight: "700" },
+  freeVal:   { fontSize: 13, fontFamily: C.fontBold, color: C.ink2 },
   totalFreeChip: {
-    backgroundColor: "rgba(29,185,84,0.10)", borderWidth: 1,
-    borderColor: "rgba(29,185,84,0.28)", paddingHorizontal: 10,
-    paddingVertical: 4, borderRadius: 999,
+    backgroundColor: C.purpleSoft, borderWidth: 1,
+    borderColor: C.purpleBorder, paddingHorizontal: 12,
+    paddingVertical: 5, borderRadius: 20,
   },
-  totalFreeChipText: { fontSize: 12, fontWeight: "800", color: C.green },
+  totalFreeChipText: { fontSize: 12, fontFamily: C.fontBold, color: C.purple },
 
   /* Policy */
   policyCard: {
@@ -967,11 +1085,11 @@ const M = StyleSheet.create({
   policyText:  { fontSize: 12, color: C.muted, lineHeight: 18 },
 
   /* Fields */
-  fieldLabel: { fontSize: 12, fontWeight: "700", color: C.muted, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.4 },
+  fieldLabel: { fontSize: 11, fontFamily: C.fontBold, color: C.muted, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.6 },
   input: {
     backgroundColor: C.surface, borderWidth: 1, borderColor: C.border,
-    borderRadius: 12, paddingHorizontal: 14, paddingVertical: 13,
-    color: C.ink, fontSize: 14, fontWeight: "600",
+    borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14,
+    color: C.ink, fontSize: 14, fontFamily: C.fontBold,
   },
 
   /* Payment method */
@@ -999,16 +1117,16 @@ const M = StyleSheet.create({
   radioDot:         { width: 7, height: 7, borderRadius: 3.5, backgroundColor: "#fff" },
 
   /* Footer buttons */
-  footer:     { gap: 10 },
+  footer:     { gap: 12, marginTop: 10 },
   confirmBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
-    height: 54, borderRadius: 14, backgroundColor: C.green,
-    shadowColor: C.green, shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.22, shadowRadius: 10, elevation: 5,
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10,
+    height: 56, borderRadius: 18, backgroundColor: C.purple,
+    shadowColor: C.purple, shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3, shadowRadius: 10, elevation: 6,
   },
-  confirmBtnText: { fontSize: 16, fontWeight: "800", color: "#fff" },
-  cancelBtn:      { height: 46, alignItems: "center", justifyContent: "center" },
-  cancelBtnText:  { fontSize: 14, fontWeight: "700", color: C.muted },
+  confirmBtnText: { fontSize: 16, fontFamily: C.fontExtraBold, color: "#fff" },
+  cancelBtn:      { height: 48, alignItems: "center", justifyContent: "center" },
+  cancelBtnText:  { fontSize: 14, fontFamily: C.fontBold, color: C.muted },
 
   /* Razorpay banner */
   rzpBanner: {
@@ -1022,13 +1140,13 @@ const M = StyleSheet.create({
 
   /* Confirmed screen */
   confirmCircle: {
-    width: 100, height: 100, borderRadius: 50,
-    borderWidth: 3, borderColor: C.green,
+    width: 90, height: 90, borderRadius: 45,
+    borderWidth: 4, borderColor: C.purple,
     alignItems: "center", justifyContent: "center",
-    marginTop: 16, marginBottom: 16,
+    marginTop: 20, marginBottom: 20,
   },
-  confirmTitle: { fontSize: 24, fontWeight: "900", color: C.ink, marginBottom: 6 },
-  confirmSub:   { fontSize: 13, color: C.muted, textAlign: "center", marginBottom: 24, fontWeight: "500" },
+  confirmTitle: { fontSize: 24, fontFamily: C.fontBlack, color: C.ink, marginBottom: 8 },
+  confirmSub:   { fontSize: 13, color: C.muted, textAlign: "center", marginBottom: 30, fontFamily: C.font, lineHeight: 20 },
 
   /* Ticket */
   ticketCard: {
@@ -1038,10 +1156,10 @@ const M = StyleSheet.create({
     shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
   },
-  ticketHeader: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 10 },
-  ticketDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: C.green },
-  ticketStatus: { fontSize: 12, fontWeight: "700", color: C.green },
-  ticketEventName: { fontSize: 20, fontWeight: "900", color: C.ink, marginBottom: 4 },
+  ticketHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
+  ticketDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: C.purple },
+  ticketStatus: { fontSize: 12, fontFamily: C.fontBold, color: C.purple },
+  ticketEventName: { fontSize: 20, fontFamily: C.fontBlack, color: C.ink, marginBottom: 4 },
   ticketDashedLine: {
     height: 1, borderWidth: 1, borderColor: C.border,
     borderStyle: "dashed", marginVertical: 14,
@@ -1057,28 +1175,44 @@ const M = StyleSheet.create({
   barcodeWrap: { alignItems: "center", paddingTop: 8 },
   barcodeMock: { flexDirection: "row", gap: 2, height: 48, alignItems: "center" },
   barcodeBar:  { height: "100%", backgroundColor: C.ink2, borderRadius: 1 },
-  otpBox:      { alignItems: "center", gap: 4, paddingVertical: 8 },
-  otpLabel:    { fontSize: 11, fontWeight: "700", color: C.muted, textTransform: "uppercase", letterSpacing: 0.6 },
-  otpCode:     { fontSize: 36, fontWeight: "900", color: C.green, letterSpacing: 8 },
-  otpHint:     { fontSize: 11, color: C.muted, textAlign: "center" },
+  otpBox:      { alignItems: "center", gap: 6, paddingVertical: 12 },
+  otpLabel:    { fontSize: 11, fontFamily: C.fontBold, color: C.muted, textTransform: "uppercase", letterSpacing: 0.8 },
+  otpCode:     { fontSize: 36, fontFamily: C.fontBlack, color: C.purple, letterSpacing: 10 },
+  otpHint:     { fontSize: 11, color: C.muted, textAlign: "center", fontFamily: C.font },
 
   // Slots
   slotsGrid: {
     flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8,
   },
   slotBtn: {
-    paddingHorizontal: 10, paddingVertical: 10,
-    borderRadius: 10, backgroundColor: "#F3F4F6",
-    borderWidth: 1, borderColor: "rgba(0,0,0,0.05)",
+    paddingHorizontal: 12, paddingVertical: 12,
+    borderRadius: 14, backgroundColor: C.surface,
+    borderWidth: 1, borderColor: C.border,
     minWidth: "22%", alignItems: "center",
   },
   slotBtnActive: {
-    backgroundColor: C.green, borderColor: C.green,
+    backgroundColor: C.purple, borderColor: C.purple,
+    shadowColor: C.purple, shadowOpacity: 0.2, shadowRadius: 8, elevation: 4,
   },
   slotBtnBooked: {
-    backgroundColor: "#E5E7EB", opacity: 0.6,
+    backgroundColor: "#F1F5F9", opacity: 0.5,
   },
-  slotBtnTxt: { fontSize: 13, fontWeight: "700", color: C.ink2 },
+  slotBtnTxt: { fontSize: 13, fontFamily: C.fontBold, color: C.ink2 },
   slotBtnTxtActive: { color: "#fff" },
-  slotBtnTxtBooked: { color: C.hint, fontSize: 11 },
+  slotBtnTxtBooked: { color: C.hint, fontSize: 11, fontFamily: C.font },
+
+  // Date selection styles
+  dateList: { gap: 10, paddingVertical: 4 },
+  dateBtn: {
+    width: 58, height: 68, borderRadius: 16,
+    backgroundColor: C.surface, borderWidth: 1, borderColor: C.border,
+    alignItems: "center", justifyContent: "center", gap: 4,
+  },
+  dateBtnActive: {
+    backgroundColor: C.green, borderColor: C.green,
+    shadowColor: C.green, shadowOpacity: 0.2, shadowRadius: 8, elevation: 4,
+  },
+  dateDay: { fontSize: 11, fontWeight: "600", color: C.muted, textTransform: "uppercase" },
+  dateNum: { fontSize: 18, fontWeight: "800", color: C.ink },
+  dateTextActive: { color: "#fff" },
 });

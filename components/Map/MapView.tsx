@@ -138,7 +138,7 @@ export default function MapView({
     for (let i = 0; i < list.length; i++) {
       const status = String(list[i]?.status || "active").toLowerCase();
       const isMine = userId && String(list[i]?.creatorClerkId) === userId;
-      if (status !== "active" && (!isMine || status !== "paused")) continue;
+      if (status !== "active" && status !== "live" && (!isMine || status !== "paused")) continue;
       const n = normalizeEvent(list[i], i);
       if (n) out.push(n);
     }
@@ -158,8 +158,9 @@ export default function MapView({
     initialCenter ??
     (canFallbackToEvents && safeEvents[0]
       ? { lat: safeEvents[0].lat, lng: safeEvents[0].lng }
-      : { lat: 22.7196, lng: 75.8577 });
-  const zoom = initialCenter || (canFallbackToEvents && safeEvents[0]) ? 12 : 11;
+      : { lat: 40.7128, lng: -74.006 }); // Default to NYC for worldwide neutral start
+  const zoom = initialCenter || (canFallbackToEvents && safeEvents[0]) ? 12 : 10;
+
   const safeEventsJson = useMemo(() => JSON.stringify(safeEvents), [safeEvents]);
 
   // ✅ Use a ref to capture the initial center for the HTML payload.

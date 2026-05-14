@@ -13,7 +13,7 @@ import { NotifItem } from "../../context/NotificationContext";
 // ─────────────────────────────────────────────────────────────
 const C = {
   bg:      "#FFFFFF",
-  primary: "#3ECFB2", // Brand Teal
+  primary: "#6C63FF", // Brand Purple
   ink:     "#1C1A17",
   ink2:    "#4A453E",
   muted:   "#8A8278",
@@ -22,8 +22,7 @@ const C = {
   white:   "#FFFFFF",
   coral:   "#FF6F6F",
   coralBg: "#FFF0F0",
-  teal:    "#3ECFB2",
-  tealBg:  "#E8FAF7",
+  brandSoft: "#EEF2FF",
 };
 
 function timeAgo(iso: string) {
@@ -36,7 +35,7 @@ function timeAgo(iso: string) {
 }
 
 export default function NotificationSheet({
-  visible, onClose, items, loading, admitBusy, onAdmit, onReject, onPressEvent, onMarkRead
+  visible, onClose, items, loading, admitBusy, onAdmit, onReject, onPressEvent, onPressUser, onMarkRead
 }: {
   visible: boolean;
   onClose: () => void;
@@ -46,6 +45,7 @@ export default function NotificationSheet({
   onAdmit: (item: NotifItem) => void;
   onReject: (item: NotifItem) => void;
   onPressEvent: (eventId: string) => void;
+  onPressUser: (clerkUserId: string) => void;
   onMarkRead: () => void;
 }) {
   const pending = items.filter(i => i.type === "pending");
@@ -115,9 +115,13 @@ export default function NotificationSheet({
                         </View>
                         <View style={{ flex: 1 }}>
                           <Text style={S.cardText} numberOfLines={2}>
-                            <Text style={S.boldText}>{item.userName}</Text>
+                            <Text style={S.boldText} onPress={() => onPressUser(item.userClerkId)}>
+                              {item.userName}
+                            </Text>
                             <Text style={S.normalText}> wants to join </Text>
-                            <Text style={S.eventText}>{item.eventEmoji} {item.eventTitle}</Text>
+                            <Text style={S.eventText} onPress={() => onPressEvent(item.eventId)}>
+                              {item.eventEmoji} {item.eventTitle}
+                            </Text>
                           </Text>
                           <Text style={S.timeText}>{timeAgo(item.timestamp)}</Text>
                         </View>
@@ -172,9 +176,13 @@ export default function NotificationSheet({
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={S.cardText} numberOfLines={2}>
-                        <Text style={S.boldText}>{item.userName}</Text>
+                        <Text style={S.boldText} onPress={() => onPressUser(item.userClerkId)}>
+                          {item.userName}
+                        </Text>
                         <Text style={S.normalText}> joined </Text>
-                        <Text style={S.eventText}>{item.eventEmoji} {item.eventTitle}</Text>
+                        <Text style={S.eventText} onPress={() => onPressEvent(item.eventId)}>
+                          {item.eventEmoji} {item.eventTitle}
+                        </Text>
                       </Text>
                       <Text style={S.timeText}>{timeAgo(item.timestamp)}</Text>
                     </View>
@@ -204,8 +212,8 @@ const S = StyleSheet.create({
   headerTitle: { fontSize: 24, fontWeight: "900", color: C.ink },
   headerSub: { fontSize: 13, color: C.muted, fontWeight: "600", marginTop: 2 },
   headerActions: { flexDirection: "row", alignItems: "center", gap: 12 },
-  markBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, backgroundColor: "rgba(0,0,0,0.04)" },
-  markTxt: { fontSize: 12, fontWeight: "800", color: C.ink2 },
+  markBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, backgroundColor: C.brandSoft },
+  markTxt: { fontSize: 12, fontWeight: "800", color: C.primary },
   closeBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(0,0,0,0.04)", alignItems: "center", justifyContent: "center" },
   
   scroll: { paddingHorizontal: 24, paddingBottom: 60, paddingTop: 20 },
@@ -224,7 +232,7 @@ const S = StyleSheet.create({
 
   card: { backgroundColor: C.white, borderRadius: 24, padding: 16, marginBottom: 12, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 10, elevation: 2 },
   cardRow: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
-  avatar: { width: 48, height: 48, borderRadius: 16, backgroundColor: C.tealBg, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  avatar: { width: 48, height: 48, borderRadius: 16, backgroundColor: C.brandSoft, alignItems: "center", justifyContent: "center", overflow: "hidden" },
   avatarImg: { width: "100%", height: "100%" },
   avatarLetter: { fontSize: 18, fontWeight: "900", color: C.primary },
   cardText: { fontSize: 14, lineHeight: 20 },
@@ -243,6 +251,6 @@ const S = StyleSheet.create({
   rejectTxt: { color: C.ink2, fontWeight: "800", fontSize: 14 },
 
   activityRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "rgba(0,0,0,0.03)" },
-  avatarSm: { width: 40, height: 40, borderRadius: 14, backgroundColor: C.tealBg, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  avatarSm: { width: 40, height: 40, borderRadius: 14, backgroundColor: C.brandSoft, alignItems: "center", justifyContent: "center", overflow: "hidden" },
   avatarLetterSm: { fontSize: 15, fontWeight: "900", color: C.primary },
 });

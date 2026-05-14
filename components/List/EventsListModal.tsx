@@ -53,7 +53,9 @@ type EventPin = {
     formattedAddress?: string;
     address?: string;
   };
-  distance?: number; // Calculated field
+  creatorName?: string;
+  creatorAvatar?: string;
+  creatorVerified?: boolean;
 };
 
 function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -80,7 +82,12 @@ function EventCard({ item, onPress }: { item: EventPin; onPress: () => void }) {
         <Text style={S.freeText}>{price}</Text>
       </View>
       <BlurView intensity={25} tint="dark" style={S.eventGlassCard}>
-        <Text style={S.eventTitle} numberOfLines={1}>{item.title}</Text>
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <Text style={S.eventTitle} numberOfLines={1}>{item.title}</Text>
+          {item.creatorVerified && (
+            <Ionicons name="checkmark-circle" size={14} color="#4BB543" style={{ marginLeft: 5, marginBottom: 5 }} />
+          )}
+        </View>
         <View style={S.eventMetaRow}>
           <Ionicons name="location-outline" size={12} color="#fff" />
           <Text style={S.eventMetaText} numberOfLines={1}>
@@ -122,7 +129,12 @@ function ServiceCard({ item, onPress }: { item: EventPin; onPress: () => void })
 
       <View style={S.serviceContentOverlay}>
         <View style={S.serviceInfoTop}>
-          <Text style={S.serviceName} numberOfLines={1}>{item.title}</Text>
+          <View style={{ flex: 1, flexDirection: "row", alignItems: "center" }}>
+            <Text style={S.serviceName} numberOfLines={1}>{item.title}</Text>
+            {item.creatorVerified && (
+              <Ionicons name="checkmark-circle" size={14} color="#4BB543" style={{ marginLeft: 5 }} />
+            )}
+          </View>
           <View style={S.serviceRatingBox}>
              <Ionicons name="star" size={10} color="#F59E0B" />
              <Text style={S.serviceRatingText}>4.9</Text>
@@ -163,7 +175,12 @@ function CompactCard({ item, onPress }: { item: EventPin; onPress: () => void })
       <Image source={{ uri: imgUri }} style={S.compactImg} />
       <View style={S.compactContent}>
         <View style={S.compactTop}>
-          <Text style={S.compactName} numberOfLines={1}>{item.title}</Text>
+          <View style={{ flex: 1, flexDirection: "row", alignItems: "center" }}>
+            <Text style={S.compactName} numberOfLines={1}>{item.title}</Text>
+            {item.creatorVerified && (
+              <Ionicons name="checkmark-circle" size={12} color="#4BB543" style={{ marginLeft: 4 }} />
+            )}
+          </View>
           <View style={S.compactTag}><Text style={S.compactTagText}>{item.kind?.toUpperCase() || "EVENT"}</Text></View>
         </View>
         <View style={S.compactMeta}>

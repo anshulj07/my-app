@@ -98,6 +98,9 @@ export default function EditEventModalView(props: {
     onClosePress: () => void;
     onSave: () => void;
     onDelete: () => void;
+
+    bannerUri: string | null;
+    setBannerUri: (v: string | null) => void;
 }) {
     const insets = useSafeAreaInsets();
     const [dateOpen, setDateOpen] = useState(false);
@@ -150,7 +153,7 @@ export default function EditEventModalView(props: {
                 
                 {/* 2. HERO IMAGE */}
                 <View style={S.heroContainer}>
-                   <Image source={{ uri: "https://images.unsplash.com/photo-1517457373958-b7bdd4587205?q=80&w=1000" }} style={S.heroImg} />
+                   <Image source={{ uri: props.bannerUri || "https://images.unsplash.com/photo-1517457373958-b7bdd4587205?q=80&w=1000" }} style={S.heroImg} />
                    <View style={S.heroOverlay}>
                       <TouchableOpacity style={S.editCircle}>
                         <Ionicons name="pencil" size={20} color={C.accent} />
@@ -201,6 +204,24 @@ export default function EditEventModalView(props: {
                       </TouchableOpacity>
                    </View>
                 </View>
+
+                {/* PRICE INPUT (Show if Paid) */}
+                {props.kind === "event_paid" && (
+                    <View style={S.section}>
+                        <Text style={S.label}>Event Price (₹)</Text>
+                        <View style={S.inputShell}>
+                            <Text style={{ marginLeft: 15, fontSize: 18, fontWeight: "900", color: C.accent }}>₹</Text>
+                            <TextInput
+                                style={S.locationInput}
+                                value={props.priceText}
+                                onChangeText={props.setPriceText}
+                                placeholder="0"
+                                placeholderTextColor={C.muted}
+                                keyboardType="numeric"
+                            />
+                        </View>
+                    </View>
+                )}
 
                 {/* 5. DATE & TIME TILES */}
                 <View style={S.row}>
@@ -392,7 +413,7 @@ const S = StyleSheet.create({
 
     body: { paddingHorizontal: 20 },
 
-    heroContainer: { height: 180, borderRadius: 24, overflow: "hidden", marginTop: 10 },
+    heroContainer: { height: 240, borderRadius: 24, overflow: "hidden", marginTop: 10 },
     heroImg: { width: "100%", height: "100%" },
     heroOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.2)", alignItems: "center", justifyContent: "center" },
     editCircle: { width: 48, height: 48, borderRadius: 24, backgroundColor: "#fff", alignItems: "center", justifyContent: "center" },

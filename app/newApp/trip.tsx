@@ -59,6 +59,7 @@ type TripEvent = {
   kind?: string; priceCents?: number; date?: string; time?: string;
   location?: { city?: string; admin1?: string; formattedAddress?: string; address?: string; };
   creatorName?: string;
+  creatorVerified?: boolean;
 };
 
 async function apiFetch(url: string, opts: any) {
@@ -90,7 +91,12 @@ function HeroCard({ ev, onPress }: { ev: TripEvent; onPress?: () => void }) {
 
         {/* Bottom Content Overlay (Glassmorphism) */}
         <BlurView intensity={25} tint="dark" style={S.heroGlass}>
-          <Text style={S.heroTitle} numberOfLines={1}>{ev.title}</Text>
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <Text style={S.heroTitle} numberOfLines={1}>{ev.title}</Text>
+            {ev.creatorVerified && (
+              <Ionicons name="checkmark-circle" size={14} color="#4BB543" style={{ marginLeft: 5, marginBottom: 12 }} />
+            )}
+          </View>
           
           <View style={S.heroMetaRow}>
             <View style={S.heroMetaItem}>
@@ -130,7 +136,12 @@ function SmallCard({ ev, onPress, width }: { ev: TripEvent; onPress?: () => void
         <View style={S.smallBadge}><Text style={S.smallBadgeTxt}>{price}</Text></View>
       </View>
       <View style={S.smallBody}>
-        <Text style={S.smallTitle} numberOfLines={2}>{ev.title}</Text>
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <Text style={S.smallTitle} numberOfLines={1}>{ev.title}</Text>
+          {ev.creatorVerified && (
+            <Ionicons name="checkmark-circle" size={12} color="#4BB543" style={{ marginLeft: 4, marginBottom: 4 }} />
+          )}
+        </View>
         {!!loc && (
           <View style={S.smallRow}>
             <Ionicons name="location-sharp" size={10} color={C.accent} />
@@ -477,7 +488,12 @@ export default function TripScreen() {
                             style={S.compactServiceImg} 
                           />
                           <View style={S.compactServiceBody}>
-                            <Text style={S.compactServiceTitle} numberOfLines={1}>{ev.title}</Text>
+                            <View style={{ flexDirection: "row", alignItems: "center" }}>
+                              <Text style={S.compactServiceTitle} numberOfLines={1}>{ev.title}</Text>
+                              {ev.creatorVerified && (
+                                <Ionicons name="checkmark-circle" size={12} color="#4BB543" style={{ marginLeft: 4 }} />
+                              )}
+                            </View>
                             <View style={S.compactServiceMeta}>
                               <Ionicons name="star" size={10} color={C.gold} />
                               <Text style={S.compactServiceMetaTxt}>4.9 • 1.2km</Text>

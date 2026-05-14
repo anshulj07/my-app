@@ -62,6 +62,9 @@ type Props = {
   autoOpen?: boolean;
   eventLat?: number;
   eventLng?: number;
+  isRecurring?: boolean;
+  recurringDays?: number[];
+  startTime?: string; // 24h format e.g. "13:00"
 };
 
 export default function JoinEventButton({
@@ -82,6 +85,9 @@ export default function JoinEventButton({
   autoOpen = false,
   eventLat,
   eventLng,
+  isRecurring = false,
+  recurringDays = [],
+  startTime,
 }: Props) {
   const router    = useRouter();
   const { userId } = useAuth();
@@ -141,17 +147,49 @@ export default function JoinEventButton({
   // Date selection
   const [selectedDate, setSelectedDate] = useState(startDate || new Date().toISOString().split("T")[0]);
 
-  // Generate next 14 days
+  // Generate available dates (Next 30 days)
   const availableDates = useMemo(() => {
     const dates = [];
-    const today = new Date();
-    for (let i = 0; i < 14; i++) {
-      const d = new Date(today);
-      d.setDate(today.getDate() + i);
+    const now = new Date();
+    
+    // Convert startTime to minutes for comparison
+    let startMinutes = -1;
+    if (startTime) {
+      const [h, m] = startTime.split(":").map(Number);
+      startMinutes = h * 60 + m;
+    }
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+    for (let i = 0; i < 30; i++) {
+      const d = new Date();
+      d.setDate(now.getDate() + i);
+      const dayOfWeek = d.getDay();
+      
+      // If recurring, only include selected days
+      if (isRecurring && recurringDays.length > 0) {
+        if (!recurringDays.includes(dayOfWeek)) continue;
+      }
+      
+      // If it's today, check if time has passed
+      if (i === 0 && startMinutes !== -1 && nowMinutes >= startMinutes) {
+        continue;
+      }
+
       dates.push(d.toISOString().split("T")[0]);
+      if (!isRecurring && dates.length >= 1) break; // One-off events only need one date
+      if (dates.length >= 14) break; // Limit to 14 occurrences
     }
     return dates;
-  }, []);
+  }, [isRecurring, recurringDays, startTime]);
+
+  // Set initial selected date to the first available date
+  useEffect(() => {
+    if (availableDates.length > 0 && !selectedDate) {
+      setSelectedDate(availableDates[0]);
+    } else if (availableDates.length > 0 && !availableDates.includes(selectedDate)) {
+      setSelectedDate(availableDates[0]);
+    }
+  }, [availableDates]);
 
   // Totals
   const subtotal   = pricePerSpot * (kind === "service" ? duration : spots);
@@ -570,10 +608,10 @@ export default function JoinEventButton({
                 keyboardShouldPersistTaps="handled"
                 contentContainerStyle={M.body}
               >
-                {/* ── SERVICE DATE & SLOT SELECTION ── */}
-                {kind === "service" && (
+                {/* ── DATE SELECTION (Recurring or Service) ── */}
+                {(kind === "service" || isRecurring) && (
                   <View style={M.section}>
-                    <Text style={M.sectionTitle}>Select Date</Text>
+                    <Text style={M.sectionTitle}>{isRecurring ? "Select Occurrence" : "Select Date"}</Text>
                     <ScrollView 
                       horizontal 
                       showsHorizontalScrollIndicator={false} 
@@ -583,6 +621,7 @@ export default function JoinEventButton({
                         const d = new Date(dateStr);
                         const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
                         const dayNum  = d.getDate();
+                        const monthName = d.toLocaleDateString('en-US', { month: 'short' });
                         const active  = selectedDate === dateStr;
                         return (
                           <TouchableOpacity 
@@ -590,45 +629,50 @@ export default function JoinEventButton({
                             style={[M.dateBtn, active && M.dateBtnActive]}
                             onPress={() => {
                               setSelectedDate(dateStr);
-                              setSelectedSlot(null); // Reset slot on date change
+                              if (kind === "service") setSelectedSlot(null);
                             }}
                           >
                             <Text style={[M.dateDay, active && M.dateTextActive]}>{dayName}</Text>
                             <Text style={[M.dateNum, active && M.dateTextActive]}>{dayNum}</Text>
+                            <Text style={[M.dateDay, { fontSize: 9, marginTop: 2 }, active && M.dateTextActive]}>{monthName}</Text>
                           </TouchableOpacity>
                         );
                       })}
                     </ScrollView>
-
-                    <Text style={[M.sectionTitle, { marginTop: 20 }]}>Select Start Time</Text>
-                    <View style={M.slotsGrid}>
-                      {(() => {
-                        // For now we just generate some sample hours. 
-                        // In a real app we'd use the host's actual schedule.
-                        const slots = ["09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "12:00", "12:30", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00"];
-                        return slots.map(s => {
-                          const hour = parseInt(s.split(":")[0]);
-                          const isBooked = bookedSlots.some(b => {
-                            const bStart = parseInt((b.startTime || "00:00").split(":")[0]);
-                            const bDur = b.duration || 1;
-                            return hour >= bStart && hour < bStart + bDur;
-                          });
-                          const active = selectedSlot === s;
-                          return (
-                            <TouchableOpacity
-                              key={s}
-                              disabled={isBooked}
-                              onPress={() => setSelectedSlot(s)}
-                              style={[M.slotBtn, active && M.slotBtnActive, isBooked && M.slotBtnBooked]}
-                            >
-                              <Text style={[M.slotBtnTxt, active && M.slotBtnTxtActive, isBooked && M.slotBtnTxtBooked]}>
-                                {isBooked ? "Booked" : t12(s)}
-                              </Text>
-                            </TouchableOpacity>
-                          );
-                        });
-                      })()}
-                    </View>
+                    
+                    {kind === "service" && (
+                      <>
+                        <Text style={[M.sectionTitle, { marginTop: 20 }]}>Select Start Time</Text>
+                        <View style={M.slotsGrid}>
+                          {(() => {
+                            // For now we just generate some sample hours. 
+                            // In a real app we'd use the host's actual schedule.
+                            const slots = ["09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "12:00", "12:30", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00"];
+                            return slots.map(s => {
+                              const hour = parseInt(s.split(":")[0]);
+                              const isBooked = bookedSlots.some(b => {
+                                const bStart = parseInt((b.startTime || "00:00").split(":")[0]);
+                                const bDur = b.duration || 1;
+                                return hour >= bStart && hour < bStart + bDur;
+                              });
+                              const active = selectedSlot === s;
+                              return (
+                                <TouchableOpacity
+                                  key={s}
+                                  disabled={isBooked}
+                                  onPress={() => setSelectedSlot(s)}
+                                  style={[M.slotBtn, active && M.slotBtnActive, isBooked && M.slotBtnBooked]}
+                                >
+                                  <Text style={[M.slotBtnTxt, active && M.slotBtnTxtActive, isBooked && M.slotBtnTxtBooked]}>
+                                    {isBooked ? "Booked" : t12(s)}
+                                  </Text>
+                                </TouchableOpacity>
+                              );
+                            });
+                          })()}
+                        </View>
+                      </>
+                    )}
                   </View>
                 )}
 

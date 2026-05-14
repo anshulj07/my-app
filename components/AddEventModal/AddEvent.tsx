@@ -63,6 +63,10 @@ export default function AddEventModal({
   // Service-specific: slots
   const [slots, setSlots] = useState<string[]>([]); // e.g. ["09:00", "10:00"]
   const [slotDuration, setSlotDuration] = useState("60"); // minutes
+  
+  // Recurring
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurringDays, setRecurringDays] = useState<number[]>([]); // 0=Sun, 1=Mon, ...
 
   const [showDetails, setShowDetails] = useState(false);
   const [showWhen, setShowWhen] = useState(false);
@@ -181,6 +185,7 @@ const [bannerUri, setBannerUri] = useState<string | null>(null);
     setTitle(""); setKind(defaultKind); setPriceText(""); setDescription(""); setJoinPolicy("open");
     setDateISO(""); setTime24(""); setEndDateISO(""); setEndTime24(""); setLimitEnabled(false); setCapacityText("");
     setSlots([]); setSlotDuration("60");
+    setIsRecurring(false); setRecurringDays([]);
     setShowDetails(false); setShowWhen(false); setDateOpen(false); setTimeOpen(false);
     setEndDateOpen(false); setEndTimeOpen(false);
     setQuery(""); setSuggestions([]); setSelectedAddress(""); setCoord(null); setLocationPayload(null);
@@ -270,6 +275,9 @@ const [bannerUri, setBannerUri] = useState<string | null>(null);
         slots,
         slotDurationMinutes: parseInt(slotDuration, 10) || 60,
       } : {}),
+      // Recurring
+      isRecurring,
+      recurringDays,
       joinPolicy, tags: [], visibility: "public", status: "active",
       location: {
         lat: coord.lat, lng: coord.lng,
@@ -387,6 +395,8 @@ setBannerUri={setBannerUri}
         onCreate={handleCreate}
         joinPolicy={joinPolicy} setJoinPolicy={setJoinPolicy}
         isServiceMode={defaultKind === "service"}
+        isRecurring={isRecurring} setIsRecurring={setIsRecurring}
+        recurringDays={recurringDays} setRecurringDays={setRecurringDays}
       />
     </Modalize>
   );

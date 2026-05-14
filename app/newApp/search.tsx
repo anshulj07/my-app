@@ -310,6 +310,7 @@ const R = { card: 20, input: 14, pill: 999 };
 
 type PersonResult = {
   clerkUserId: string;
+  isVerified?: boolean;
   profile?: { firstName?: string; lastName?: string; username?: string; avatar?: string; photos?: string[]; about?: string };
   clerk?: { firstName?: string; lastName?: string; imageUrl?: string };
 };
@@ -338,7 +339,12 @@ function PersonCard({ item, onPress, onMessage }: {
         <Image source={{ uri: safeUri }} style={S.avatar} />
       </View>
       <View style={S.cardBody}>
-        <Text style={S.cardName} numberOfLines={1}>{name}</Text>
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <Text style={S.cardName} numberOfLines={1}>{name}</Text>
+          {item.isVerified && (
+            <Ionicons name="checkmark-circle" size={14} color="#4BB543" style={{ marginLeft: 5 }} />
+          )}
+        </View>
         <Text style={S.cardSub} numberOfLines={1}>
           {uname ? `@${uname}` : item.profile?.about || "Member"}
         </Text>

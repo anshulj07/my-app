@@ -48,7 +48,7 @@ export const styles = StyleSheet.create({
 
   // Banner
   bannerZone: {
-    height: 180, borderRadius: 14, backgroundColor: C.surface,
+    height: 240, borderRadius: 14, backgroundColor: C.surface,
     borderWidth: 1.5, borderColor: C.border, borderStyle: "dashed",
     overflow: "hidden",
   },

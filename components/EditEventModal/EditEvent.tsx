@@ -102,6 +102,7 @@ export default function EditEventModal({
   const [endTime24, setEndTime24] = useState("");
   const [limitEnabled, setLimitEnabled] = useState(false);
   const [capacityText, setCapacityText] = useState("");
+  const [bannerUri, setBannerUri] = useState<string | null>(null);
 
   const capacityOk = useMemo(() => {
     if (!limitEnabled) return true;
@@ -152,6 +153,7 @@ export default function EditEventModal({
     const eTime = (event.time ?? "").toString();
     const eEndDate = (event.endDate ?? "").toString();
     const eEndTime = (event.endTime ?? "").toString();
+    const eBanner = (event as any).bannerUri || (event as any).bannerImage || (event as any).imageUrl || (event as any).coverImage || null;
 
     const lat = toNumber(event.location?.lat);
     const lng = toNumber(event.location?.lng);
@@ -165,6 +167,7 @@ export default function EditEventModal({
     setTime24(eTime);
     setEndDateISO(eEndDate);
     setEndTime24(eEndTime);
+    setBannerUri(eBanner);
 
     const cap = event.capacity ?? event.attendance ?? null;
     if (cap != null && cap > 0) {
@@ -324,6 +327,8 @@ export default function EditEventModal({
         source: args.location.source ?? "user_edit",
       },
 
+      attendance: args.attendance,
+      bannerUri: args.bannerUri,
       creatorClerkId: args.creatorClerkId,
     };
 
@@ -442,6 +447,7 @@ export default function EditEventModal({
         priceCents,
         capacity: capVal,
         attendance: capVal,
+        bannerUri: bannerUri || "",
         creatorClerkId: userId,
       });
 
@@ -554,6 +560,9 @@ export default function EditEventModal({
       setLimitEnabled={setLimitEnabled}
       capacityText={capacityText}
       setCapacityText={setCapacityText}
+
+      bannerUri={bannerUri}
+      setBannerUri={setBannerUri}
 
       onClosePress={() => sheetRef.current?.close()}
       onSave={handleSave}

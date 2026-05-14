@@ -278,13 +278,11 @@ export default function EventDetailScreen() {
         
         {/* HERO BANNER */}
         <View style={S.bannerContainer}>
-          {banner ? (
-            <Image source={{ uri: banner }} style={S.banner} resizeMode="cover" />
-          ) : (
-            <View style={[S.banner, { backgroundColor: "#E5E7EB", justifyContent: "center", alignItems: "center" }]}>
-              <Text style={{ fontSize: 80 }}>{ev?.emoji || "📍"}</Text>
-            </View>
-          )}
+          <Image 
+            source={{ uri: banner || "https://images.unsplash.com/photo-1517457373958-b7bdd4587205?q=80&w=1000" }} 
+            style={S.banner} 
+            resizeMode="cover" 
+          />
           <View style={S.bannerOverlay} />
           
           <TouchableOpacity 
@@ -364,11 +362,26 @@ export default function EventDetailScreen() {
         )}
 
         {/* HOST ROW */}
-        <View style={S.hostCard}>
-          <Image source={{ uri: ev?.creatorAvatar || "https://i.pravatar.cc/100" }} style={S.hostImg} />
+        <View style={[S.hostCard, ev?.creatorVerified && S.verifiedHostCard]}>
+          <View style={S.hostImgWrap}>
+            <Image source={{ uri: ev?.creatorAvatar || "https://i.pravatar.cc/100" }} style={S.hostImg} />
+            {ev?.creatorVerified && (
+              <View style={S.verifiedIconOver}>
+                <Ionicons name="shield-checkmark" size={12} color="#fff" />
+              </View>
+            )}
+          </View>
           <View style={{ flex: 1 }}>
-            <Text style={S.hostName}>{ev?.creatorName || "Local Host"}</Text>
-            <Text style={S.hostSub}>HOST & ORGANIZER</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
+              <Text style={S.hostName}>{ev?.creatorName || "Local Host"}</Text>
+              {ev?.creatorVerified && (
+                <View style={S.verifiedBadge}>
+                  <Ionicons name="checkmark-circle" size={12} color="#fff" />
+                  <Text style={S.verifiedBadgeTxt}>VERIFIED HOST</Text>
+                </View>
+              )}
+            </View>
+            <Text style={S.hostSub}>PLATFORM TRUSTED ORGANIZER</Text>
           </View>
           {!isHost && (
             <TouchableOpacity style={S.messageBtn} onPress={handleMessageHost}>
@@ -376,6 +389,16 @@ export default function EventDetailScreen() {
             </TouchableOpacity>
           )}
         </View>
+
+        {ev?.creatorVerified && (
+          <View style={S.trustBanner}>
+            <Ionicons name="shield-checkmark" size={18} color="#059669" />
+            <View style={{ flex: 1 }}>
+              <Text style={S.trustTitle}>Trusted Experience</Text>
+              <Text style={S.trustSub}>This host has completed identity verification for a safer community.</Text>
+            </View>
+          </View>
+        )}
 
         {/* ABOUT THE EVENT */}
         <View style={S.section}>
@@ -548,6 +571,9 @@ export default function EventDetailScreen() {
               autoOpen={params.booking === "true"}
               eventLat={ev?.location?.lat}
               eventLng={ev?.location?.lng}
+              isRecurring={ev?.isRecurring}
+              recurringDays={ev?.recurringDays}
+              startTime={ev?.time}
               onJoined={() => loadAll()}
               customTrigger={(onPress) => (
                 <TouchableOpacity 
@@ -702,11 +728,36 @@ const S = StyleSheet.create({
     backgroundColor: "#F8FAFC", marginHorizontal: PAD, marginTop: 25,
     padding: 15, borderRadius: 20, borderWidth: 1, borderColor: "#F1F5F9",
   },
-  hostImg: { width: 50, height: 50, borderRadius: 25 },
+  verifiedHostCard: {
+    backgroundColor: "#F0FDF4", borderColor: "#BBF7D0",
+    borderWidth: 1.5,
+  },
+  hostImgWrap: { position: "relative" },
+  hostImg: { width: 50, height: 50, borderRadius: 25, borderWidth: 2, borderColor: "#fff" },
+  verifiedIconOver: {
+    position: "absolute", bottom: 0, right: 0,
+    width: 20, height: 20, borderRadius: 10,
+    backgroundColor: "#10B981", alignItems: "center", justifyContent: "center",
+    borderWidth: 2, borderColor: "#F0FDF4",
+  },
   hostName: { fontSize: 16, fontFamily: "Outfit_700Bold", color: C.ink },
+  verifiedBadge: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    backgroundColor: "#10B981", paddingHorizontal: 8, paddingVertical: 3,
+    borderRadius: 6,
+  },
+  verifiedBadgeTxt: { fontSize: 9, fontFamily: "Outfit_800ExtraBold", color: "#fff", letterSpacing: 0.5 },
   hostSub: { fontSize: 10, fontFamily: "Outfit_700Bold", color: C.muted, marginTop: 2 },
   messageBtn: { backgroundColor: "#fff", paddingHorizontal: 15, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: C.border },
   messageBtnText: { fontSize: 13, fontFamily: "Outfit_600SemiBold", color: C.ink },
+
+  trustBanner: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    backgroundColor: "#ECFDF5", marginHorizontal: PAD, marginTop: 15,
+    padding: 12, borderRadius: 16, borderWidth: 1, borderColor: "#D1FAE5",
+  },
+  trustTitle: { fontSize: 13, fontFamily: "Outfit_700Bold", color: "#065F46" },
+  trustSub: { fontSize: 11, fontFamily: "Outfit_500Medium", color: "#065F46", opacity: 0.8 },
 
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 15 },
   gridItem: { width: (SW - PAD * 2 - 15) / 2, backgroundColor: "#F8FAFC", padding: 15, borderRadius: 20, alignItems: "center" },

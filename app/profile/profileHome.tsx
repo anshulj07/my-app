@@ -76,6 +76,11 @@ type ProfileData = {
   overallEarning?: number;
   services?: string[];
   reviewsCount?: number;
+  isVerified?: boolean;
+  verification?: {
+    status?: string;
+    rejectionReason?: string;
+  };
 };
 function sanitizePhotos(p?: unknown): string[] {
   if (!Array.isArray(p)) return [];
@@ -172,6 +177,8 @@ export default function ProfileHome() {
         email: s?.email ?? "",
         city: s?.city ?? "",
         country: s?.country ?? "",
+        isVerified: !!s?.isVerified || s?.verification?.status === "verified",
+        verification: s?.verification,
       };
       setProfile(next);
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
@@ -387,6 +394,11 @@ export default function ProfileHome() {
           >
             <Ionicons name="camera" size={13} color="#fff" />
           </TouchableOpacity>
+          {profile.isVerified && (
+            <View style={[S.verifyBadge, { bottom: 4, left: 4 }]}>
+              <Ionicons name="checkmark" size={10} color="#fff" />
+            </View>
+          )}
         </Animated.View>
 
         {/* Stats row — white text on gradient */}
@@ -465,9 +477,13 @@ export default function ProfileHome() {
             </TouchableOpacity>
           )}
 
-          {/* Cover info */}
           <Animated.View style={[S.coverInfo, { opacity: coverInfoOpacity }]}>
-            <Text style={S.coverName}>{profile.name || "User Name"}</Text>
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <Text style={S.coverName}>{profile.name || "User Name"}</Text>
+              {profile.isVerified && (
+                <Ionicons name="checkmark-circle" size={18} color="#4BB543" style={{ marginLeft: 6 }} />
+              )}
+            </View>
             <Text style={S.coverUsername}>
               {profile.username ? `@${profile.username}` : "Name"}
             </Text>
@@ -495,19 +511,63 @@ export default function ProfileHome() {
             { borderTopLeftRadius: whiteRadius, borderTopRightRadius: whiteRadius },
           ]}
         >
-          {/* Stats + Verify card */}
           <View style={S.statsCard}>
-            <TouchableOpacity style={S.verifyCardInner} activeOpacity={0.92}>
-              <View style={S.verifyIcon}>
-                <Ionicons name="shield-checkmark" size={20} color="#6C63FF" />
+            <TouchableOpacity 
+              style={[S.verifyCardInner, profile.isVerified && S.verifiedCardBorder]} 
+              activeOpacity={profile.isVerified ? 1 : 0.92}
+              onPress={() => !profile.isVerified && router.push("/profile/verification" as any)}
+              disabled={profile.isVerified}
+            >
+              {profile.isVerified && (
+                <LinearGradient
+                  colors={["#F0FFF4", "#DCFCE7"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={StyleSheet.absoluteFill}
+                />
+              )}
+              <View style={[S.verifyIcon, profile.isVerified && { backgroundColor: "#22C55E", shadowColor: "#22C55E", shadowOpacity: 0.2, shadowRadius: 5 }]}>
+                <Ionicons 
+                  name={profile.isVerified ? "shield-checkmark" : "shield-outline"} 
+                  size={20} 
+                  color={profile.isVerified ? "#FFF" : "#6C63FF"} 
+                />
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={S.verifyTitle}>Get verified</Text>
-                <Text style={S.verifySub}>
-                  Lorem ipsum is simply dummy text of the industry.
+              <View style={{ flex: 1, zIndex: 1 }}>
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                  <Text style={[
+                    S.verifyTitle, 
+                    profile.isVerified && { color: "#166534" },
+                    profile.verification?.status === "pending" && { color: "#4B46E5" }
+                  ]}>
+                    {profile.isVerified 
+                      ? "Identity Verified" 
+                      : profile.verification?.status === "pending" 
+                        ? "Verification Pending" 
+                        : "Get Verified"}
+                  </Text>
+                  {profile.isVerified && (
+                    <Ionicons name="checkmark-circle" size={14} color="#22C55E" style={{ marginLeft: 6 }} />
+                  )}
+                  {profile.verification?.status === "pending" && (
+                    <Ionicons name="time" size={14} color="#6C63FF" style={{ marginLeft: 6 }} />
+                  )}
+                </View>
+                <Text style={[
+                  S.verifySub, 
+                  profile.isVerified && { color: "#166534", opacity: 0.8 },
+                  profile.verification?.status === "pending" && { color: "#4B46E5", opacity: 0.8 }
+                ]}>
+                  {profile.isVerified 
+                    ? "Your account is secured and trusted by the community."
+                    : profile.verification?.status === "pending"
+                      ? "Your request is under review. This usually takes 24 hours."
+                      : "Complete selfie verification to get a verified badge."}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color="#6C63FF" />
+              {profile.isVerified ? null : (
+                <Ionicons name="chevron-forward" size={18} color="#6C63FF" />
+              )}
             </TouchableOpacity>
           </View>
 
@@ -981,6 +1041,13 @@ const S = StyleSheet.create({
   statNum:    { fontSize: 22, fontWeight: "900", color: "#111" },
   statLabel:  { fontSize: 10, color: "#888", fontWeight: "600", marginTop: 4, textAlign: "center", lineHeight: 15 },
   statDivider:{ width: 1, height: 36, backgroundColor: "#EEE" },
+  verifyBadge: {
+    position: "absolute",
+    width: 20, height: 20, borderRadius: 10,
+    backgroundColor: "#6C63FF", borderWidth: 2, borderColor: "#fff",
+    alignItems: "center", justifyContent: "center",
+    zIndex: 10,
+  },
 
   // Stats + verify combined card at top of white body
   statsCard: {
@@ -995,10 +1062,12 @@ const S = StyleSheet.create({
     flexDirection: "row", alignItems: "center", gap: 12,
     paddingHorizontal: 16, paddingVertical: 14,
   },
+  verifiedCardBorder: {
+    borderWidth: 1.5, borderColor: "#22C55E22",
+  },
   verifyIcon:  { width: 40, height: 40, borderRadius: 12, backgroundColor: "#F5F3FF", alignItems: "center", justifyContent: "center" },
-  verifyTitle: { fontSize: 14, fontWeight: "800", color: "#111" },
-  verifySub:   { fontSize: 12, color: "#888", marginTop: 2, lineHeight: 18 },
-
+  verifyTitle: { fontSize: 15, fontWeight: "800", color: "#111" },
+  verifySub:   { fontSize: 11, color: "#888", marginTop: 2, lineHeight: 16 },
   // Section divider
   secDiv: { height: 10, backgroundColor: "#F2F2F7" },
 

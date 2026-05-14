@@ -58,6 +58,13 @@ export default function EditServiceFlow({ visible, service, onClose, onUpdated }
   const [submitting, setSubmitting] = useState(false);
   const [bannerUri, setBannerUri] = useState<string | null>(null);
   const [overlayVisible, setOverlayVisible] = useState(false);
+  const [selectedRatio, setSelectedRatio] = useState<"16:9" | "4:3" | "1:1">("16:9");
+
+  const ratios: Record<string, [number, number]> = {
+    "16:9": [16, 9],
+    "4:3": [4, 3],
+    "1:1": [1, 1]
+  };
 
   // Location State
   const [locationQuery, setLocationQuery] = useState("");
@@ -96,12 +103,31 @@ export default function EditServiceFlow({ visible, service, onClose, onUpdated }
   });
 
   const handlePick = async (source: "camera" | "gallery") => {
-    await openImagePicker({
-      source: source === "camera" ? "camera" : "library",
-      quality: 0.85,
-      allowsEditing: true,
-      aspect: [16, 9],
-    });
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: ratios[selectedRatio],
+        quality: 1,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        if (asset.width < 1000) {
+          Alert.alert("Low Quality", "The selected image is too small. Please upload a high-quality image (at least 1000px wide).");
+          return;
+        }
+
+        await openImagePicker({
+          source: source === "camera" ? "camera" : "library",
+          quality: 1,
+          allowsEditing: true,
+          aspect: ratios[selectedRatio],
+        });
+      }
+    } catch (e) {
+      console.error(e);
+    }
     setOverlayVisible(false);
   };
 
@@ -354,6 +380,23 @@ export default function EditServiceFlow({ visible, service, onClose, onUpdated }
                   <TouchableOpacity style={styles.bannerPlaceholder} onPress={() => handlePick("gallery")}>
                     <Ionicons name="image-outline" size={32} color="#6C5CE7" />
                     <Text style={styles.bannerPlaceholderTitle}>Add a cover photo</Text>
+                    
+                    {/* RATIO SELECTOR */}
+                    <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
+                        {Object.keys(ratios).map(r => (
+                            <TouchableOpacity 
+                                key={r} 
+                                onPress={() => setSelectedRatio(r as any)}
+                                style={{ 
+                                    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, 
+                                    backgroundColor: selectedRatio === r ? "#6C5CE7" : "#F8FAFC",
+                                    borderWidth: 1, borderColor: selectedRatio === r ? "#6C5CE7" : "#E2E8F0"
+                                }}
+                            >
+                                <Text style={{ fontSize: 11, fontWeight: "800", color: selectedRatio === r ? "#fff" : "#64748B" }}>{r}</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
                   </TouchableOpacity>
                 )}
               </View>

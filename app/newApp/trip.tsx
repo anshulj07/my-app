@@ -320,7 +320,7 @@ export default function TripScreen() {
       <View style={[S.header, { paddingTop: TOP }]}>
         <View style={S.headerRow}>
           <View>
-            <Text style={S.headerTitle}>Major Trips</Text>
+            <Text style={S.headerTitle}>Explore</Text>
             <View style={S.headerLocRow}>
               <View style={S.locBadge}>
                 <Ionicons name="location-sharp" size={12} color={C.accent} />
@@ -340,7 +340,7 @@ export default function TripScreen() {
           <Ionicons name="search-outline" size={17} color={C.hint} />
           <TextInput
             value={search} onChangeText={t => { setSearch(t); setPage(0); }}
-            placeholder="Search trips, places..."
+            placeholder="Search events, places..."
             placeholderTextColor={C.hint}
             style={S.searchInput}
           />
@@ -370,7 +370,7 @@ export default function TripScreen() {
         {loading && !refreshing ? (
           <View style={S.center}>
             <ActivityIndicator size="large" color={C.accent} />
-            <Text style={S.loadingTxt}>Finding trips…</Text>
+            <Text style={S.loadingTxt}>Finding events…</Text>
           </View>
         ) : filtered.length === 0 ? (
           <View style={S.center}>
@@ -381,8 +381,8 @@ export default function TripScreen() {
               {search 
                 ? `No results for "${search}"` 
                 : catFilter !== "All" 
-                  ? `No ${catFilter} trips found` 
-                  : "No trips found"}
+                  ? `No ${catFilter} events found`
+                  : "No events found"}
             </Text>
             <Text style={S.emptySub}>Try adjusting your filters or search terms to find what you're looking for.</Text>
             

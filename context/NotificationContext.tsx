@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useAuth } from "@clerk/clerk-expo";
+import { useAuth, useUser } from "@clerk/clerk-expo";
 import Constants from "expo-constants";
 import { apiFetch } from "../lib/apiFetch";
 
@@ -32,6 +32,8 @@ const LAST_SEEN_KEY = "@notif_last_seen";
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
   const { userId } = useAuth();
+  const { user } = useUser();
+  const onboardingComplete = user?.unsafeMetadata?.onboardingComplete === true;
   const [notifications, setNotifications] = useState<NotifItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [lastSeen, setLastSeen] = useState<number>(0);
@@ -53,7 +55,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   }, []);
 
   const refresh = useCallback(async () => {
-    if (!API_BASE || !userId) return;
+    if (!API_BASE || !userId || !onboardingComplete) return;
     setLoading(true);
     try {
       const res = await apiFetch(
@@ -69,10 +71,10 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     } finally {
       setLoading(false);
     }
-  }, [API_BASE, userId, headers]);
+  }, [API_BASE, userId, onboardingComplete, headers]);
 
   useEffect(() => {
-    if (userId) {
+    if (userId && onboardingComplete) {
       refresh();
       // Optional: Polling every 60 seconds
       const timer = setInterval(refresh, 60000);

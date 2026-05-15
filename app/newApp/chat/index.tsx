@@ -6,7 +6,7 @@ import {
   Animated, Pressable, ScrollView, Dimensions
 } from "react-native";
 import { useRouter } from "expo-router";
-import { useAuth } from "@clerk/clerk-expo";
+import { useAuth, useUser } from "@clerk/clerk-expo";
 import Constants from "expo-constants";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { apiFetch } from "../../../lib/apiFetch";
@@ -46,6 +46,8 @@ function fmtTime(iso: string) {
 export default function ChatListScreen() {
   const router = useRouter();
   const { userId } = useAuth();
+  const { user } = useUser();
+  const onboardingComplete = user?.unsafeMetadata?.onboardingComplete === true;
   const API_BASE      = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
   const EVENT_API_KEY = (Constants.expoConfig?.extra as any)?.eventApiKey as string | undefined;
 
@@ -58,7 +60,7 @@ export default function ChatListScreen() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchConversations = useCallback(async () => {
-    if (!API_BASE || !userId) return;
+    if (!API_BASE || !userId || !onboardingComplete) return;
     try {
       const res  = await apiFetch(
         `${API_BASE}/api/messages/conversations?clerkUserId=${encodeURIComponent(userId)}`,
@@ -68,7 +70,7 @@ export default function ChatListScreen() {
       if (res.ok && Array.isArray(json?.conversations)) setConversations(json.conversations);
     } catch {}
     finally { setLoading(false); setRefreshing(false); }
-  }, [API_BASE, EVENT_API_KEY, userId]);
+  }, [API_BASE, EVENT_API_KEY, userId, onboardingComplete]);
 
   useEffect(() => {
     fetchConversations();

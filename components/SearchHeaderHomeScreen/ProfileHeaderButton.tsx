@@ -114,11 +114,11 @@ export default function ProfileHeaderButton({ size = 44 }: { size?: number }) {
           });
           const j: any = await res.json().catch(() => ({}));
           const src = (j && typeof j === "object" && (j.profile || j.data || j)) as any;
-          const fromDb     = typeof src?.avatar === "string" && src.avatar.trim() ? src.avatar.trim() : null;
           const photos: string[] = Array.isArray(src?.photos) ? src.photos : [];
           const firstPhoto = photos.find((p) => typeof p === "string" && p.trim())?.trim();
+          const fromDb     = typeof src?.avatar === "string" && src.avatar.trim() ? src.avatar.trim() : null;
           const fromClerk  = user?.imageUrl || undefined;
-          if (mounted) setAvatarUri(fromDb || firstPhoto || fromClerk);
+          if (mounted) setAvatarUri(firstPhoto || fromDb || fromClerk);
         } catch {}
       })();
       return () => { mounted = false; };

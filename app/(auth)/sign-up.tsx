@@ -1,5 +1,5 @@
 // app/(auth)/sign-up.tsx
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -9,19 +9,54 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  SafeAreaView,
   ScrollView,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useSignUp } from "@clerk/clerk-expo";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import * as Location from "expo-location";
 
 export default function SignUpScreen() {
   const router = useRouter();
   const { signUp, setActive, isLoaded } = useSignUp();
 
+  const [fullName, setFullName] = useState("");
   const [emailAddress, setEmailAddress] = useState("");
   const [password, setPassword] = useState("");
+  const [location, setLocation] = useState("");
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [ageChecked, setAgeChecked] = useState(false);
+  const [recaptchaChecked, setRecaptchaChecked] = useState(false);
+
+  const detectLocation = async () => {
+    setLocationLoading(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        setLocationLoading(false);
+        return;
+      }
+      const coords = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const [place] = await Location.reverseGeocodeAsync({
+        latitude: coords.coords.latitude,
+        longitude: coords.coords.longitude,
+      });
+      if (place) {
+        const city = place.city || place.subregion || place.region || "";
+        const country = place.country || "";
+        setLocation([city, country].filter(Boolean).join(", "));
+      }
+    } catch {
+      // silently fail — user can type manually
+    } finally {
+      setLocationLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    detectLocation();
+  }, []);
 
   const [pendingVerification, setPendingVerification] = useState(false);
   const [code, setCode] = useState("");
@@ -31,32 +66,45 @@ export default function SignUpScreen() {
   const [showPw, setShowPw] = useState(false);
 
   const emailOk = useMemo(() => emailAddress.trim().includes("@"), [emailAddress]);
-  const pwOk = useMemo(() => password.length >= 8, [password]);
+  const pwStrength = useMemo(() => {
+    const len = password.length;
+    if (len === 0) return 0;
+    if (len < 5) return 1;
+    if (len < 8) return 2;
+    if (len < 12) return 3;
+    return 4;
+  }, [password]);
+  const pwOk = password.length >= 10;
 
   const canSubmitSignUp =
-    !!emailAddress.trim() && !!password && emailOk && pwOk && !submitting;
+    !!fullName.trim() &&
+    !!emailAddress.trim() &&
+    emailOk &&
+    pwOk &&
+    ageChecked &&
+    recaptchaChecked &&
+    !submitting;
 
   const codeDigits = useMemo(() => code.replace(/\D/g, ""), [code]);
   const canSubmitVerify = codeDigits.length === 6 && !submitting;
 
   const pickErr = (e: any, fallback: string) =>
-    e?.errors?.[0]?.longMessage ||
-    e?.errors?.[0]?.message ||
-    e?.message ||
-    fallback;
+    e?.errors?.[0]?.longMessage || e?.errors?.[0]?.message || e?.message || fallback;
 
   const onSignUpPress = async () => {
     if (!isLoaded || !signUp) return;
-
     setSubmitting(true);
     setErr(null);
-
     try {
+      const nameParts = fullName.trim().split(" ");
+      const firstName = nameParts[0] || "";
+      const lastName = nameParts.slice(1).join(" ") || "";
       await signUp.create({
         emailAddress: emailAddress.trim(),
         password,
+        firstName,
+        lastName,
       });
-
       await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
       setPendingVerification(true);
     } catch (e: any) {
@@ -68,32 +116,25 @@ export default function SignUpScreen() {
 
   const onVerifyPress = async () => {
     if (!isLoaded || !signUp || !setActive) return;
-
     setSubmitting(true);
     setErr(null);
-
     try {
-      const attempt = await signUp.attemptEmailAddressVerification({
-        code: codeDigits,
-      });
-
+      const attempt = await signUp.attemptEmailAddressVerification({ code: codeDigits });
       if (attempt.status === "complete") {
         await setActive({ session: attempt.createdSessionId });
-        router.replace("/(onboarding)/name");
+        router.replace("/(onboarding)/username");
         return;
       }
-
       if (attempt.status === "missing_requirements") {
         const missing = (attempt as any)?.missingFields;
         if (Array.isArray(missing) && missing.length) {
           setErr(`Missing required fields: ${missing.join(", ")}`);
         } else {
-          setErr("Missing required fields in sign-up settings. Check Clerk dashboard requirements.");
+          setErr("Missing required fields. Check Clerk dashboard settings.");
         }
         return;
       }
-
-      setErr(`Verification not complete (status: ${attempt.status}). Try again.`);
+      setErr(`Verification not complete (status: ${attempt.status}).`);
     } catch (e: any) {
       setErr(pickErr(e, "Failed to verify code."));
     } finally {
@@ -101,536 +142,425 @@ export default function SignUpScreen() {
     }
   };
 
+  const strengthColors = ["#ddd", "#FF4D4D", "#FF8C00", "#FFC107", "#22C55E"];
+  const strengthLabels = ["", "Weak", "Fair", "Good", "Strong"];
+
   return (
     <SafeAreaView style={styles.safe}>
       <KeyboardAvoidingView
-        style={styles.flex}
+        style={{ flex: 1 }}
         behavior={Platform.select({ ios: "padding", android: undefined })}
       >
-        <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
-          {/* Hero */}
-          <View style={styles.hero}>
-            <View style={styles.heroTop}>
-              <View style={styles.badge}>
-                <Ionicons name="sparkles" size={16} color={COLORS.primary} />
-                <Text style={styles.badgeText}>Welcome</Text>
+        <ScrollView
+          contentContainerStyle={styles.page}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Close / Back */}
+          <TouchableOpacity
+            style={styles.closeBtn}
+            onPress={() =>
+              pendingVerification
+                ? (setPendingVerification(false), setCode(""), setErr(null))
+                : router.back()
+            }
+            hitSlop={10}
+          >
+            <Ionicons name="close" size={20} color="#666" />
+          </TouchableOpacity>
+
+          {pendingVerification ? (
+            // ── Verification view ─────────────────────────────────────────────
+            <>
+              <Text style={styles.title}>Verify your email</Text>
+              <Text style={styles.subtitle}>
+                Enter the 6-digit code we sent to {emailAddress.trim()}.
+              </Text>
+
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>6-digit code</Text>
+                <View style={styles.fieldWrap}>
+                  <TextInput
+                    value={codeDigits}
+                    onChangeText={(t) => setCode(t.replace(/\D/g, "").slice(0, 6))}
+                    keyboardType="number-pad"
+                    placeholder="123456"
+                    placeholderTextColor="#bbb"
+                    style={[styles.fieldInput, styles.codeInput]}
+                    maxLength={6}
+                    returnKeyType="done"
+                  />
+                </View>
+                <Text style={styles.helperText}>Check spam/promotions if you don't see it.</Text>
               </View>
 
-              {/* <TouchableOpacity
-                activeOpacity={0.85}
-                onPress={() => router.push("/(auth)/sign-in")}
-                style={styles.heroLinkPill}
+              {!!err && <Text style={styles.errText}>{err}</Text>}
+
+              <TouchableOpacity
+                onPress={onVerifyPress}
+                disabled={!canSubmitVerify}
+                style={[styles.submitBtn, !canSubmitVerify && { opacity: 0.5 }]}
               >
-                <Text style={styles.heroLinkText}>Sign in</Text>
-                <Ionicons name="arrow-forward" size={16} color={COLORS.ink} />
-              </TouchableOpacity> */}
-            </View>
-
-            <Text style={styles.h1}>
-              {pendingVerification ? "Verify your email" : "Create your account"}
-            </Text>
-            <Text style={styles.h2}>
-              {pendingVerification
-                ? "Enter the 6-digit code we sent you. It only takes a moment."
-                : "Light, fast, and secure. You'll be ready in under a minute."}
-            </Text>
-          </View>
-
-          {/* Surface */}
-          <View style={styles.surface}>
-            {!pendingVerification ? (
-              <>
-                {/* Email */}
-                <View style={styles.group}>
-                  <Text style={styles.label}>Email address</Text>
-                  <View style={[styles.inputWrap, emailAddress.trim() && (emailOk ? styles.ok : styles.bad)]}>
-                    <View style={styles.leftIcon}>
-                      <Ionicons name="mail-outline" size={18} color={COLORS.muted} />
-                    </View>
-                    <TextInput
-                      value={emailAddress}
-                      onChangeText={setEmailAddress}
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      keyboardType="email-address"
-                      placeholder="you@email.com"
-                      placeholderTextColor={COLORS.placeholder}
-                      style={styles.input}
-                    />
-                    <View style={styles.rightIcon}>
-                      {emailAddress.trim().length > 0 ? (
-                        <Ionicons
-                          name={emailOk ? "checkmark-circle" : "alert-circle"}
-                          size={18}
-                          color={emailOk ? COLORS.success : COLORS.danger}
-                        />
-                      ) : (
-                        <View style={{ width: 18 }} />
-                      )}
-                    </View>
-                  </View>
-                </View>
-
-                {/* Password */}
-                <View style={styles.group}>
-                  <Text style={styles.label}>Password</Text>
-                  <View style={[styles.inputWrap, password.length > 0 && (pwOk ? styles.ok : styles.bad)]}>
-                    <View style={styles.leftIcon}>
-                      <Ionicons name="lock-closed-outline" size={18} color={COLORS.muted} />
-                    </View>
-                    <TextInput
-                      value={password}
-                      onChangeText={setPassword}
-                      secureTextEntry={!showPw}
-                      placeholder="8+ characters"
-                      placeholderTextColor={COLORS.placeholder}
-                      style={styles.input}
-                    />
-                    <TouchableOpacity
-                      onPress={() => setShowPw((s) => !s)}
-                      activeOpacity={0.85}
-                      hitSlop={10}
-                      style={[styles.rightIcon, styles.iconTap]}
-                    >
-                      <Ionicons
-                        name={showPw ? "eye-off-outline" : "eye-outline"}
-                        size={18}
-                        color={COLORS.inkSoft}
-                      />
-                    </TouchableOpacity>
-                  </View>
-                  <Text style={styles.helper}>
-                    {password.length === 0 ? " " : pwOk ? "Strong enough." : "Use at least 8 characters."}
-                  </Text>
-                </View>
-
-                {!!err && (
-                  <View style={styles.alert}>
-                    <View style={styles.alertIcon}>
-                      <Ionicons name="warning-outline" size={18} color={COLORS.danger} />
-                    </View>
-                    <Text style={styles.alertText}>{err}</Text>
-                  </View>
+                {submitting ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.submitBtnText}>Verify & continue</Text>
                 )}
+              </TouchableOpacity>
+            </>
+          ) : (
+            // ── Sign up form ──────────────────────────────────────────────────
+            <>
+              <Text style={styles.title}>Finish signing up</Text>
 
-                {/* Primary CTA */}
-                <TouchableOpacity
-                  onPress={onSignUpPress}
-                  activeOpacity={0.92}
-                  disabled={!canSubmitSignUp}
-                  style={[styles.cta, !canSubmitSignUp && styles.ctaDisabled]}
-                >
-                  {submitting ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <>
-                      <Text style={styles.ctaText}>Create account</Text>
-                      <View style={styles.ctaIcon}>
-                        <Ionicons name="arrow-forward" size={18} color="#fff" />
-                      </View>
-                    </>
-                  )}
-                </TouchableOpacity>
-
-                {/* Quiet divider + alt */}
-                <View style={styles.dividerRow}>
-                  <View style={styles.dividerLine} />
-                  <Text style={styles.dividerText}>or</Text>
-                  <View style={styles.dividerLine} />
+              {/* Name */}
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>Your name</Text>
+                <View style={styles.fieldWrap}>
+                  <TextInput
+                    value={fullName}
+                    onChangeText={setFullName}
+                    placeholder="Your full name here"
+                    placeholderTextColor="#bbb"
+                    style={styles.fieldInput}
+                  />
                 </View>
+                <Text style={styles.helperText}>
+                  Your name will be public on your profile
+                </Text>
+              </View>
 
-                <TouchableOpacity
-                  onPress={() => router.push("/(auth)/sign-in")}
-                  activeOpacity={0.9}
-                  style={styles.secondary}
-                >
-                  <Ionicons name="log-in-outline" size={18} color={COLORS.ink} />
-                  <Text style={styles.secondaryText}>I already have an account</Text>
-                </TouchableOpacity>
-              </>
-            ) : (
-              <>
-                <View style={styles.group}>
-                  <Text style={styles.label}>6-digit code</Text>
-                  <View style={[styles.inputWrap, styles.codeWrap, codeDigits.length === 6 && styles.ok]}>
-                    <View style={styles.leftIcon}>
-                      <Ionicons name="key-outline" size={18} color={COLORS.muted} />
-                    </View>
-                    <TextInput
-                      value={codeDigits}
-                      onChangeText={(t) => setCode(t.replace(/\D/g, "").slice(0, 6))}
-                      keyboardType="number-pad"
-                      placeholder="123456"
-                      placeholderTextColor={COLORS.placeholder}
-                      style={[styles.input, styles.codeInput]}
-                      maxLength={6}
-                      returnKeyType="done"
+              {/* Email */}
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>Email address</Text>
+                <View style={styles.fieldWrap}>
+                  <TextInput
+                    value={emailAddress}
+                    onChangeText={setEmailAddress}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    keyboardType="email-address"
+                    placeholder="example@email.com"
+                    placeholderTextColor="#bbb"
+                    style={styles.fieldInput}
+                  />
+                </View>
+                <Text style={styles.helperText}>
+                  We'll use your email address to send you updates and to verify your account
+                </Text>
+              </View>
+
+              {/* Password */}
+              <View style={styles.fieldGroup}>
+                <View style={styles.labelRow}>
+                  <Text style={styles.fieldLabel}>Password</Text>
+                  <Ionicons name="information-circle-outline" size={16} color="#aaa" />
+                </View>
+                <View style={styles.fieldWrap}>
+                  <TextInput
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry={!showPw}
+                    placeholder=""
+                    placeholderTextColor="#bbb"
+                    style={[styles.fieldInput, { flex: 1 }]}
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowPw((s) => !s)}
+                    style={styles.eyeBtn}
+                    hitSlop={10}
+                  >
+                    <Ionicons
+                      name={showPw ? "eye-off-outline" : "eye-outline"}
+                      size={20}
+                      color="#888"
                     />
-                    <View style={styles.rightIcon}>
-                      <Ionicons
-                        name={codeDigits.length === 6 ? "checkmark-circle" : "ellipse-outline"}
-                        size={18}
-                        color={codeDigits.length === 6 ? COLORS.success : COLORS.placeholder}
-                      />
-                    </View>
-                  </View>
-                  <Text style={styles.helper}>Check spam/promotions if you don’t see it.</Text>
+                  </TouchableOpacity>
                 </View>
-
-                {!!err && (
-                  <View style={styles.alert}>
-                    <View style={styles.alertIcon}>
-                      <Ionicons name="warning-outline" size={18} color={COLORS.danger} />
-                    </View>
-                    <Text style={styles.alertText}>{err}</Text>
-                  </View>
-                )}
-
-                <TouchableOpacity
-                  onPress={onVerifyPress}
-                  activeOpacity={0.92}
-                  disabled={!canSubmitVerify}
-                  style={[styles.cta, !canSubmitVerify && styles.ctaDisabled]}
-                >
-                  {submitting ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <>
-                      <Text style={styles.ctaText}>Verify & continue</Text>
-                      <View style={styles.ctaIcon}>
-                        <Ionicons name="checkmark" size={18} color="#fff" />
-                      </View>
-                    </>
+                <Text style={styles.helperText}>At least 10 characters are required</Text>
+                {/* Strength bars */}
+                <View style={styles.strengthRow}>
+                  {[1, 2, 3, 4].map((n) => (
+                    <View
+                      key={n}
+                      style={[
+                        styles.strengthBar,
+                        {
+                          backgroundColor:
+                            pwStrength >= n ? strengthColors[pwStrength] : "#e0e0e0",
+                        },
+                      ]}
+                    />
+                  ))}
+                  {pwStrength > 0 && (
+                    <Text style={[styles.strengthLabel, { color: strengthColors[pwStrength] }]}>
+                      {strengthLabels[pwStrength]}
+                    </Text>
                   )}
-                </TouchableOpacity>
+                </View>
+              </View>
 
+              {/* Location */}
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>Location</Text>
+                <View style={styles.fieldWrap}>
+                  <Ionicons name="location-outline" size={18} color="#888" style={styles.fieldIcon} />
+                  <TextInput
+                    value={location}
+                    onChangeText={setLocation}
+                    placeholder="Detecting location…"
+                    placeholderTextColor="#bbb"
+                    style={styles.fieldInput}
+                  />
+                  <TouchableOpacity
+                    onPress={detectLocation}
+                    disabled={locationLoading}
+                    style={styles.locationRefreshBtn}
+                    hitSlop={10}
+                  >
+                    {locationLoading
+                      ? <ActivityIndicator size="small" color="#7C5CBF" />
+                      : <Ionicons name="navigate-outline" size={18} color="#7C5CBF" />
+                    }
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.helperText}>
+                  We'll use your location to show events near you.
+                </Text>
+              </View>
+
+              {/* Age */}
+              <View style={styles.fieldGroup}>
+                <View style={styles.labelRow}>
+                  <Text style={styles.fieldLabel}>Age</Text>
+                  <Ionicons name="information-circle-outline" size={16} color="#aaa" />
+                </View>
                 <TouchableOpacity
-                  onPress={() => {
-                    setPendingVerification(false);
-                    setCode("");
-                    setErr(null);
-                  }}
-                  activeOpacity={0.9}
-                  style={styles.ghost}
+                  style={styles.checkRow}
+                  onPress={() => setAgeChecked((v) => !v)}
+                  activeOpacity={0.8}
                 >
-                  <Ionicons name="arrow-back" size={18} color={COLORS.ink} />
-                  <Text style={styles.ghostText}>Back to sign up</Text>
+                  <View style={[styles.checkbox, ageChecked && styles.checkboxChecked]}>
+                    {ageChecked && <Ionicons name="checkmark" size={14} color="#fff" />}
+                  </View>
+                  <Text style={styles.checkLabel}>I am 18 years of age or older.</Text>
                 </TouchableOpacity>
-              </>
-            )}
-          </View>
+              </View>
 
-          <Text style={styles.footer}>
-            By continuing, you agree to the terms and acknowledge email verification.
-          </Text>
+              {/* reCAPTCHA */}
+              <TouchableOpacity
+                style={styles.recaptchaBox}
+                onPress={() => setRecaptchaChecked(v => !v)}
+                activeOpacity={0.8}
+              >
+                <View style={styles.recaptchaLeft}>
+                  <View style={[styles.recaptchaCheckbox, recaptchaChecked && styles.recaptchaCheckboxChecked]}>
+                    {recaptchaChecked && <Ionicons name="checkmark" size={16} color="#fff" />}
+                  </View>
+                  <Text style={styles.recaptchaText}>I'm not a robot</Text>
+                </View>
+                <View style={styles.recaptchaRight}>
+                  <Ionicons name="sync-outline" size={28} color="#4A90D9" />
+                  <Text style={styles.recaptchaBrand}>reCAPTCHA</Text>
+                </View>
+              </TouchableOpacity>
+
+              {!!err && <Text style={styles.errText}>{err}</Text>}
+
+              <TouchableOpacity
+                onPress={onSignUpPress}
+                disabled={!canSubmitSignUp}
+                style={[styles.submitBtn, !canSubmitSignUp && { opacity: 0.45 }]}
+              >
+                {submitting ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.submitBtnText}>Create account</Text>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => router.back()}
+                style={styles.logInLink}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.logInLinkText}>Already have an account? Log in</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
-// Replace ONLY your COLORS + styles with this (same style keys).
-// "Tinder/Bumble-ish": high-contrast header, soft gradient vibe, pill chips, glossy card, bold typography.
-
-const COLORS = {
-  // base
-  bgTop: "#0B0B12",
-  bgBottom: "#0F172A",
-  card: "rgba(255,255,255,0.10)",
-  card2: "rgba(255,255,255,0.14)",
-  ink: "#FFFFFF",
-  inkSoft: "rgba(255,255,255,0.78)",
-  muted: "rgba(255,255,255,0.62)",
-  placeholder: "rgba(255,255,255,0.45)",
-
-  // borders
-  border: "rgba(255,255,255,0.12)",
-  borderSoft: "rgba(255,255,255,0.08)",
-
-  // accent (hot pink -> orange vibe)
-  primary: "#FF4D6D",
-  primary2: "#FF8A00",
-  primarySoft: "rgba(255,77,109,0.18)",
-
-  success: "#22C55E",
-  danger: "#FB7185",
-};
-
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
-
-  // IMPORTANT: your SafeAreaView uses styles.safe; this gives the “premium dark + glow” base.
-  safe: {
-    flex: 1,
-    backgroundColor: COLORS.bgTop,
-  },
-
+  safe: { flex: 1, backgroundColor: "#f5f5f5" },
   page: {
     flexGrow: 1,
-    paddingHorizontal: 18,
-    paddingTop: 10,
-    paddingBottom: 18,
+    paddingHorizontal: 24,
+    paddingTop: 20,
+    paddingBottom: 40,
+  },
+
+  closeBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#e0e0e0",
+    alignItems: "center",
     justifyContent: "center",
-    gap: 16,
-    // “soft glow / neon” feel without extra libs
-    backgroundColor: COLORS.bgTop,
+    marginBottom: 20,
   },
 
-  // HERO
-  hero: {
-    paddingHorizontal: 2,
-    gap: 10,
-  },
-  heroTop: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-
-  badge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: "rgba(255,77,109,0.14)",
-    borderWidth: 1,
-    borderColor: "rgba(255,77,109,0.25)",
-  },
-  badgeText: {
-    color: COLORS.ink,
+  title: {
+    fontSize: 26,
     fontWeight: "800",
-    fontSize: 12,
-    letterSpacing: 0.3,
+    color: "#111",
+    marginBottom: 20,
+    letterSpacing: -0.5,
   },
-
-  heroLinkPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.10)",
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  heroLinkText: { color: COLORS.ink, fontWeight: "800", fontSize: 12 },
-
-  h1: {
-    color: COLORS.ink,
-    fontSize: 34,
-    fontWeight: "900",
-    letterSpacing: -1.1,
-    lineHeight: 40,
-  },
-  h2: {
-    color: COLORS.muted,
+  subtitle: {
     fontSize: 14,
-    fontWeight: "700",
+    color: "#555",
+    marginBottom: 24,
     lineHeight: 20,
   },
 
-  // SURFACE (glass card)
-  surface: {
-    backgroundColor: COLORS.card,
-    borderRadius: 28,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    shadowColor: "#000",
-    shadowOpacity: 0.35,
-    shadowRadius: 26,
-    shadowOffset: { width: 0, height: 16 },
-    elevation: 6,
-  },
-
-  group: { marginTop: 12 },
-  label: {
-    color: COLORS.inkSoft,
-    fontWeight: "800",
+  fieldGroup: { marginBottom: 20 },
+  labelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
     marginBottom: 8,
-    fontSize: 12,
-    letterSpacing: 0.25,
   },
-
-  inputWrap: {
-    height: 56,
-    borderRadius: 18,
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-  },
-  leftIcon: {
-    width: 46,
-    height: 56,
-    alignItems: "center",
-    justifyContent: "center",
-    opacity: 0.9,
-  },
-  rightIcon: {
-    width: 46,
-    height: 56,
-    alignItems: "center",
-    justifyContent: "center",
-    opacity: 0.95,
-  },
-  input: {
-    flex: 1,
-    color: COLORS.ink,
-    fontWeight: "800",
+  fieldLabel: {
     fontSize: 15,
-    paddingVertical: 0,
-    paddingRight: 8,
-    letterSpacing: 0.2,
-  },
-  iconTap: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.10)",
-  },
-
-  // validation states (sleek: tiny tint + accent border)
-  ok: {
-    borderColor: "rgba(34,197,94,0.35)",
-    backgroundColor: "rgba(34,197,94,0.06)",
-  },
-  bad: {
-    borderColor: "rgba(251,113,133,0.35)",
-    backgroundColor: "rgba(251,113,133,0.06)",
-  },
-
-  helper: {
-    marginTop: 8,
-    color: COLORS.muted,
     fontWeight: "700",
-    fontSize: 12,
-    lineHeight: 16,
+    color: "#111",
+    marginBottom: 8,
   },
-
-  // CODE
-  codeWrap: { backgroundColor: "rgba(255,255,255,0.08)" },
-  codeInput: { letterSpacing: 10, fontVariant: ["tabular-nums"] },
-
-  // ALERT (glass red)
-  alert: {
-    marginTop: 14,
-    borderRadius: 18,
-    padding: 12,
+  fieldWrap: {
     flexDirection: "row",
-    gap: 10,
     alignItems: "center",
-    backgroundColor: "rgba(251,113,133,0.10)",
+    minHeight: 52,
+    borderRadius: 28,
     borderWidth: 1,
-    borderColor: "rgba(251,113,133,0.24)",
+    borderColor: "#ddd",
+    backgroundColor: "#fff",
+    paddingHorizontal: 18,
   },
-  alertIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 14,
-    backgroundColor: "rgba(251,113,133,0.14)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  alertText: {
-    color: "#FFE4EA",
-    fontWeight: "800",
+  fieldIcon: { marginRight: 8 },
+  locationRefreshBtn: { paddingLeft: 8, paddingRight: 4 },
+  fieldInput: {
     flex: 1,
-    lineHeight: 18,
+    color: "#111",
+    fontSize: 15,
+    paddingVertical: 14,
   },
-
-  // CTA (fake gradient feel using layered “shine” + strong shadow)
-  cta: {
-    marginTop: 16,
-    height: 56,
-    borderRadius: 18,
-    backgroundColor: COLORS.primary,
-    alignItems: "center",
-    justifyContent: "center",
-    flexDirection: "row",
-    gap: 10,
-    shadowColor: COLORS.primary,
-    shadowOpacity: 0.35,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 8,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.16)",
-  },
-  ctaDisabled: { opacity: 0.5 },
-  ctaText: {
-    color: "#fff",
-    fontWeight: "900",
-    fontSize: 16,
-    letterSpacing: 0.3,
-  },
-  ctaIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.16)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  // DIVIDER
-  dividerRow: {
-    marginTop: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  dividerLine: { flex: 1, height: 1, backgroundColor: "rgba(255,255,255,0.12)" },
-  dividerText: { color: COLORS.muted, fontWeight: "800", fontSize: 12 },
-
-  // SECONDARY (premium glass)
-  secondary: {
-    marginTop: 12,
-    height: 56,
-    borderRadius: 18,
-    backgroundColor: "rgba(255,255,255,0.10)",
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    alignItems: "center",
-    justifyContent: "center",
-    flexDirection: "row",
-    gap: 10,
-  },
-  secondaryText: { color: COLORS.ink, fontWeight: "900" },
-
-  // GHOST
-  ghost: {
-    marginTop: 12,
-    height: 56,
-    borderRadius: 18,
-    backgroundColor: "rgba(255,255,255,0.06)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.10)",
-    alignItems: "center",
-    justifyContent: "center",
-    flexDirection: "row",
-    gap: 10,
-  },
-  ghostText: { color: COLORS.ink, fontWeight: "900" },
-
-  footer: {
-    color: "rgba(255,255,255,0.55)",
-    textAlign: "center",
-    fontWeight: "700",
+  eyeBtn: { paddingLeft: 8 },
+  helperText: {
+    marginTop: 6,
     fontSize: 12,
-    paddingHorizontal: 10,
-    marginTop: 2,
-    lineHeight: 18,
+    color: "#888",
+    lineHeight: 16,
+    paddingHorizontal: 4,
+  },
+
+  // Password strength
+  strengthRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 10,
+  },
+  strengthBar: {
+    flex: 1,
+    height: 4,
+    borderRadius: 2,
+  },
+  strengthLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    width: 44,
+  },
+
+  // Checkbox
+  checkRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 4,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: "#ccc",
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  checkboxChecked: {
+    backgroundColor: "#2D1F4B",
+    borderColor: "#2D1F4B",
+  },
+  checkLabel: { fontSize: 14, color: "#333", flex: 1, lineHeight: 20 },
+
+  // reCAPTCHA
+  recaptchaBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderWidth: 1,
+    borderColor: "#ddd",
+    borderRadius: 6,
+    backgroundColor: "#fff",
+    padding: 16,
+    marginBottom: 20,
+  },
+  recaptchaLeft: { flexDirection: "row", alignItems: "center", gap: 14 },
+  recaptchaCheckbox: {
+    width: 24,
+    height: 24,
+    borderWidth: 1.5,
+    borderColor: "#ccc",
+    borderRadius: 3,
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  recaptchaCheckboxChecked: {
+    backgroundColor: "#4A90D9",
+    borderColor: "#4A90D9",
+  },
+  recaptchaText: { fontSize: 14, color: "#333", fontWeight: "500" },
+  recaptchaRight: { alignItems: "center", gap: 2 },
+  recaptchaBrand: { fontSize: 9, color: "#888", fontWeight: "600", letterSpacing: 0.3 },
+
+  // Error
+  errText: { color: "#e53935", fontSize: 13, marginBottom: 14, marginLeft: 4 },
+
+  // Submit
+  submitBtn: {
+    height: 52,
+    borderRadius: 28,
+    backgroundColor: "#2D1F4B",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
+  submitBtnText: { color: "#fff", fontWeight: "700", fontSize: 16 },
+
+  // Code input
+  codeInput: { letterSpacing: 10, textAlign: "center" },
+
+  // Log in link
+  logInLink: { alignItems: "center", paddingVertical: 6 },
+  logInLinkText: {
+    color: "#555",
+    fontSize: 14,
+    textDecorationLine: "underline",
   },
 });

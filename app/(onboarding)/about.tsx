@@ -1,443 +1,313 @@
-﻿// app/(onboarding)/about.tsx
-import React, { useMemo, useState } from "react";
+// app/(onboarding)/about.tsx — Step 5 of 6
+import { useRef, useEffect, useState } from "react";
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  ActivityIndicator,
+  ScrollView,
+  Animated,
+  Keyboard,
+  Image,
+  useWindowDimensions,
 } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useUser } from "@clerk/clerk-expo";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import Constants from "expo-constants";
-import { apiFetch } from "../../lib/apiFetch";
+
+import heroImage from "../../assets/IMG_0016.png";
+
+const STEP = 5;
+const TOTAL = 6;
+const HEADER_MIN = 64;
+const MAX_LEN = 500;
+const MIN_LEN = 10;
+
+const QUICK_FILLS = [
+  "Coffee, hikes, and spontaneous plans. Always down to explore new spots and meet new people.",
+  "Tech person by day, foodie by night. Love discovering hidden gems around the city.",
+  "Into outdoor adventures, live music, and good conversations over great food.",
+];
 
 export default function AboutScreen() {
   const router = useRouter();
   const { isLoaded, user } = useUser();
+  const insets = useSafeAreaInsets();
+  const { width, height } = useWindowDimensions();
+  const HEADER_FULL = height * 0.3;
+
+  const headerAnim = useRef(new Animated.Value(height * 0.3)).current;
+
+  useEffect(() => {
+    const showE = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideE = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const dur = Platform.OS === "ios" ? 250 : 180;
+
+    const show = Keyboard.addListener(showE, () =>
+      Animated.timing(headerAnim, { toValue: HEADER_MIN, duration: dur, useNativeDriver: false }).start()
+    );
+    const hide = Keyboard.addListener(hideE, () =>
+      Animated.timing(headerAnim, { toValue: height * 0.3, duration: dur, useNativeDriver: false }).start()
+    );
+    return () => { show.remove(); hide.remove(); };
+  }, [headerAnim, height]);
 
   const [about, setAbout] = useState("");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  const API_BASE = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
-  const EVENT_API_KEY = (Constants.expoConfig?.extra as any)?.eventApiKey as string | undefined;
-
-  const maxLen = 500;
-  const minLen = 10;
-
   const len = about.length;
-  const remaining = Math.max(0, maxLen - len);
-
-  const canContinue = useMemo(() => about.trim().length >= minLen && !saving, [about, saving]);
-
-  const pickErr = (text: string, fallback: string) => {
-    try {
-      const j = JSON.parse(text);
-      return j?.message || j?.error || fallback;
-    } catch {
-      return fallback;
-    }
-  };
+  const remaining = MAX_LEN - len;
+  const canContinue = about.trim().length >= MIN_LEN && !saving;
 
   const onNext = async () => {
     if (!isLoaded || !user) return;
-
     setSaving(true);
     setErr(null);
-
     try {
-      if (!API_BASE) throw new Error("Missing API base URL (extra.apiBaseUrl).");
-
-      const res = await apiFetch(`${API_BASE}/api/onboarding/about`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {}),
-        },
-        body: JSON.stringify({ clerkUserId: user.id, about: about.trim() }),
-      });
-
-      const text = await res.text();
-
-      if (!res.ok) {
-        throw new Error(pickErr(text, `Failed to save about (${res.status}).`));
-      }
-
-      // Step 4
+      await user.update({ unsafeMetadata: { ...user.unsafeMetadata, about: about.trim() } });
       router.push("/(onboarding)/photos");
     } catch (e: any) {
-      setErr(e?.message || "Failed to save about.");
+      setErr(e?.message || "Failed to save bio.");
     } finally {
       setSaving(false);
     }
   };
 
-  const quickFill = (s: string) => setAbout((prev) => (prev.trim().length ? prev : s));
-
   return (
-    <SafeAreaView style={styles.safe}>
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.select({ ios: "padding", android: undefined })}>
-        <View style={styles.page}>
-          {/* HERO */}
-          <View style={styles.hero}>
-              <View style={styles.heroTop}>
-                <TouchableOpacity
-                  onPress={() => {
-                    if (router.canGoBack()) {
-                      router.back();
-                    } else {
-                      router.push("/(onboarding)/interests");
-                    }
-                  }}
-                  activeOpacity={0.7}
-                  style={styles.backBtn}
-                >
-                  <Ionicons name="chevron-back" size={20} color={COLORS.ink} />
-                </TouchableOpacity>
-
-                <View style={styles.pill}>
-                  <View style={styles.pillDot} />
-                  <Text style={styles.pillText}>Step 6 of 7</Text>
-                </View>
-
-              <View style={styles.spark}>
-                <Ionicons name="chatbubble-ellipses" size={16} color={COLORS.primary} />
-              </View>
-            </View>
-
-            <Text style={styles.h1}>Tell us about you</Text>
-            <Text style={styles.h2}>Short. Real. Swipe-worthy.</Text>
+    <SafeAreaView style={styles.safe} edges={[]}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.select({ ios: "padding", android: undefined })}
+      >
+        {/* Animated collapsing header */}
+        <Animated.View style={[styles.header, { height: headerAnim }]}>
+          <Image source={heroImage} style={{ width, height: HEADER_FULL }} resizeMode="cover" />
+          <View style={[styles.headerInner, { paddingTop: insets.top + 12 }]}>
+            <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} hitSlop={12}>
+              <Ionicons name="chevron-back" size={20} color="#fff" />
+            </TouchableOpacity>
           </View>
+        </Animated.View>
 
-          {/* CARD */}
-          <View style={styles.card}>
-            {/* Top row: label + counter */}
-            <View style={styles.cardTopRow}>
-              <View style={styles.labelRow}>
-                <Ionicons name="pencil-outline" size={16} color={COLORS.inkSoft} />
-                <Text style={styles.label}>About</Text>
-              </View>
+        {/* White content */}
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={styles.contentInner}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <Text style={styles.stepLabel}>STEP {STEP} OF {TOTAL}</Text>
+          <Text style={styles.title}>Tell us about you</Text>
+          <Text style={styles.subtitle}>
+            Write a short bio. It shows on your profile and helps others know what you're about.
+          </Text>
 
-              <View style={[styles.counterPill, remaining <= 40 && styles.counterPillHot]}>
-                <Text style={styles.counterText}>
-                  {Math.min(len, maxLen)}/{maxLen}
-                </Text>
-              </View>
+          {/* Bio input */}
+          <View style={styles.fieldGroup}>
+            <View style={styles.fieldLabelRow}>
+              <Text style={styles.fieldLabel}>Your bio</Text>
+              <Text style={[styles.counter, remaining <= 60 && styles.counterWarn]}>{len}/{MAX_LEN}</Text>
             </View>
-
-            <View style={[styles.textareaWrap, about.trim().length > 0 && styles.textareaWrapFocused]}>
+            <View style={[styles.textareaWrap, about.trim().length > 0 && styles.textareaWrapActive]}>
               <TextInput
                 value={about}
-                onChangeText={(t) => setAbout(t.slice(0, maxLen))}
-                placeholder="Example: I’m into coffee, hikes, and finding underrated spots around the city."
-                placeholderTextColor={COLORS.placeholder}
+                onChangeText={(t) => setAbout(t.slice(0, MAX_LEN))}
+                placeholder="I'm into coffee, hikes, and finding underrated spots around the city. Always up for a spontaneous meetup!"
+                placeholderTextColor="#C0B8D8"
                 style={styles.textarea}
                 multiline
                 textAlignVertical="top"
-                maxLength={maxLen}
+                maxLength={MAX_LEN}
               />
             </View>
-
-            {/* Quick picks */}
-            <View style={styles.quickRow}>
-              <TouchableOpacity
-                activeOpacity={0.9}
-                onPress={() => quickFill("Coffee, hikes, and spontaneous plans. Always down to explore new spots.")}
-                style={styles.quickChip}
-              >
-                <Ionicons name="flash-outline" size={14} color={COLORS.ink} />
-                <Text style={styles.quickText}>Quick fill</Text>
-              </TouchableOpacity>
-
-              <View style={styles.hint}>
-                <Ionicons name="sparkles-outline" size={14} color={COLORS.muted} />
-                <Text style={styles.hintText}>
-                  {about.trim().length < minLen ? `Add ${minLen - about.trim().length}+ chars` : "Looks good"}
-                </Text>
-              </View>
-            </View>
-
-            {!!err && (
-              <View style={styles.alert}>
-                <View style={styles.alertIcon}>
-                  <Ionicons name="warning-outline" size={18} color={COLORS.danger} />
-                </View>
-                <Text style={styles.alertText}>{err}</Text>
-              </View>
-            )}
-
-            <TouchableOpacity
-              onPress={onNext}
-              activeOpacity={0.92}
-              disabled={!canContinue}
-              style={[styles.cta, !canContinue && styles.ctaDisabled]}
-            >
-              {saving ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <>
-                  <Text style={styles.ctaText}>Continue</Text>
-                  <View style={styles.ctaIcon}>
-                    <Ionicons name="arrow-forward" size={18} color="#fff" />
-                  </View>
-                </>
-              )}
-            </TouchableOpacity>
-
-            {!API_BASE ? (
-              <View style={[styles.alert, { marginTop: 12 }]}>
-                <View style={styles.alertIcon}>
-                  <Ionicons name="bug-outline" size={18} color={COLORS.danger} />
-                </View>
-                <Text style={styles.alertText}>Config issue: extra.apiBaseUrl is missing.</Text>
-              </View>
-            ) : null}
+            <Text style={[styles.helperText, about.trim().length >= MIN_LEN && { color: "#22C55E" }]}>
+              {about.trim().length < MIN_LEN
+                ? `Add at least ${MIN_LEN - about.trim().length} more characters`
+                : "Looks good!"}
+            </Text>
           </View>
 
-          <Text style={styles.footer}>Keep it friendly — you can always edit later.</Text>
+          {/* Quick fills */}
+          <View style={styles.quickSection}>
+            <Text style={styles.quickLabel}>Need inspiration?</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickScroll}>
+              {QUICK_FILLS.map((fill, i) => (
+                <TouchableOpacity
+                  key={i}
+                  activeOpacity={0.85}
+                  onPress={() => { if (!about.trim()) setAbout(fill); }}
+                  style={styles.quickChip}
+                >
+                  <Ionicons name="flash-outline" size={13} color="#6B46C1" />
+                  <Text style={styles.quickChipText} numberOfLines={2}>{fill}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+
+          {!!err && <Text style={styles.errText}>{err}</Text>}
+        </ScrollView>
+
+        {/* Footer */}
+        <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
+          <TouchableOpacity
+            onPress={onNext}
+            disabled={!canContinue}
+            style={[styles.cta, !canContinue && styles.ctaDisabled]}
+          >
+            {saving
+              ? <ActivityIndicator color="#fff" />
+              : <Text style={styles.ctaText}>Continue</Text>
+            }
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => router.push("/(onboarding)/photos")} style={styles.skipBtn}>
+            <Text style={styles.skipText}>Skip for now</Text>
+          </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
-const COLORS = {
-  bg: "#0B0B12",
-  card: "rgba(255,255,255,0.10)",
-  border: "rgba(255,255,255,0.12)",
-  borderSoft: "rgba(255,255,255,0.08)",
-  ink: "#FFFFFF",
-  inkSoft: "rgba(255,255,255,0.82)",
-  muted: "rgba(255,255,255,0.62)",
-  placeholder: "rgba(255,255,255,0.42)",
-  primary: "#FF4D6D",
-  primary2: "#FF8A00",
-  success: "#22C55E",
-  danger: "#FB7185",
-};
-
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  safe: { flex: 1, backgroundColor: COLORS.bg },
+  safe: { flex: 1, backgroundColor: "#3D2875" },
 
-  page: {
-    flex: 1,
-    paddingHorizontal: 18,
-    paddingTop: 14,
-    paddingBottom: 18,
-    justifyContent: "center",
-    gap: 16,
-    backgroundColor: COLORS.bg,
+  header: {
+    overflow: "hidden",
+    position: "relative",
   },
-
-  // HERO
-  hero: { paddingHorizontal: 2, gap: 10 },
-  heroTop: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 4,
+  headerInner: {
+    paddingHorizontal: 20,
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
   },
-
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.22)",
     alignItems: "center",
     justifyContent: "center",
   },
 
-  pill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: "rgba(255,77,109,0.14)",
-    borderWidth: 1,
-    borderColor: "rgba(255,77,109,0.25)",
+  content: {
+    flex: 1,
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    marginTop: -20,
   },
-  pillDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 99,
-    backgroundColor: COLORS.primary2,
-    shadowColor: COLORS.primary2,
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
-  },
-  pillText: { color: COLORS.ink, fontWeight: "900", fontSize: 12, letterSpacing: 0.25 },
-
-  spark: {
-    width: 40,
-    height: 40,
-    borderRadius: 16,
-    backgroundColor: "rgba(255,255,255,0.10)",
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-    alignItems: "center",
-    justifyContent: "center",
+  contentInner: {
+    paddingHorizontal: 24,
+    paddingTop: 28,
+    paddingBottom: 24,
   },
 
-  h1: { color: COLORS.ink, fontSize: 34, fontWeight: "900", letterSpacing: -1.1, lineHeight: 40 },
-  h2: { color: COLORS.muted, fontSize: 14, fontWeight: "700", lineHeight: 20 },
-
-  // CARD
-  card: {
-    backgroundColor: COLORS.card,
-    borderRadius: 28,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    shadowColor: "#000",
-    shadowOpacity: 0.35,
-    shadowRadius: 26,
-    shadowOffset: { width: 0, height: 16 },
-    elevation: 6,
+  stepLabel: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#6B46C1",
+    letterSpacing: 1.5,
+    marginBottom: 10,
+  },
+  title: {
+    fontSize: 26,
+    fontWeight: "800",
+    color: "#111",
+    letterSpacing: -0.5,
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: "#666",
+    lineHeight: 21,
+    marginBottom: 24,
   },
 
-  cardTopRow: {
+  fieldGroup: { marginBottom: 20 },
+  fieldLabelRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 12,
+    marginBottom: 10,
   },
-
-  labelRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  label: { color: COLORS.inkSoft, fontWeight: "900", fontSize: 12 },
-
-  counterPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.10)",
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-  },
-  counterPillHot: {
-    backgroundColor: "rgba(255,138,0,0.14)",
-    borderColor: "rgba(255,138,0,0.26)",
-  },
-  counterText: { color: COLORS.inkSoft, fontWeight: "900", fontSize: 12 },
+  fieldLabel: { fontSize: 14, fontWeight: "700", color: "#222" },
+  counter: { fontSize: 12, color: "#aaa", fontWeight: "600" },
+  counterWarn: { color: "#ea580c" },
 
   textareaWrap: {
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-    backgroundColor: "rgba(255,255,255,0.08)",
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    minHeight: 180,
+    borderWidth: 1.5,
+    borderColor: "#E5E0F5",
+    borderRadius: 14,
+    backgroundColor: "#FAFAFA",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    minHeight: 140,
   },
-  textareaWrapFocused: {
-    borderColor: "rgba(255,77,109,0.35)",
-    backgroundColor: "rgba(255,77,109,0.08)",
+  textareaWrapActive: {
+    borderColor: "#6B46C1",
+    backgroundColor: "#fff",
   },
-
   textarea: {
     flex: 1,
-    color: COLORS.ink,
-    fontWeight: "900",
+    color: "#111",
     fontSize: 15,
-    letterSpacing: 0.2,
-    lineHeight: 20,
+    lineHeight: 22,
+  },
+  helperText: {
+    marginTop: 8,
+    fontSize: 12,
+    color: "#aaa",
+    paddingHorizontal: 4,
   },
 
-  quickRow: {
-    marginTop: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-
+  quickSection: { marginBottom: 20 },
+  quickLabel: { fontSize: 13, fontWeight: "700", color: "#444", marginBottom: 10 },
+  quickScroll: { gap: 10, paddingBottom: 4 },
   quickChip: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.10)",
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-  },
-  quickText: { color: COLORS.ink, fontWeight: "900", fontSize: 12 },
-
-  hint: { flexDirection: "row", alignItems: "center", gap: 8, opacity: 0.95 },
-  hintText: { color: COLORS.muted, fontWeight: "800", fontSize: 12 },
-
-  // ALERT
-  alert: {
-    marginTop: 14,
-    borderRadius: 18,
+    backgroundColor: "#EDE8F8",
+    borderRadius: 12,
     padding: 12,
-    flexDirection: "row",
-    gap: 10,
-    alignItems: "center",
-    backgroundColor: "rgba(251,113,133,0.10)",
-    borderWidth: 1,
-    borderColor: "rgba(251,113,133,0.24)",
+    maxWidth: 230,
   },
-  alertIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 14,
-    backgroundColor: "rgba(251,113,133,0.14)",
-    alignItems: "center",
-    justifyContent: "center",
+  quickChipText: {
+    fontSize: 12,
+    color: "#3D2875",
+    flex: 1,
+    lineHeight: 18,
+    fontWeight: "500",
   },
-  alertText: { color: "#FFE4EA", fontWeight: "900", flex: 1, lineHeight: 18 },
 
-  // CTA
-  cta: {
-    marginTop: 18,
-    height: 56,
-    borderRadius: 18,
-    backgroundColor: COLORS.primary,
-    alignItems: "center",
-    justifyContent: "center",
-    flexDirection: "row",
-    gap: 10,
-    shadowColor: COLORS.primary,
-    shadowOpacity: 0.35,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 8,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.16)",
-  },
-  ctaDisabled: { opacity: 0.5 },
-  ctaText: { color: "#fff", fontWeight: "900", fontSize: 16, letterSpacing: 0.3 },
-  ctaIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.16)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  errText: { color: "#EF4444", fontSize: 13, marginBottom: 14 },
 
   footer: {
-    color: "rgba(255,255,255,0.55)",
-    textAlign: "center",
-    fontWeight: "700",
-    fontSize: 12,
-    marginTop: 2,
-    lineHeight: 18,
+    backgroundColor: "#fff",
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#F0EDF8",
   },
+  cta: {
+    height: 54,
+    borderRadius: 14,
+    backgroundColor: "#5B3FA0",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 10,
+  },
+  ctaDisabled: { backgroundColor: "#C5B8E8" },
+  ctaText: { color: "#fff", fontWeight: "800", fontSize: 16 },
+  skipBtn: { alignItems: "center", paddingVertical: 6 },
+  skipText: { color: "#999", fontSize: 14, fontWeight: "600" },
 });
-

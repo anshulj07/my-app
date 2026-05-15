@@ -10,15 +10,10 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as ImagePicker from "expo-image-picker";
 import Constants from "expo-constants";
-import { generateReactNativeHelpers } from "@uploadthing/expo";
+import { CropModal } from "./CropModal";
 
 const API_BASE_RAW = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
 const EVENT_API_KEY = (Constants.expoConfig?.extra as any)?.eventApiKey as string | undefined;
-const UT_ENDPOINT = API_BASE_RAW ? `${API_BASE_RAW.replace(/\/$/, "")}/api/uploadthing` : undefined;
-
-const { useImageUploader } = generateReactNativeHelpers({
-  url: UT_ENDPOINT || "http://localhost:3000/api/uploadthing",
-});
 
 import type { Suggestion, ListingKind } from "./types";
 
@@ -622,170 +617,211 @@ type Props = {
 };
 
 // ─────────────────────────────────────────────
-//  BANNER IMAGE SECTION  (logic unchanged)
+//  BANNER IMAGE SECTION
 // ─────────────────────────────────────────────
 function BannerImageSection({
-  bannerUri, setBannerUri, accentColor,
+  bannerUri, setBannerUri, accentColor, hasError,
 }: {
   bannerUri: string | null;
   setBannerUri: (v: string | null) => void;
   accentColor: string;
+  hasError?: boolean;
 }) {
-  const [overlayVisible, setOverlayVisible] = useState(false);
-  const [fullScreenVisible, setFullScreenVisible] = useState(false);
-  const [selectedRatio, setSelectedRatio] = useState<"16:9" | "4:3" | "1:1">("16:9");
+  const [rawImage, setRawImage] = useState<{ uri: string; w: number; h: number } | null>(null);
+  const [uploading, setUploading] = useState(false);
 
-  const ratios: Record<string, [number, number]> = {
-    "16:9": [16, 9],
-    "4:3": [4, 3],
-    "1:1": [1, 1]
+  const pickImage = async (source: "gallery" | "camera") => {
+    const result = source === "camera"
+      ? await ImagePicker.launchCameraAsync({ quality: 1, allowsEditing: false })
+      : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 1, allowsEditing: false });
+
+    if (result.canceled || !result.assets?.[0]) return;
+    const asset = result.assets[0];
+    setRawImage({ uri: asset.uri, w: asset.width, h: asset.height });
   };
 
-  const { openImagePicker, isUploading } = useImageUploader("bannerImage", {
-    headers: {
-      ...(EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {}),
-      "ngrok-skip-browser-warning": "1",
-    },
-    onUploadBegin(fileName) { console.log("🟦 [UT][banner] Upload begin:", fileName); },
-    onClientUploadComplete(res) {
-      console.log("🟩 [UT][banner] Upload complete:", res);
-      if (Array.isArray(res) && res.length > 0) {
-        setBannerUri(res[0].url);
-      }
-    },
-    onUploadError(e) {
-      console.log("🟥 [UT][banner] Upload error:", e);
-      Alert.alert("Upload Failed", e.message || "Failed to upload banner.");
-    },
-  });
+  const handleCropConfirm = async (croppedUri: string, base64: string) => {
+    setRawImage(null);
+    console.log("[BannerUpload] crop confirmed, base64 length:", base64.length, "uri:", croppedUri);
 
-  const handlePick = async (source: "camera" | "gallery") => {
-    try {
-        const result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          allowsEditing: true,
-          aspect: ratios[selectedRatio],
-          quality: 1,
-        });
-
-        if (!result.canceled && result.assets && result.assets.length > 0) {
-            const asset = result.assets[0];
-            // Quality Check: At least 1000px width for good results
-            if (asset.width < 1000) {
-                Alert.alert("Low Quality", "The selected image is too small for a banner. Please upload a high-quality image (at least 1000px wide) for the best look.");
-                return;
-            }
-            
-            // If quality is OK, we proceed to upload using the uploader
-            // Since useImageUploader's openImagePicker is just a wrapper, 
-            // we might need to manually trigger the upload if we want to check dimensions first.
-            // But for simplicity, let's just keep the dimension check as a warning or 
-            // use a custom picker flow.
-            
-            await openImagePicker({
-                source: source === "camera" ? "camera" : "library",
-                quality: 1,
-                allowsEditing: true,
-                aspect: ratios[selectedRatio],
-            });
-        }
-    } catch (e) {
-        console.error("Picker error:", e);
+    if (!base64) {
+      Alert.alert("Error", "No image data received from crop.");
+      return;
     }
-    setOverlayVisible(false);
+    if (!API_BASE_RAW) {
+      Alert.alert("Error", "API base URL not configured.");
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const endpoint = `${API_BASE_RAW.replace(/\/$/, "")}/api/events/upload-banner`;
+      console.log("[BannerUpload] posting to:", endpoint);
+
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {}),
+        },
+        body: JSON.stringify({ imageBase64: base64, mimeType: "image/jpeg" }),
+      });
+
+      const json = await res.json().catch(() => ({}));
+      console.log("[BannerUpload] response status:", res.status, "body:", JSON.stringify(json));
+
+      if (!res.ok || !json.url) throw new Error(json.error || `Server returned ${res.status}`);
+      console.log("[BannerUpload] success, url:", json.url);
+      setBannerUri(json.url);
+    } catch (e: any) {
+      console.error("[BannerUpload] error:", e?.message ?? e);
+      Alert.alert("Upload Failed", e.message || "Failed to upload banner.");
+    } finally {
+      setUploading(false);
+    }
   };
 
-  return (
-    <View>
-      <View style={[S.bannerZone, bannerUri ? S.bannerZoneHasImage : {}, { borderColor: accentColor + "55" }]}>
-        {isUploading ? (
-          <View style={S.bannerPlaceholder}>
-            <ActivityIndicator size="large" color={accentColor} />
-            <Text style={[S.bannerPlaceholderTitle, { color: accentColor }]}>Uploading banner…</Text>
-          </View>
-        ) : bannerUri ? (
-          <>
-            <Image source={{ uri: bannerUri }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
-            <Pressable style={StyleSheet.absoluteFill} onPress={() => setOverlayVisible(v => !v)} />
-            {overlayVisible && (
-              <View style={S.bannerOverlay}>
-                <Pressable style={S.bannerOverlayBtn} onPress={() => { setOverlayVisible(false); setFullScreenVisible(true); }}>
-                  <Ionicons name="eye-outline" size={16} color="#fff" />
-                  <Text style={S.bannerOverlayBtnText}>Preview</Text>
-                </Pressable>
-                <Pressable style={S.bannerOverlayBtn} onPress={() => handlePick("gallery")}>
-                  <Ionicons name="image-outline" size={16} color="#fff" />
-                  <Text style={S.bannerOverlayBtnText}>Change</Text>
-                </Pressable>
-                <Pressable style={[S.bannerOverlayBtn, S.bannerOverlayBtnDanger]}
-                  onPress={() => { setBannerUri(null); setOverlayVisible(false); }}>
-                  <Ionicons name="trash-outline" size={16} color="#fff" />
-                  <Text style={S.bannerOverlayBtnText}>Remove</Text>
-                </Pressable>
-              </View>
-            )}
-          </>
-        ) : (
-          <View style={S.bannerPlaceholder}>
-            <View style={[S.bannerPlaceholderIcon, { backgroundColor: accentColor + "18", borderColor: accentColor + "33" }]}>
-              <Ionicons name="image-outline" size={28} color={accentColor} />
-            </View>
-            <Text style={[S.bannerPlaceholderTitle, { color: accentColor }]}>Add a cover photo</Text>
-            <Text style={S.bannerPlaceholderSub}>Give your event a face. Select a ratio below and skip to auto-generate.</Text>
-            
-            {/* RATIO SELECTOR */}
-            <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
-                {Object.keys(ratios).map(r => (
-                    <TouchableOpacity 
-                        key={r} 
-                        onPress={() => setSelectedRatio(r as any)}
-                        style={{ 
-                            paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, 
-                            backgroundColor: selectedRatio === r ? accentColor : C.inputBg,
-                            borderWidth: 1, borderColor: selectedRatio === r ? accentColor : C.inputBorder
-                        }}
-                    >
-                        <Text style={{ fontSize: 11, fontWeight: "800", color: selectedRatio === r ? "#fff" : C.muted }}>{r}</Text>
-                    </TouchableOpacity>
-                ))}
-            </View>
-          </View>
-        )}
+  // Uploading state
+  if (uploading) {
+    return (
+      <View style={BS.zone}>
+        <ActivityIndicator size="large" color={accentColor} />
+        <Text style={[BS.uploadingTxt, { color: accentColor }]}>Uploading…</Text>
       </View>
-      {!bannerUri && !isUploading && (
-        <View style={S.bannerActions}>
-          <TouchableOpacity style={[S.bannerActionBtn, { backgroundColor: accentColor }]}
-            onPress={() => handlePick("gallery")} activeOpacity={0.88}>
-            <Ionicons name="images-outline" size={16} color="#fff" />
-            <Text style={S.bannerActionBtnText}>Choose photo</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={S.bannerActionBtnOutline}
-            onPress={() => handlePick("camera")} activeOpacity={0.88}>
-            <Ionicons name="camera-outline" size={16} color={accentColor} />
-            <Text style={[S.bannerActionBtnOutlineText, { color: accentColor }]}>Take photo</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-      <View style={S.bannerTip}>
-        <Ionicons name="information-circle-outline" size={13} color={C.hint} />
-        <Text style={S.bannerTipText}>
-          {bannerUri ? "Tap the image to preview, change or remove it." : "If you skip this, we'll find a relevant image for you!"}
-        </Text>
-      </View>
+    );
+  }
 
-      {/* Full Screen Preview Modal */}
-      <Modal visible={fullScreenVisible} transparent animationType="fade" onRequestClose={() => setFullScreenVisible(false)}>
-        <View style={S.fullScreenContainer}>
-          <Image source={{ uri: bannerUri || "" }} style={S.fullScreenImage} resizeMode="contain" />
-          
-          <TouchableOpacity style={S.fullScreenClose} onPress={() => setFullScreenVisible(false)}>
-            <Ionicons name="close" size={28} color="#fff" />
-          </TouchableOpacity>
+  // Banner set — image with corner action buttons
+  if (bannerUri) {
+    return (
+      <>
+        <View style={[BS.zone, BS.zoneSet]}>
+          <Image source={{ uri: bannerUri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+          <View style={BS.cornerActions}>
+            <Pressable style={BS.cornerBtn} onPress={() => pickImage("gallery")} hitSlop={6}>
+              <Ionicons name="pencil" size={13} color="#fff" />
+            </Pressable>
+            <Pressable style={[BS.cornerBtn, BS.cornerBtnRed]} onPress={() => setBannerUri(null)} hitSlop={6}>
+              <Ionicons name="trash-outline" size={13} color="#fff" />
+            </Pressable>
+          </View>
         </View>
-      </Modal>
-    </View>
+        {rawImage && (
+          <CropModal
+            visible
+            uri={rawImage.uri}
+            imgW={rawImage.w}
+            imgH={rawImage.h}
+            onConfirm={handleCropConfirm}
+            onCancel={() => setRawImage(null)}
+          />
+        )}
+      </>
+    );
+  }
+
+  // Empty — big tappable zone
+  return (
+    <>
+      <View>
+        <Pressable
+          style={[BS.zone, { borderColor: hasError ? C.error + "88" : accentColor + "66", backgroundColor: hasError ? "#FEF2F2" : "#F5F3FF" }]}
+          onPress={() => pickImage("gallery")}
+        >
+          <View style={BS.placeholder}>
+            <View style={[BS.placeholderRing, { backgroundColor: hasError ? C.error + "15" : accentColor + "18", borderColor: hasError ? C.error + "40" : accentColor + "44" }]}>
+              <Ionicons name="camera" size={32} color={hasError ? C.error : accentColor} />
+            </View>
+            <Text style={[BS.placeholderTitle, { color: hasError ? C.error : accentColor }]}>Tap to add cover photo</Text>
+            <Text style={BS.placeholderSub}>You can crop &amp; zoom before uploading</Text>
+          </View>
+        </Pressable>
+        <Pressable style={BS.cameraLink} onPress={() => pickImage("camera")}>
+          <Ionicons name="camera-outline" size={14} color={C.muted} />
+          <Text style={BS.cameraLinkTxt}>Use Camera</Text>
+        </Pressable>
+      </View>
+      {rawImage && (
+        <CropModal
+          visible
+          uri={rawImage.uri}
+          imgW={rawImage.w}
+          imgH={rawImage.h}
+          onConfirm={handleCropConfirm}
+          onCancel={() => setRawImage(null)}
+        />
+      )}
+    </>
   );
 }
+
+// ─────────────────────────────────────────────
+//  STEP 2 STYLES
+// ─────────────────────────────────────────────
+const ST2 = StyleSheet.create({
+  body: { padding: 20, paddingBottom: 48, backgroundColor: C.bg },
+
+  // Title — primary / prominent
+  titleSection: { marginBottom: 28 },
+  fieldLabel: {
+    fontSize: 11, fontWeight: "800", color: C.muted,
+    textTransform: "uppercase", letterSpacing: 1.1,
+    marginBottom: 10,
+  },
+  titleShell: {
+    backgroundColor: C.inputBg,
+    borderWidth: 2, borderColor: C.purpleBorder,
+    borderRadius: 16, paddingHorizontal: 16,
+  },
+  titleShellError: { borderColor: C.error + "66", backgroundColor: C.error + "06" },
+  titleInput: {
+    fontSize: 20, fontWeight: "800", color: C.ink,
+    paddingVertical: 14, letterSpacing: -0.3,
+    lineHeight: 28, textAlignVertical: "center",
+    minHeight: 56,
+  },
+
+  // Banner — required
+  bannerSection: { marginBottom: 8 },
+  requiredStar: { fontSize: 14, fontWeight: "900", color: C.error, lineHeight: 16 },
+  bannerError: { fontSize: 12, fontWeight: "700", color: C.error, marginTop: 6, paddingHorizontal: 2 },
+});
+
+// BannerImageSection styles
+const BS = StyleSheet.create({
+  zone: {
+    height: 220, borderRadius: 20, overflow: "hidden",
+    borderWidth: 2, borderStyle: "dashed", borderColor: "#6366F166",
+    backgroundColor: "#F5F3FF", alignItems: "center", justifyContent: "center",
+  },
+  zoneSet: { borderStyle: "solid", borderColor: "#6366F188" },
+
+  placeholder:      { alignItems: "center", gap: 12 },
+  placeholderRing:  { width: 72, height: 72, borderRadius: 22, borderWidth: 2, alignItems: "center", justifyContent: "center" },
+  placeholderTitle: { fontSize: 15, fontWeight: "800" },
+  placeholderSub:   { fontSize: 12, color: "#999", textAlign: "center" },
+
+  uploadingTxt: { fontSize: 13, fontWeight: "600", marginTop: 10 },
+
+  // Corner edit/remove buttons on set image
+  cornerActions: {
+    position: "absolute", top: 10, right: 10,
+    flexDirection: "row", gap: 6,
+  },
+  cornerBtn: {
+    width: 30, height: 30, borderRadius: 15,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    alignItems: "center", justifyContent: "center",
+  },
+  cornerBtnRed: { backgroundColor: "rgba(220,38,38,0.70)" },
+
+  // Camera secondary link
+  cameraLink: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 5, marginTop: 10, paddingVertical: 4,
+  },
+  cameraLinkTxt: { fontSize: 12, fontWeight: "600", color: C.muted },
+});
 
 // ─────────────────────────────────────────────
 //  WIZARD HEADER  (reusable across steps)
@@ -878,8 +914,9 @@ export default function AddEventFields(props: Props) {
   const handleNext = () => {
     const nextErrors: Record<string, string> = {};
 
-    if (step === 2 && !title.trim()) {
-      nextErrors.title = "Title is required";
+    if (step === 2) {
+      if (!title.trim()) nextErrors.title = "Title is required";
+      if (!bannerUri) nextErrors.banner = "Cover photo is required";
     }
     if (step === 3) {
       if (!dateISO) nextErrors.date = "Date is required";
@@ -1025,7 +1062,7 @@ export default function AddEventFields(props: Props) {
   }
 
   // ════════════════════════════════════════════
-  //  STEP 2 — Cover Photo + Event Title
+  //  STEP 2 — Event Title + Cover Photo
   // ════════════════════════════════════════════
   if (step === 2) {
     return (
@@ -1037,45 +1074,43 @@ export default function AddEventFields(props: Props) {
           onBack={goBack} onClose={onClose} showBack
           accentColor={accent} accentBg={accentBg} accentText={accentText}
         />
-        <ScrollView style={{ backgroundColor: C.bg }} contentContainerStyle={S.body}
+        <ScrollView style={{ backgroundColor: C.bg }} contentContainerStyle={ST2.body}
           showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
-          {/* Cover photo */}
-          <Text style={S.sectionLabel}>Cover photo</Text>
-          <View style={[S.card, { overflow: "visible" }]}>
-            <View style={S.cardInner}>
-              <View style={S.cardTitleRow}>
-                <View style={[S.cardIconBox, { backgroundColor: accentBg }]}>
-                  <Ionicons name="image-outline" size={18} color={accent} />
-                </View>
-                <Text style={S.cardTitle}>Event banner</Text>
-              </View>
-              <Text style={S.cardSub}>A great cover photo makes your event stand out on the map.</Text>
-              <BannerImageSection bannerUri={bannerUri} setBannerUri={setBannerUri} accentColor={accent} />
+          {/* ── TITLE — primary / large ── */}
+          <View style={ST2.titleSection}>
+            <Text style={ST2.fieldLabel}>
+              {kind === "service" ? "Service name" : "Event title"}
+            </Text>
+            <View style={[ST2.titleShell, !!errors.title && ST2.titleShellError]}>
+              <TextInput
+                value={title}
+                onChangeText={(t) => { setTitle(t); if (errors.title) setErrors(e => ({ ...e, title: "" })); }}
+                placeholder={kind === "service" ? "e.g., Yoga session, Photography" : "e.g., Saturday coffee meetup"}
+                placeholderTextColor={C.hint}
+                style={ST2.titleInput}
+                returnKeyType="done"
+                multiline
+                numberOfLines={2}
+                autoFocus
+              />
             </View>
+            {!!errors.title && <Text style={S.errorMsg}>{errors.title}</Text>}
           </View>
 
-          {/* Title */}
-          <Text style={S.sectionLabel}>Event title</Text>
-          <View style={S.card}>
-            <View style={S.cardInner}>
-              <View style={S.cardTitleRow}>
-                <View style={[S.cardIconBox, { backgroundColor: C.purpleBg }]}>
-                  <Ionicons name={kind === "service" ? "construct-outline" : "create-outline"} size={18}
-                    color={C.purple} />
-                </View>
-                <Text style={S.cardTitle}>{kind === "service" ? "Name your service" : "Name your event"}</Text>
-              </View>
-              <View style={[S.inputShell, errors.title && { borderColor: C.error + "44", backgroundColor: C.error + "08" }]}>
-                <Ionicons name="pencil-outline" size={16} color={errors.title ? C.error : C.hint} />
-                <TextInput
-                  value={title} onChangeText={(t) => { setTitle(t); if (errors.title) setErrors(e => ({ ...e, title: "" })); }}
-                  placeholder={kind === "service" ? "e.g., Yoga session, Photography" : "e.g., Saturday coffee meetup"}
-                  placeholderTextColor={C.hint} style={S.textInput} returnKeyType="done"
-                />
-              </View>
-              {!!errors.title && <Text style={S.errorMsg}>{errors.title}</Text>}
+          {/* ── BANNER — required ── */}
+          <View style={ST2.bannerSection}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 10 }}>
+              <Text style={ST2.fieldLabel}>Cover Photo</Text>
+              <Text style={ST2.requiredStar}>*</Text>
             </View>
+            <BannerImageSection
+              bannerUri={bannerUri}
+              setBannerUri={(v) => { setBannerUri(v); if (errors.banner) setErrors(e => ({ ...e, banner: "" })); }}
+              accentColor={accent}
+              hasError={!!errors.banner}
+            />
+            {!!errors.banner && <Text style={ST2.bannerError}>{errors.banner}</Text>}
           </View>
 
           <ContinueBtn label="Continue" onPress={handleNext} color={accent} />

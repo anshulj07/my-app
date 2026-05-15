@@ -17,6 +17,7 @@ import * as ImagePicker from "expo-image-picker";
 import { apiFetch } from "../../lib/apiFetch";
 
 import PhotosManagerModal from "./PhotosManagerModal";
+import WorldMapSection from "./WorldMapSection";
 import { styles, COLORS } from "./profileHome.styles";
 
 type ProfileData = {
@@ -28,6 +29,8 @@ type ProfileData = {
   photos?: string[];
   avatar?: string | null;
 };
+
+const VISITED_STORAGE_KEY = "@visitedCountries";
 
 const STORAGE_KEY = "@profile";
 const PROFILE_ENDPOINT = "/api/profile";
@@ -48,6 +51,8 @@ export default function ProfileHome() {
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [profileErr, setProfileErr] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+
+  const [visitedCountries, setVisitedCountries] = useState<string[]>([]);
 
   const [photosOpen, setPhotosOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -127,9 +132,11 @@ export default function ProfileHome() {
     (async () => {
       const raw = await AsyncStorage.getItem(STORAGE_KEY);
       if (raw) {
-        try {
-          setProfile(JSON.parse(raw));
-        } catch {}
+        try { setProfile(JSON.parse(raw)); } catch {}
+      }
+      const visitedRaw = await AsyncStorage.getItem(VISITED_STORAGE_KEY);
+      if (visitedRaw) {
+        try { setVisitedCountries(JSON.parse(visitedRaw)); } catch {}
       }
       await fetchProfile();
     })();
@@ -149,6 +156,11 @@ export default function ProfileHome() {
       setRefreshing(false);
     }
   }, [fetchProfile]);
+
+  const onVisitedChanged = useCallback(async (countries: string[]) => {
+    setVisitedCountries(countries);
+    await AsyncStorage.setItem(VISITED_STORAGE_KEY, JSON.stringify(countries));
+  }, []);
 
   const onLogout = useCallback(async () => {
     await AsyncStorage.removeItem(STORAGE_KEY);
@@ -445,6 +457,12 @@ export default function ProfileHome() {
           ))}
         </View>
       </View>
+
+      {/* World Map */}
+      <WorldMapSection
+        visitedCountries={visitedCountries}
+        onChanged={onVisitedChanged}
+      />
 
       {/* Logout */}
       <TouchableOpacity style={styles.logoutBtn} activeOpacity={0.92} onPress={onLogout}>

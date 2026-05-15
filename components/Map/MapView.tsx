@@ -270,12 +270,12 @@ export default function MapView({
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           {locLoading ? (
-            <ActivityIndicator size="small" color="#0A84FF" />
+            <ActivityIndicator size="small" color="#5B4FD4" />
           ) : (
             <Ionicons
               name={locError ? "location-outline" : "locate"}
               size={22}
-              color={locError ? "#DC2626" : "#0A84FF"}
+              color={locError ? "#DC2626" : "#5B4FD4"}
             />
           )}
         </TouchableOpacity>
@@ -289,19 +289,19 @@ const styles = StyleSheet.create({
   center: { alignItems: "center", justifyContent: "center" },
   locBtn: {
     position: "absolute",
-    bottom: 116,
-    right: 18,
+    bottom: 32,
+    left: 20,
     width: 46,
     height: 46,
-    borderRadius: 14,
+    borderRadius: 999,
     backgroundColor: "rgba(255,255,255,0.97)",
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "rgba(15,23,42,0.10)",
+    borderWidth: 1.5,
+    borderColor: "rgba(91,79,212,0.18)",
     shadowColor: "#000",
-    shadowOpacity: 0.13,
-    shadowRadius: 12,
+    shadowOpacity: 0.14,
+    shadowRadius: 14,
     shadowOffset: { width: 0, height: 6 },
     elevation: 8,
   },

@@ -959,6 +959,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   View, TextInput, StyleSheet, Pressable, FlatList, Text,
   Keyboard, ActivityIndicator, Platform, ScrollView, TouchableOpacity,
+  Animated,
 } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import Constants from "expo-constants";
@@ -993,7 +994,7 @@ const C = {
 
 // ─── Filters ─────────────────────────────────────────────────────────────────
 type Filter     = { key: string; label: string; icon: any };
-type KindFilter = { key: string; label: string; dotColor: string; activeBg: string; activeText: string };
+type KindFilter = { key: string; label: string; emoji: string; dotColor: string; activeBg: string; activeText: string; activeBorder: string; icon: any };
 
 const ACTIVITY_FILTERS: Filter[] = [
   { key: "coffee",  label: "Coffee",  icon: "cafe-outline" },
@@ -1009,9 +1010,18 @@ const ACTIVITY_FILTERS: Filter[] = [
 ];
 
 const KIND_FILTERS: KindFilter[] = [
-  { key: "free",    label: "Free",    dotColor: "#22C55E", activeBg: "#DCFCE7", activeText: "#166534", icon: "gift-outline" },
-  { key: "paid",    label: "Paid",    dotColor: "#F59E0B", activeBg: "#FEF3C7", activeText: "#92400E", icon: "cash-outline" },
-  { key: "service", label: "Service", dotColor: "#8B5CF6", activeBg: "#F3E8FF", activeText: "#5B21B6", icon: "briefcase-outline" },
+  {
+    key: "free", label: "Free", emoji: "🎁", icon: "gift-outline",
+    dotColor: "#22C55E", activeBg: "#DCFCE7", activeText: "#166534", activeBorder: "#22C55E",
+  },
+  {
+    key: "paid", label: "Paid", emoji: "💳", icon: "card-outline",
+    dotColor: "#F59E0B", activeBg: "#FEF3C7", activeText: "#92400E", activeBorder: "#F59E0B",
+  },
+  {
+    key: "service", label: "Service", emoji: "💼", icon: "briefcase-outline",
+    dotColor: "#8B5CF6", activeBg: "#F3E8FF", activeText: "#5B21B6", activeBorder: "#8B5CF6",
+  },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1019,7 +1029,7 @@ const KIND_FILTERS: KindFilter[] = [
 export default function MapSearchHeader({
   top,
   onPick,
-  placeholder = "Search places…",
+  placeholder = "Discover events nearby…",
   activeFilter,
   onFilterChange,
 }: {
@@ -1031,19 +1041,39 @@ export default function MapSearchHeader({
 }) {
   const GOOGLE_KEY = (Constants.expoConfig?.extra as any)?.googleMapsKey as string | undefined;
 
-  const [q,       setQ]       = useState("");
-  const [open,    setOpen]    = useState(false);
-  const [items,   setItems]   = useState<Suggestion[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [err,     setErr]     = useState<string | null>(null);
+  const [q,        setQ]       = useState("");
+  const [open,     setOpen]    = useState(false);
+  const [focused,  setFocused] = useState(false);
+  const [items,    setItems]   = useState<Suggestion[]>([]);
+  const [loading,  setLoading] = useState(false);
+  const [err,      setErr]     = useState<string | null>(null);
 
-  const inputRef = useRef<TextInput>(null);
-  const moreRef  = useRef<Modalize>(null);
+  const inputRef  = useRef<TextInput>(null);
+  const moreRef   = useRef<Modalize>(null);
+  // Animated value 0 = idle, 1 = focused
+  const glowAnim  = useRef(new Animated.Value(0)).current;
 
   const quickActivity = useMemo(() => ACTIVITY_FILTERS.slice(0, 4), []);
   const restActivity  = useMemo(() => ACTIVITY_FILTERS.slice(4), []);
 
-  const closePanel = () => { setOpen(false); setItems([]); setErr(null); Keyboard.dismiss(); };
+  // Glow transition on focus/blur
+  const triggerGlow = (on: boolean) => {
+    Animated.timing(glowAnim, {
+      toValue: on ? 1 : 0,
+      duration: 220,
+      useNativeDriver: false,
+    }).start();
+  };
+
+  const barShadowOpacity = glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0.10, 0.28] });
+  const barShadowRadius  = glowAnim.interpolate({ inputRange: [0, 1], outputRange: [12, 22]  });
+  const barElevation     = glowAnim.interpolate({ inputRange: [0, 1], outputRange: [6,  14]  });
+
+  const closePanel = () => {
+    setOpen(false); setItems([]); setErr(null);
+    setFocused(false); triggerGlow(false);
+    Keyboard.dismiss();
+  };
 
   useEffect(() => {
     if (!open || !GOOGLE_KEY) return;
@@ -1059,109 +1089,145 @@ export default function MapSearchHeader({
     if (!GOOGLE_KEY) return;
     try {
       setLoading(true); setErr(null);
-      const details  = await fetchPlaceDetails(GOOGLE_KEY, placeId);
+      const details = await fetchPlaceDetails(GOOGLE_KEY, placeId);
       const lat = details?.latLng?.lat;
       const lng = details?.latLng?.lng;
       if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
       const finalLabel = details?.formattedAddress || label;
       setQ(finalLabel); setOpen(false); setItems([]);
-      Keyboard.dismiss();
+      Keyboard.dismiss(); triggerGlow(false);
       onPick(lat!, lng!, finalLabel);
     } finally { setLoading(false); }
   }
 
-  const panelTop = top + 62;
+  const panelTop = top + 66;
 
   return (
     <>
-      {/* ── Search bar ── */}
+      {/* ── Search bar ─────────────────────────────────────────── */}
       <View pointerEvents="box-none" style={[S.wrap, { top }]}>
-        <Pressable
-          style={({ pressed }) => [S.bar, pressed && S.barPressed]}
-          onPress={() => { setOpen(true); inputRef.current?.focus(); }}
+        <Animated.View
+          style={[
+            S.barOuter,
+            {
+              shadowOpacity: barShadowOpacity,
+              shadowRadius:  barShadowRadius,
+              elevation:     barElevation,
+            },
+          ]}
         >
-          <View style={S.searchIconWrap}>
-            <Ionicons name="search" size={17} color={C.teal} />
-          </View>
+          <Pressable
+            style={({ pressed }) => [S.bar, pressed && S.barPressed]}
+            onPress={() => { setOpen(true); inputRef.current?.focus(); }}
+          >
+            {/* Search icon pill */}
+            <View style={S.searchIconWrap}>
+              <Ionicons name="search" size={18} color="#fff" />
+            </View>
 
-          <TextInput
-            ref={inputRef}
-            value={q}
-            onChangeText={(t) => { setQ(t); if (!open) setOpen(true); }}
-            onFocus={() => setOpen(true)}
-            placeholder={GOOGLE_KEY ? placeholder : "Missing googleMapsKey"}
-            placeholderTextColor={C.hint}
-            style={S.input}
-            returnKeyType="search"
-            autoCorrect={false}
-          />
+            {/* Thin vertical separator */}
+            <View style={S.inputSep} />
 
-          {loading ? (
-            <View style={S.trailingBtn}><ActivityIndicator size="small" color={C.teal} /></View>
-          ) : q.trim().length ? (
-            <Pressable
-              hitSlop={10}
-              onPress={() => { setQ(""); setItems([]); setErr(null); setOpen(true); inputRef.current?.focus(); }}
-              style={S.trailingBtn}
-            >
-              <Ionicons name="close" size={15} color={C.muted} />
-            </Pressable>
-          ) : (
-            <View style={S.trailingSpacer} />
-          )}
+            <TextInput
+              ref={inputRef}
+              value={q}
+              onChangeText={(t) => { setQ(t); if (!open) setOpen(true); }}
+              onFocus={() => { setOpen(true); setFocused(true); triggerGlow(true); }}
+              onBlur={() => { setFocused(false); if (!q) triggerGlow(false); }}
+              placeholder={GOOGLE_KEY ? placeholder : "Missing googleMapsKey"}
+              placeholderTextColor="#AAA8A4"
+              style={S.input}
+              returnKeyType="search"
+              autoCorrect={false}
+            />
 
-          <View style={S.profileWrap}>
-            <ProfileHeaderButton size={40} />
-          </View>
-        </Pressable>
+            {/* Trailing action */}
+            {loading ? (
+              <View style={S.trailingBtn}>
+                <ActivityIndicator size="small" color={C.teal} />
+              </View>
+            ) : q.trim().length ? (
+              <Pressable
+                hitSlop={10}
+                onPress={() => {
+                  setQ(""); setItems([]); setErr(null);
+                  setOpen(true); inputRef.current?.focus();
+                }}
+                style={S.trailingBtn}
+              >
+                <Ionicons name="close-circle" size={18} color="#C0BAB2" />
+              </Pressable>
+            ) : (
+              <View style={S.trailingSpacer} />
+            )}
+
+            {/* Divider before avatar */}
+            <View style={S.avatarSep} />
+
+            {/* Profile avatar */}
+            <View style={S.profileWrap}>
+              <ProfileHeaderButton size={38} />
+            </View>
+          </Pressable>
+        </Animated.View>
       </View>
 
-      {/* ── Filter chips row ── */}
-      <View pointerEvents="box-none" style={[S.filtersWrap, { top: top + 60 }]}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={S.filtersRow}>
-
-          {/* All Filter */}
+      {/* ── Filter chips row ──────────────────────────────────── */}
+      <View pointerEvents="box-none" style={[S.filtersWrap, { top: top + 64 }]}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={S.filtersRow}
+        >
+          {/* All */}
           <TouchableOpacity
-            activeOpacity={0.88}
+            activeOpacity={0.82}
             onPress={() => onFilterChange(null)}
             style={[
-              S.kindChip,
+              S.allChip,
               activeFilter === null
-                ? { backgroundColor: "#1C1A17", borderColor: "#1C1A17" }
-                : { backgroundColor: "rgba(255,255,255,0.95)", borderColor: C.border },
+                ? S.allChipActive
+                : S.allChipIdle,
             ]}
           >
-            <Text style={[S.kindChipTxt, activeFilter === null && { color: "#FFF", fontWeight: "900" }]}>
+            <Ionicons
+              name="globe-outline"
+              size={13}
+              color={activeFilter === null ? "#fff" : "#666"}
+            />
+            <Text style={[S.allChipTxt, activeFilter === null && S.allChipTxtActive]}>
               All
             </Text>
           </TouchableOpacity>
 
-          {/* Kind pills */}
+          {/* Kind pills: Free / Paid / Service */}
           {KIND_FILTERS.map((f) => {
             const active = activeFilter === f.key;
             return (
               <TouchableOpacity
                 key={f.key}
-                activeOpacity={0.88}
+                activeOpacity={0.82}
                 onPress={() => onFilterChange(active ? null : f.key)}
                 style={[
                   S.kindChip,
                   active
-                    ? { backgroundColor: f.activeBg, borderColor: f.dotColor + "88" }
-                    : { backgroundColor: "rgba(255,255,255,0.95)", borderColor: C.border },
+                    ? { backgroundColor: f.activeBg, borderColor: f.activeBorder + "AA" }
+                    : S.kindChipIdle,
                 ]}
               >
-                <Ionicons name={f.icon as any} size={14} color={active ? f.activeText : f.dotColor} style={{ marginRight: 2 }} />
-                <Text style={[S.kindChipTxt, active && { color: f.activeText, fontWeight: "900" }]}>
+                <Text style={S.kindChipEmoji}>{f.emoji}</Text>
+                <Text style={[S.kindChipTxt, active && { color: f.activeText, fontWeight: "800" }]}>
                   {f.label}
                 </Text>
-                {active && <Ionicons name="close" size={11} color={f.activeText} style={{ marginLeft: 2 }} />}
+                {active && (
+                  <Ionicons name="close-circle" size={13} color={f.activeText} style={{ marginLeft: 1 }} />
+                )}
               </TouchableOpacity>
             );
           })}
 
-          {/* Vertical divider */}
-          <View style={S.divider} />
+          {/* Thin vertical separator */}
+          <View style={S.chipDivider} />
 
           {/* Activity filters */}
           {quickActivity.map((f) => {
@@ -1169,32 +1235,32 @@ export default function MapSearchHeader({
             return (
               <TouchableOpacity
                 key={f.key}
-                activeOpacity={0.88}
+                activeOpacity={0.82}
                 onPress={() => onFilterChange(active ? null : f.key)}
                 style={[S.actChip, active && S.actChipActive]}
               >
-                <Ionicons name={f.icon} size={14} color={active ? C.tealText : C.muted} />
-                <Text style={[S.actChipTxt, active && { color: C.tealText, fontWeight: "900" }]}>
+                <Ionicons name={f.icon} size={13} color={active ? C.tealText : "#888"} />
+                <Text style={[S.actChipTxt, active && { color: C.tealText, fontWeight: "800" }]}>
                   {f.label}
                 </Text>
-                {active && <Ionicons name="close" size={11} color={C.tealText} />}
+                {active && <Ionicons name="close-circle" size={12} color={C.tealText} />}
               </TouchableOpacity>
             );
           })}
 
+          {/* More */}
           <TouchableOpacity
-            activeOpacity={0.88}
+            activeOpacity={0.82}
             onPress={() => moreRef.current?.open()}
             style={S.moreChip}
           >
-            <Ionicons name="options-outline" size={14} color={C.muted} />
-            <Text style={S.actChipTxt}>More</Text>
+            <Ionicons name="options-outline" size={13} color="#666" />
+            <Text style={S.moreChipTxt}>More</Text>
           </TouchableOpacity>
-
         </ScrollView>
       </View>
 
-      {/* ── More sheet ── */}
+      {/* ── More sheet ─────────────────────────────────────────── */}
       <Modalize
         ref={moreRef}
         adjustToContentHeight
@@ -1204,13 +1270,13 @@ export default function MapSearchHeader({
       >
         <View style={S.sheetInner}>
           <View style={S.sheetHeader}>
-            <Text style={S.sheetTitle}>More filters</Text>
+            <Text style={S.sheetTitle}>Filters</Text>
             <TouchableOpacity
-              activeOpacity={0.88}
+              activeOpacity={0.85}
               onPress={() => { onFilterChange(null); moreRef.current?.close(); }}
               style={S.resetBtn}
             >
-              <Ionicons name="refresh-outline" size={14} color={C.tealText} />
+              <Ionicons name="refresh-outline" size={13} color={C.tealText} />
               <Text style={S.resetTxt}>Reset all</Text>
             </TouchableOpacity>
           </View>
@@ -1222,17 +1288,15 @@ export default function MapSearchHeader({
               return (
                 <TouchableOpacity
                   key={f.key}
-                  activeOpacity={0.88}
+                  activeOpacity={0.85}
                   onPress={() => { onFilterChange(active ? null : f.key); moreRef.current?.close(); }}
                   style={[
                     S.gridChip,
-                    active
-                      ? { backgroundColor: f.activeBg, borderColor: f.dotColor + "88" }
-                      : {},
+                    active ? { backgroundColor: f.activeBg, borderColor: f.activeBorder + "99" } : {},
                   ]}
                 >
-                  <View style={[S.kindDot, { backgroundColor: active ? f.dotColor : f.dotColor + "99" }]} />
-                  <Text style={[S.gridChipTxt, active && { color: f.activeText, fontWeight: "900" }]}>
+                  <Text style={{ fontSize: 16 }}>{f.emoji}</Text>
+                  <Text style={[S.gridChipTxt, active && { color: f.activeText, fontWeight: "800" }]}>
                     {f.label}
                   </Text>
                 </TouchableOpacity>
@@ -1240,19 +1304,19 @@ export default function MapSearchHeader({
             })}
           </View>
 
-          <Text style={[S.sheetSectionLbl, { marginTop: 18 }]}>Activity</Text>
+          <Text style={[S.sheetSectionLbl, { marginTop: 20 }]}>Activity</Text>
           <View style={S.grid}>
             {restActivity.map((f) => {
               const active = activeFilter === f.key;
               return (
                 <TouchableOpacity
                   key={f.key}
-                  activeOpacity={0.88}
+                  activeOpacity={0.85}
                   onPress={() => { onFilterChange(active ? null : f.key); moreRef.current?.close(); }}
                   style={[S.gridChip, active && S.gridChipActive]}
                 >
-                  <Ionicons name={f.icon} size={16} color={active ? C.tealText : C.muted} />
-                  <Text style={[S.gridChipTxt, active && { color: C.tealText, fontWeight: "900" }]}>
+                  <Ionicons name={f.icon} size={15} color={active ? C.tealText : "#888"} />
+                  <Text style={[S.gridChipTxt, active && { color: C.tealText, fontWeight: "800" }]}>
                     {f.label}
                   </Text>
                 </TouchableOpacity>
@@ -1262,19 +1326,37 @@ export default function MapSearchHeader({
         </View>
       </Modalize>
 
-      {/* ── Search dropdown ── */}
+      {/* ── Search dropdown ────────────────────────────────────── */}
       {open ? (
         <>
           <Pressable style={[S.backdrop, { top: panelTop }]} onPress={closePanel} />
           <View style={[S.dropdown, { top: panelTop }]}>
+            {/* Dropdown header */}
+            {items.length === 0 && (
+              <View style={S.ddHeader}>
+                <Ionicons name="location-outline" size={13} color={C.teal} />
+                <Text style={S.ddHeaderTxt}>
+                  {q.trim().length === 0
+                    ? "Where do you want to explore?"
+                    : q.trim().length < 2
+                    ? "Keep typing…"
+                    : loading
+                    ? "Finding places…"
+                    : "No results found"}
+                </Text>
+              </View>
+            )}
             <FlatList
               data={items}
               keyExtractor={(x) => x.id}
               keyboardShouldPersistTaps="always"
-              renderItem={({ item }) => (
-                <Pressable style={S.ddRow} onPress={() => pick(item.id, item.main)}>
+              renderItem={({ item, index }) => (
+                <Pressable
+                  style={[S.ddRow, index === 0 && { borderTopWidth: 0 }]}
+                  onPress={() => pick(item.id, item.main)}
+                >
                   <View style={S.ddIcon}>
-                    <Ionicons name="location-outline" size={16} color={C.teal} />
+                    <Ionicons name="location" size={15} color={C.tealText} />
                   </View>
                   <View style={S.ddTextWrap}>
                     <Text style={S.ddMain} numberOfLines={1}>{item.main}</Text>
@@ -1282,22 +1364,18 @@ export default function MapSearchHeader({
                       <Text style={S.ddSec} numberOfLines={1}>{item.secondary}</Text>
                     )}
                   </View>
-                  <Ionicons name="chevron-forward" size={14} color={C.hint} />
+                  <View style={S.ddArrow}>
+                    <Ionicons name="chevron-forward" size={13} color="#CCC" />
+                  </View>
                 </Pressable>
               )}
-              ListEmptyComponent={
-                <View style={S.ddEmpty}>
-                  <Text style={S.ddEmptyTxt}>
-                    {q.trim().length === 0 ? "Start typing…"
-                      : q.trim().length < 2 ? "Type at least 2 letters"
-                      : loading ? "Searching…"
-                      : err ? "Couldn't fetch results"
-                      : "No results"}
-                  </Text>
-                  {!!err && <Text style={S.ddEmptySub}>{err}</Text>}
-                </View>
-              }
             />
+            {!!err && (
+              <View style={S.ddErrorRow}>
+                <Ionicons name="alert-circle-outline" size={14} color="#EF4444" />
+                <Text style={S.ddErrorTxt}>{err}</Text>
+              </View>
+            )}
           </View>
         </>
       ) : null}
@@ -1306,134 +1384,224 @@ export default function MapSearchHeader({
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
+
+const ACCENT   = "#5B4FD4";   // indigo/purple search accent
+const ACCENT_L = "#EEF0FF";
+
 const S = StyleSheet.create({
-  wrap: { position: "absolute", left: 12, right: 12, zIndex: 9999, elevation: 30 },
+  wrap: { position: "absolute", left: 14, right: 14, zIndex: 9999, elevation: 30 },
 
-  // Search bar — warm white pill with teal accent
+  // Outer animated wrapper — carries the shadow so it can animate
+  barOuter: {
+    borderRadius: 20,
+    shadowColor: ACCENT,
+    shadowOffset: { width: 0, height: 8 },
+    backgroundColor: "transparent",
+  },
+
+  // The actual pill
   bar: {
-    height: 52, flexDirection: "row", alignItems: "center", gap: 10,
-    paddingLeft: 10, paddingRight: 8, borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.97)",
-    borderWidth: 1.5, borderColor: "rgba(240,235,227,0.9)",
-    shadowColor: C.teal,
-    shadowOpacity: 0.12, shadowRadius: 16, shadowOffset: { width: 0, height: 8 },
-    elevation: 8,
+    height: 58,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingLeft: 6, paddingRight: 8,
+    borderRadius: 20,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1.5,
+    borderColor: "rgba(220,215,210,0.9)",
+    overflow: "hidden",
   },
-  barPressed: { transform: [{ scale: 0.996 }] },
+  barPressed: { transform: [{ scale: 0.995 }] },
 
+  // Search icon: filled accent circle
   searchIconWrap: {
-    width: 34, height: 34, borderRadius: 10,
+    width: 40, height: 40, borderRadius: 14,
     alignItems: "center", justifyContent: "center",
-    backgroundColor: C.tealBg,
-    borderWidth: 1, borderColor: C.teal + "44",
+    backgroundColor: ACCENT,
+    marginRight: 2,
+    flexShrink: 0,
   },
+
+  inputSep: {
+    width: 1, height: 22,
+    backgroundColor: "rgba(200,196,190,0.6)",
+    marginHorizontal: 10,
+    flexShrink: 0,
+  },
+
   input: {
-    flex: 1, fontSize: 14, fontWeight: "700", color: C.ink,
-    paddingVertical: Platform.OS === "ios" ? 10 : 8,
+    flex: 1,
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#1C1A17",
+    paddingVertical: 0,
+    letterSpacing: 0.1,
   },
+
   trailingBtn: {
-    width: 30, height: 30, borderRadius: 999,
+    width: 32, height: 32,
     alignItems: "center", justifyContent: "center",
-    backgroundColor: "rgba(240,235,227,0.6)",
-    borderWidth: 1, borderColor: "rgba(240,235,227,0.9)",
+    marginRight: 2,
   },
-  trailingSpacer: { width: 30, height: 30 },
+  trailingSpacer: { width: 32, height: 32, marginRight: 2 },
+
+  avatarSep: {
+    width: 1, height: 22,
+    backgroundColor: "rgba(200,196,190,0.6)",
+    marginHorizontal: 6,
+    flexShrink: 0,
+  },
+
   profileWrap: {
-    width: 40, height: 40, borderRadius: 20,
-    overflow: "hidden", alignItems: "center", justifyContent: "center",
-    borderWidth: 2, borderColor: C.teal + "55",
+    width: 38, height: 38, borderRadius: 13,
+    overflow: "hidden",
+    alignItems: "center", justifyContent: "center",
+    borderWidth: 1.5, borderColor: ACCENT + "44",
+    flexShrink: 0,
   },
 
-  // Filter chips row
-  filtersWrap: { position: "absolute", left: 0, right: 0, paddingHorizontal: 12, zIndex: 9997, elevation: 25 },
-  filtersRow:  { paddingVertical: 8, paddingRight: 16, gap: 7, flexDirection: "row", alignItems: "center" },
+  // ── Filter chips row ────────────────────────────────────────────────────────
+  filtersWrap: {
+    position: "absolute", left: 0, right: 0,
+    paddingHorizontal: 14,
+    zIndex: 9997, elevation: 25,
+  },
+  filtersRow: {
+    paddingVertical: 6, paddingRight: 16,
+    gap: 8, flexDirection: "row", alignItems: "center",
+  },
 
-  // Kind chips
-  kindChip: {
-    flexDirection: "row", alignItems: "center", gap: 6,
-    paddingHorizontal: 11, height: 34, borderRadius: 999, borderWidth: 1.5,
-    shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 6, shadowOffset: { width: 0, height: 4 },
+  // All chip
+  allChip: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    paddingHorizontal: 13, height: 34, borderRadius: 999,
+    borderWidth: 1.5,
+    shadowColor: "#000", shadowOpacity: 0.07, shadowRadius: 6, shadowOffset: { width: 0, height: 3 },
     elevation: 3,
   },
-  kindDot:    { width: 7, height: 7, borderRadius: 999 },
-  kindChipTxt:{ fontSize: 12, fontWeight: "700", color: C.muted },
+  allChipIdle:       { backgroundColor: "rgba(255,255,255,0.95)", borderColor: "rgba(220,215,210,0.85)" },
+  allChipActive:     { backgroundColor: "#1C1A17", borderColor: "#1C1A17" },
+  allChipTxt:        { fontSize: 12.5, fontWeight: "700", color: "#666" },
+  allChipTxtActive:  { color: "#FFF", fontWeight: "800" },
 
-  divider: { width: 1, height: 22, backgroundColor: "rgba(28,26,23,0.12)", borderRadius: 1, marginHorizontal: 2 },
+  // Kind chips (Free / Paid / Service)
+  kindChip: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    paddingHorizontal: 11, height: 34, borderRadius: 999,
+    borderWidth: 1.5,
+    shadowColor: "#000", shadowOpacity: 0.07, shadowRadius: 6, shadowOffset: { width: 0, height: 3 },
+    elevation: 3,
+  },
+  kindChipIdle: { backgroundColor: "rgba(255,255,255,0.95)", borderColor: "rgba(220,215,210,0.85)" },
+  kindChipEmoji: { fontSize: 13 },
+  kindChipTxt:   { fontSize: 12.5, fontWeight: "700", color: "#555" },
+
+  // Divider between kind + activity chips
+  chipDivider: {
+    width: 1, height: 20,
+    backgroundColor: "rgba(180,175,168,0.5)",
+    borderRadius: 1, marginHorizontal: 2,
+  },
 
   // Activity chips
   actChip: {
     flexDirection: "row", alignItems: "center", gap: 5,
     paddingHorizontal: 11, height: 34, borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.97)",
-    borderWidth: 1.5, borderColor: "rgba(240,235,227,0.9)",
-    shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 6, shadowOffset: { width: 0, height: 4 },
+    backgroundColor: "rgba(255,255,255,0.95)",
+    borderWidth: 1.5, borderColor: "rgba(220,215,210,0.85)",
+    shadowColor: "#000", shadowOpacity: 0.07, shadowRadius: 6, shadowOffset: { width: 0, height: 3 },
     elevation: 3,
   },
-  actChipActive: { backgroundColor: C.tealBg, borderColor: C.teal + "88" },
-  actChipTxt:    { fontSize: 12, fontWeight: "700", color: C.muted },
+  actChipActive: { backgroundColor: C.tealBg, borderColor: C.teal + "99" },
+  actChipTxt:    { fontSize: 12.5, fontWeight: "700", color: "#666" },
+
+  // More chip
   moreChip: {
     flexDirection: "row", alignItems: "center", gap: 5,
-    paddingHorizontal: 11, height: 34, borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.97)",
-    borderWidth: 1.5, borderColor: "rgba(240,235,227,0.9)",
-    shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 6, shadowOffset: { width: 0, height: 4 },
+    paddingHorizontal: 13, height: 34, borderRadius: 999,
+    backgroundColor: ACCENT_L,
+    borderWidth: 1.5, borderColor: ACCENT + "44",
+    shadowColor: ACCENT, shadowOpacity: 0.1, shadowRadius: 6, shadowOffset: { width: 0, height: 3 },
     elevation: 3,
   },
+  moreChipTxt: { fontSize: 12.5, fontWeight: "700", color: ACCENT },
 
-  // Backdrop
+  // ── Backdrop ────────────────────────────────────────────────────────────────
   backdrop: {
     position: "absolute", left: 0, right: 0, bottom: 0,
-    backgroundColor: "rgba(28,26,23,0.18)", zIndex: 9998,
+    backgroundColor: "rgba(20,18,15,0.25)", zIndex: 9998,
   },
 
-  // Dropdown
+  // ── Dropdown ────────────────────────────────────────────────────────────────
   dropdown: {
-    position: "absolute", left: 12, right: 12, maxHeight: 400,
+    position: "absolute", left: 14, right: 14, maxHeight: 420,
     borderRadius: 20, overflow: "hidden",
     backgroundColor: "#FFFFFF",
-    borderWidth: 1.5, borderColor: "rgba(240,235,227,0.9)",
-    shadowColor: C.teal, shadowOpacity: 0.12, shadowRadius: 20, shadowOffset: { width: 0, height: 12 },
-    elevation: 20, zIndex: 9999,
+    borderWidth: 1.5, borderColor: "rgba(220,215,210,0.8)",
+    shadowColor: ACCENT, shadowOpacity: 0.15, shadowRadius: 24,
+    shadowOffset: { width: 0, height: 14 },
+    elevation: 22, zIndex: 9999,
   },
+  ddHeader: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    paddingHorizontal: 16, paddingVertical: 14,
+    borderBottomWidth: 1, borderBottomColor: "rgba(220,215,210,0.5)",
+  },
+  ddHeaderTxt: { fontSize: 13, fontWeight: "600", color: "#999", flex: 1 },
   ddRow: {
-    paddingHorizontal: 14, paddingVertical: 13,
+    paddingHorizontal: 14, paddingVertical: 14,
     flexDirection: "row", alignItems: "center", gap: 12,
-    borderTopWidth: 1, borderTopColor: "rgba(240,235,227,0.8)",
+    borderTopWidth: 1, borderTopColor: "rgba(220,215,210,0.4)",
   },
   ddIcon: {
-    width: 32, height: 32, borderRadius: 10,
+    width: 36, height: 36, borderRadius: 11,
     alignItems: "center", justifyContent: "center",
-    backgroundColor: C.tealBg,
-    borderWidth: 1, borderColor: C.teal + "44",
+    backgroundColor: ACCENT_L,
+    borderWidth: 1, borderColor: ACCENT + "33",
+    flexShrink: 0,
   },
   ddTextWrap: { flex: 1 },
-  ddMain:     { color: C.ink,  fontSize: 14, fontWeight: "800" },
-  ddSec:      { color: C.muted, fontSize: 12, fontWeight: "600", marginTop: 2 },
-  ddEmpty:    { padding: 18 },
-  ddEmptyTxt: { color: C.muted, fontWeight: "700", fontSize: 14 },
-  ddEmptySub: { marginTop: 6, color: C.hint, fontWeight: "600", fontSize: 12 },
+  ddMain: { color: "#1C1A17", fontSize: 14.5, fontWeight: "800", letterSpacing: -0.2 },
+  ddSec:  { color: "#999", fontSize: 12, fontWeight: "500", marginTop: 2 },
+  ddArrow: {
+    width: 26, height: 26, borderRadius: 8,
+    alignItems: "center", justifyContent: "center",
+    backgroundColor: "#F5F4F2",
+    flexShrink: 0,
+  },
+  ddErrorRow: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    paddingHorizontal: 16, paddingVertical: 12,
+    borderTopWidth: 1, borderTopColor: "rgba(220,215,210,0.4)",
+  },
+  ddErrorTxt: { fontSize: 13, color: "#EF4444", fontWeight: "600", flex: 1 },
 
-  // More sheet
+  // ── More sheet ──────────────────────────────────────────────────────────────
   sheet:       { borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: "hidden", backgroundColor: "#FFFFFF" },
-  sheetHandle: { width: 44, height: 4, borderRadius: 999, backgroundColor: "rgba(240,235,227,1)", marginTop: 12 },
-  sheetInner:  { padding: 20, paddingBottom: 40 },
-  sheetHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 18 },
-  sheetTitle:  { fontSize: 17, fontWeight: "900", color: C.ink, letterSpacing: -0.3 },
+  sheetHandle: { width: 40, height: 4, borderRadius: 999, backgroundColor: "#E0DDD8", marginTop: 12 },
+  sheetInner:  { padding: 22, paddingBottom: 44 },
+  sheetHeader: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    marginBottom: 20,
+  },
+  sheetTitle:  { fontSize: 20, fontWeight: "900", color: "#1C1A17", letterSpacing: -0.4 },
   resetBtn: {
     flexDirection: "row", alignItems: "center", gap: 6,
     paddingHorizontal: 14, height: 34, borderRadius: 999,
-    backgroundColor: C.tealBg,
-    borderWidth: 1.5, borderColor: C.teal + "44",
+    backgroundColor: ACCENT_L, borderWidth: 1.5, borderColor: ACCENT + "44",
   },
-  resetTxt:        { fontSize: 12, fontWeight: "800", color: C.tealText },
-  sheetSectionLbl: { fontSize: 11, fontWeight: "800", color: C.hint, textTransform: "uppercase", letterSpacing: 1.2, marginBottom: 10 },
-  grid:            { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  resetTxt: { fontSize: 12, fontWeight: "800", color: ACCENT },
+  sheetSectionLbl: {
+    fontSize: 10.5, fontWeight: "900", color: "#AAA",
+    textTransform: "uppercase", letterSpacing: 1.4, marginBottom: 12,
+  },
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: 9 },
   gridChip: {
     flexDirection: "row", alignItems: "center", gap: 8,
-    paddingHorizontal: 14, height: 40, borderRadius: 12,
-    backgroundColor: "rgba(250,247,242,1)",
-    borderWidth: 1.5, borderColor: "rgba(240,235,227,0.9)",
+    paddingHorizontal: 14, height: 42, borderRadius: 14,
+    backgroundColor: "#F9F7F4",
+    borderWidth: 1.5, borderColor: "rgba(220,215,210,0.8)",
   },
-  gridChipActive: { backgroundColor: C.tealBg, borderColor: C.teal + "88" },
-  gridChipTxt:    { fontSize: 13, fontWeight: "700", color: C.muted },
+  gridChipActive: { backgroundColor: C.tealBg, borderColor: C.teal + "99" },
+  gridChipTxt:    { fontSize: 13.5, fontWeight: "700", color: "#555" },
 });

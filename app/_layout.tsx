@@ -25,7 +25,8 @@ SplashScreen.preventAutoHideAsync();
 
 const SIGN_IN = "/(auth)/sign-in";
 const APP_HOME = "/newApp/home";
-const ONBOARDING_START = "/(onboarding)/username";
+const ONBOARDING_NAME = "/(onboarding)/name";
+const ONBOARDING_USERNAME = "/(onboarding)/username";
 
 // ─────────────────────────────────────────────────────────────────────────────
 function AuthGate({ children }: { children: React.ReactNode }) {
@@ -63,7 +64,8 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 
     if (!onboardingComplete) {
       if (!inOnboardingGroup) {
-        router.replace(ONBOARDING_START);
+        const isOAuth = (user.externalAccounts?.length ?? 0) > 0;
+        router.replace(isOAuth ? ONBOARDING_NAME : ONBOARDING_USERNAME);
       }
       return;
     }

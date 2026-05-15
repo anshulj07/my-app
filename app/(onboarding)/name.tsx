@@ -1,56 +1,85 @@
-// app/(onboarding)/name.tsx
-import React, { useMemo, useState } from "react";
+// app/(onboarding)/name.tsx — Step 1 of 7
+import { useRef, useEffect, useState } from "react";
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  ActivityIndicator,
+  ScrollView,
+  Animated,
+  Keyboard,
+  Image,
+  useWindowDimensions,
 } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useUser } from "@clerk/clerk-expo";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import Constants from "expo-constants";
 import { apiFetch } from "../../lib/apiFetch";
 
+import heroImage from "../../assets/IMG_0016.png";
+
+const STEP = 1;
+const TOTAL = 7;
+const HEADER_MIN = 64;
+
 export default function NameScreen() {
   const router = useRouter();
   const { isLoaded, user } = useUser();
+  const insets = useSafeAreaInsets();
+  const { width, height } = useWindowDimensions();
+  const HEADER_FULL = height * 0.35;
+
+  const headerAnim = useRef(new Animated.Value(HEADER_FULL)).current;
+
+  useEffect(() => {
+    const showE = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideE = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const dur = Platform.OS === "ios" ? 250 : 180;
+    const show = Keyboard.addListener(showE, () =>
+      Animated.timing(headerAnim, { toValue: HEADER_MIN, duration: dur, useNativeDriver: false }).start()
+    );
+    const hide = Keyboard.addListener(hideE, () =>
+      Animated.timing(headerAnim, { toValue: HEADER_FULL, duration: dur, useNativeDriver: false }).start()
+    );
+    return () => { show.remove(); hide.remove(); };
+  }, [headerAnim, height]);
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  // Pre-fill from Clerk — populated automatically for Google OAuth users
+  useEffect(() => {
+    if (isLoaded && user) {
+      if (user.firstName) setFirstName(user.firstName);
+      if (user.lastName) setLastName(user.lastName);
+    }
+  }, [isLoaded, user?.id]);
 
   const API_BASE = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
   const EVENT_API_KEY = (Constants.expoConfig?.extra as any)?.eventApiKey as string | undefined;
 
-  const canContinue = useMemo(
-    () => firstName.trim().length >= 1 && !saving,
-    [firstName, saving]
-  );
+  const canContinue = firstName.trim().length >= 1 && !saving;
 
   const onNext = async () => {
-    if (!isLoaded || !user) return;
-
+    if (!isLoaded || !user || !canContinue) return;
     setSaving(true);
     setErr(null);
-
     try {
-      if (!API_BASE) throw new Error("Missing API base URL (extra.apiBaseUrl).");
-
+      if (!API_BASE) throw new Error("Missing API base URL.");
       const payload = {
         clerkUserId: user.id,
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         email: user.primaryEmailAddress?.emailAddress ?? "",
       };
-
       const res = await apiFetch(`${API_BASE}/api/onboarding/name`, {
         method: "POST",
         headers: {
@@ -59,17 +88,12 @@ export default function NameScreen() {
         },
         body: JSON.stringify(payload),
       });
-
-      const text = await res.text();
       if (!res.ok) {
+        const text = await res.text();
         let msg = `Failed to save name (${res.status}).`;
-        try {
-          const j = JSON.parse(text);
-          msg = j?.message || j?.error || msg;
-        } catch {}
+        try { const j = JSON.parse(text); msg = j?.message || j?.error || msg; } catch {}
         throw new Error(msg);
       }
-
       router.push("/(onboarding)/username");
     } catch (e: any) {
       setErr(e?.message || "Failed to save name.");
@@ -79,300 +103,196 @@ export default function NameScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={[]}>
       <KeyboardAvoidingView
-        style={styles.flex}
+        style={{ flex: 1 }}
         behavior={Platform.select({ ios: "padding", android: undefined })}
       >
-        <View style={styles.page}>
-          {/* Top glow header */}
-          <View style={styles.hero}>
-            <View style={styles.heroTop}>
-              <View style={styles.pill}>
-                <View style={styles.pillDot} />
-                <Text style={styles.pillText}>Step 1 of 7</Text>
-              </View>
-
-              <View style={styles.spark}>
-                <Ionicons name="sparkles" size={16} color={COLORS.primary} />
-              </View>
-            </View>
-
-            <Text style={styles.h1}>What’s your name?</Text>
-            <Text style={styles.h2}>This helps people recognize you nearby.</Text>
-          </View>
-
-          {/* Glass card */}
-          <View style={styles.card}>
-            <View style={styles.field}>
-              <Text style={styles.label}>First name</Text>
-              <View style={[styles.inputWrap, firstName.trim() && styles.focused]}>
-                <View style={styles.leftIcon}>
-                  <Ionicons name="person-outline" size={18} color={COLORS.muted} />
-                </View>
-                <TextInput
-                  value={firstName}
-                  onChangeText={setFirstName}
-                  placeholder="e.g. Anshul"
-                  placeholderTextColor={COLORS.placeholder}
-                  style={styles.input}
-                  returnKeyType="next"
-                />
-                <View style={styles.rightIcon}>
-                  {firstName.trim().length > 0 ? (
-                    <Ionicons name="checkmark-circle" size={18} color={COLORS.success} />
-                  ) : (
-                    <View style={{ width: 18 }} />
-                  )}
-                </View>
-              </View>
-            </View>
-
-            <View style={styles.field}>
-              <Text style={styles.label}>Last name</Text>
-              <View style={styles.inputWrap}>
-                <View style={styles.leftIcon}>
-                  <Ionicons name="id-card-outline" size={18} color={COLORS.muted} />
-                </View>
-                <TextInput
-                  value={lastName}
-                  onChangeText={setLastName}
-                  placeholder="e.g. Jain"
-                  placeholderTextColor={COLORS.placeholder}
-                  style={styles.input}
-                  returnKeyType="done"
-                />
-                <View style={styles.rightIcon}>
-                  <Ionicons
-                    name={lastName.trim().length ? "checkmark-circle" : "ellipse-outline"}
-                    size={18}
-                    color={lastName.trim().length ? COLORS.success : "rgba(255,255,255,0.25)"}
-                  />
-                </View>
-              </View>
-            </View>
-
-            {!!err && (
-              <View style={styles.alert}>
-                <View style={styles.alertIcon}>
-                  <Ionicons name="warning-outline" size={18} color={COLORS.danger} />
-                </View>
-                <Text style={styles.alertText}>{err}</Text>
-              </View>
-            )}
-
-            <TouchableOpacity
-              onPress={onNext}
-              activeOpacity={0.92}
-              disabled={!canContinue}
-              style={[styles.cta, !canContinue && styles.ctaDisabled]}
-            >
-              {saving ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <>
-                  <Text style={styles.ctaText}>Continue</Text>
-                  <View style={styles.ctaIcon}>
-                    <Ionicons name="arrow-forward" size={18} color="#fff" />
-                  </View>
-                </>
-              )}
+        {/* Animated collapsing header */}
+        <Animated.View style={{ height: headerAnim, overflow: "hidden" }}>
+          <Image
+            source={heroImage}
+            style={{ width, height: HEADER_FULL }}
+            resizeMode="cover"
+          />
+          <View style={[styles.headerInner, { paddingTop: insets.top + 12 }]}>
+            <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} hitSlop={12}>
+              <Ionicons name="chevron-back" size={20} color="#fff" />
             </TouchableOpacity>
-
-            {!API_BASE ? (
-              <View style={[styles.alert, { marginTop: 12 }]}>
-                <View style={styles.alertIcon}>
-                  <Ionicons name="bug-outline" size={18} color={COLORS.danger} />
-                </View>
-                <Text style={styles.alertText}>Config issue: extra.apiBaseUrl is missing.</Text>
-              </View>
-            ) : null}
           </View>
+        </Animated.View>
+
+        {/* White content card */}
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={styles.contentInner}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <Text style={styles.stepLabel}>STEP {STEP} OF {TOTAL}</Text>
+          <Text style={styles.title}>What's your name?</Text>
+          <Text style={styles.subtitle}>This helps people recognize you nearby.</Text>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>First name</Text>
+            <View style={[styles.fieldWrap, firstName.trim().length > 0 && styles.fieldWrapOk]}>
+              <TextInput
+                value={firstName}
+                onChangeText={setFirstName}
+                placeholder="e.g. Anshul"
+                placeholderTextColor="#C0B8D8"
+                style={styles.fieldInput}
+                autoCapitalize="words"
+                autoCorrect={false}
+                autoFocus
+                returnKeyType="next"
+              />
+              {firstName.trim().length > 0 && (
+                <Ionicons name="checkmark-circle" size={20} color="#22C55E" />
+              )}
+            </View>
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>
+              Last name{" "}
+              <Text style={styles.optional}>(optional)</Text>
+            </Text>
+            <View style={styles.fieldWrap}>
+              <TextInput
+                value={lastName}
+                onChangeText={setLastName}
+                placeholder="e.g. Jain"
+                placeholderTextColor="#C0B8D8"
+                style={styles.fieldInput}
+                autoCapitalize="words"
+                autoCorrect={false}
+                returnKeyType="done"
+                onSubmitEditing={canContinue ? onNext : undefined}
+              />
+            </View>
+          </View>
+
+          {!!err && <Text style={styles.errText}>{err}</Text>}
+        </ScrollView>
+
+        {/* Footer */}
+        <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
+          <TouchableOpacity
+            onPress={onNext}
+            disabled={!canContinue}
+            style={[styles.cta, !canContinue && styles.ctaDisabled]}
+          >
+            {saving
+              ? <ActivityIndicator color="#fff" />
+              : <Text style={styles.ctaText}>Continue</Text>
+            }
+          </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
-const COLORS = {
-  bg: "#0B0B12",
-  card: "rgba(255,255,255,0.10)",
-  border: "rgba(255,255,255,0.12)",
-  borderSoft: "rgba(255,255,255,0.08)",
-  ink: "#FFFFFF",
-  inkSoft: "rgba(255,255,255,0.82)",
-  muted: "rgba(255,255,255,0.62)",
-  placeholder: "rgba(255,255,255,0.42)",
-  primary: "#FF4D6D",
-  primary2: "#FF8A00",
-  success: "#22C55E",
-  danger: "#FB7185",
-};
-
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  safe: { flex: 1, backgroundColor: COLORS.bg },
+  safe: { flex: 1, backgroundColor: "#3D2875" },
 
-  page: {
-    flex: 1,
-    paddingHorizontal: 18,
-    paddingTop: 14,
-    paddingBottom: 18,
-    justifyContent: "center",
-    gap: 16,
-    backgroundColor: COLORS.bg,
+  headerInner: {
+    paddingHorizontal: 20,
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
   },
-
-  // HERO
-  hero: { paddingHorizontal: 2, gap: 10 },
-  heroTop: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-
-  pill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: "rgba(255,77,109,0.14)",
-    borderWidth: 1,
-    borderColor: "rgba(255,77,109,0.25)",
-  },
-  pillDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 99,
-    backgroundColor: COLORS.primary2,
-    shadowColor: COLORS.primary2,
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
-  },
-  pillText: { color: COLORS.ink, fontWeight: "900", fontSize: 12, letterSpacing: 0.25 },
-
-  spark: {
-    width: 40,
-    height: 40,
-    borderRadius: 16,
-    backgroundColor: "rgba(255,255,255,0.10)",
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  h1: { color: COLORS.ink, fontSize: 34, fontWeight: "900", letterSpacing: -1.1, lineHeight: 40 },
-  h2: { color: COLORS.muted, fontSize: 14, fontWeight: "700", lineHeight: 20 },
-
-  // CARD
-  card: {
-    backgroundColor: COLORS.card,
-    borderRadius: 28,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    shadowColor: "#000",
-    shadowOpacity: 0.35,
-    shadowRadius: 26,
-    shadowOffset: { width: 0, height: 16 },
-    elevation: 6,
-  },
-
-  field: { marginTop: 12 },
-  label: { color: COLORS.inkSoft, fontWeight: "900", fontSize: 12, marginBottom: 8 },
-  optional: { color: COLORS.muted, fontWeight: "800" },
-
-  inputWrap: {
-    height: 56,
+  backBtn: {
+    width: 36,
+    height: 36,
     borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.22)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  content: {
+    flex: 1,
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    marginTop: -20,
+  },
+  contentInner: {
+    paddingHorizontal: 24,
+    paddingTop: 28,
+    paddingBottom: 24,
+  },
+
+  stepLabel: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#6B46C1",
+    letterSpacing: 1.5,
+    marginBottom: 10,
+  },
+  title: {
+    fontSize: 26,
+    fontWeight: "800",
+    color: "#111",
+    letterSpacing: -0.5,
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: "#666",
+    lineHeight: 21,
+    marginBottom: 28,
+  },
+
+  fieldGroup: { marginBottom: 16 },
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#444",
+    marginBottom: 8,
+  },
+  optional: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: "#999",
+  },
+  fieldWrap: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
+    height: 54,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: "#E5E0F5",
+    backgroundColor: "#FAFAFA",
+    paddingHorizontal: 16,
   },
-  focused: {
-    borderColor: "rgba(255,77,109,0.35)",
-    backgroundColor: "rgba(255,77,109,0.08)",
-  },
-
-  leftIcon: { width: 46, height: 56, alignItems: "center", justifyContent: "center", opacity: 0.95 },
-  rightIcon: { width: 46, height: 56, alignItems: "center", justifyContent: "center", opacity: 0.95 },
-
-  input: {
+  fieldWrapOk: { borderColor: "#22C55E", backgroundColor: "#F0FDF4" },
+  fieldInput: {
     flex: 1,
-    color: COLORS.ink,
-    fontWeight: "900",
+    color: "#111",
     fontSize: 15,
     paddingVertical: 0,
-    paddingRight: 8,
-    letterSpacing: 0.2,
   },
-
-  // ALERT
-  alert: {
-    marginTop: 14,
-    borderRadius: 18,
-    padding: 12,
-    flexDirection: "row",
-    gap: 10,
-    alignItems: "center",
-    backgroundColor: "rgba(251,113,133,0.10)",
-    borderWidth: 1,
-    borderColor: "rgba(251,113,133,0.24)",
-  },
-  alertIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 14,
-    backgroundColor: "rgba(251,113,133,0.14)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  alertText: { color: "#FFE4EA", fontWeight: "900", flex: 1, lineHeight: 18 },
-
-  // CTA
-  cta: {
-    marginTop: 18,
-    height: 56,
-    borderRadius: 18,
-    backgroundColor: COLORS.primary,
-    alignItems: "center",
-    justifyContent: "center",
-    flexDirection: "row",
-    gap: 10,
-    shadowColor: COLORS.primary,
-    shadowOpacity: 0.35,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 8,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.16)",
-  },
-  ctaDisabled: { opacity: 0.5 },
-  ctaText: { color: "#fff", fontWeight: "900", fontSize: 16, letterSpacing: 0.3 },
-  ctaIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.16)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  errText: { color: "#EF4444", fontSize: 13, marginBottom: 14 },
 
   footer: {
-    color: "rgba(255,255,255,0.55)",
-    textAlign: "center",
-    fontWeight: "700",
-    fontSize: 12,
-    paddingHorizontal: 10,
-    marginTop: 2,
-    lineHeight: 18,
+    backgroundColor: "#fff",
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#F0EDF8",
   },
+  cta: {
+    height: 54,
+    borderRadius: 14,
+    backgroundColor: "#5B3FA0",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 10,
+  },
+  ctaDisabled: { backgroundColor: "#C5B8E8" },
+  ctaText: { color: "#fff", fontWeight: "800", fontSize: 16 },
 });

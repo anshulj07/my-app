@@ -1,4 +1,4 @@
-// app/(onboarding)/username.tsx — Step 1 of 6
+// app/(onboarding)/username.tsx — Step 2 of 7
 import { useRef, useEffect, useState } from "react";
 import {
   View,
@@ -22,8 +22,8 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 
 import heroImage from "../../assets/IMG_0016.png";
 
-const STEP = 1;
-const TOTAL = 6;
+const STEP = 2;
+const TOTAL = 7;
 const HEADER_MIN = 64;
 const USERNAME_RE = /^[a-z0-9_]{3,30}$/;
 

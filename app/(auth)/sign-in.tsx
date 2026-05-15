@@ -17,14 +17,18 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { useSignIn } from "@clerk/clerk-expo";
+import { useSignIn, useOAuth } from "@clerk/clerk-expo";
+import * as WebBrowser from "expo-web-browser";
 import Ionicons from "@expo/vector-icons/Ionicons";
+
+WebBrowser.maybeCompleteAuthSession();
 
 import heroImage from "../../assets/IMG_0016.png";
 
 export default function SignInScreen() {
   const router = useRouter();
   const { signIn, setActive, isLoaded } = useSignIn();
+  const { startOAuthFlow } = useOAuth({ strategy: "oauth_google" });
   const insets = useSafeAreaInsets();
   const { width: screenW, height: screenH } = useWindowDimensions();
 
@@ -57,6 +61,18 @@ export default function SignInScreen() {
       setErr(pickErr(e, "Failed to sign in."));
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const onGoogleSignIn = async () => {
+    try {
+      const { createdSessionId, setActive: setActiveOAuth } = await startOAuthFlow();
+      if (createdSessionId && setActiveOAuth) {
+        await setActiveOAuth({ session: createdSessionId });
+        router.replace("/");
+      }
+    } catch (e: any) {
+      Alert.alert("Google sign-in failed", pickErr(e, "Could not sign in with Google."));
     }
   };
 
@@ -204,7 +220,7 @@ export default function SignInScreen() {
           <TouchableOpacity
             style={styles.googleBtn}
             activeOpacity={0.85}
-            onPress={() => Alert.alert("Coming soon", "Google sign-in not yet configured.")}
+            onPress={onGoogleSignIn}
           >
             <View style={styles.googleIconCircle}>
               <Text style={styles.googleG}>G</Text>

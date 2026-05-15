@@ -203,23 +203,10 @@ export default function Home() {
   const [activeFilter,    setActiveFilter]    = useState<string | null>(null);
   const [mapStackOpen,    setMapStackOpen]    = useState(false);
 
-  const fabSize = useMemo(() => (Platform.OS === "ios" ? 58 : 62), []);
 
   const API_BASE      = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
   const EVENT_API_KEY = (Constants.expoConfig?.extra as any)?.eventApiKey as string | undefined;
 
-  // FAB pulse animation
-  const fabPulse = useMemo(() => new Animated.Value(1), []);
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(fabPulse, { toValue: 1.08, duration: 1200, useNativeDriver: true }),
-        Animated.timing(fabPulse, { toValue: 1.00, duration: 1200, useNativeDriver: true }),
-      ])
-    );
-    loop.start();
-    return () => loop.stop();
-  }, []);
 
   const loadEvents = useCallback(async () => {
     if (!API_BASE) return [];
@@ -372,22 +359,21 @@ export default function Home() {
 
       {/* ── FAB ──────────────────────────────────────── */}
       {!mapStackOpen && (
-        <Animated.View style={[OL.fabGlow, { transform: [{ scale: fabPulse }] }]} pointerEvents="none" />
-      )}
-      {!mapStackOpen && (
         <TouchableOpacity
-          style={[OL.fab, { width: fabSize, height: fabSize, borderRadius: fabSize / 2 }]}
+          style={OL.fab}
           onPress={() => setShowPicker(true)}
           activeOpacity={0.85}
         >
-          <Ionicons name="add" size={30} color="#000" />
+          <Ionicons name="add" size={26} color="#fff" />
         </TouchableOpacity>
       )}
 
       {/* ── Nearby pill ──────────────────────────────── */}
       {!mapStackOpen && (
-        <TouchableOpacity style={OL.nearbyPill} activeOpacity={0.88} onPress={() => setShowList(true)}>
-          <Ionicons name="map-outline" size={15} color={C.greenText} />
+        <TouchableOpacity style={OL.nearbyPill} activeOpacity={0.82} onPress={() => setShowList(true)}>
+          <View style={OL.nearbyIconWrap}>
+            <Ionicons name="navigate" size={13} color="#fff" />
+          </View>
           <Text style={OL.nearbyText}>Nearby</Text>
         </TouchableOpacity>
       )}
@@ -510,31 +496,31 @@ const OL = StyleSheet.create({
     shadowColor: C.amber, shadowOpacity: 0.2, shadowRadius: 10, shadowOffset: { width: 0, height: 4 },
     elevation: 5, zIndex: 10,
   },
-  fabGlow: {
-    position: "absolute", bottom: 28, right: 12,
-    width: 84, height: 84, borderRadius: 42,
-    backgroundColor: C.greenGlow,
-    zIndex: 9,
-  },
   fab: {
-    position: "absolute", bottom: 38, right: 22,
-    backgroundColor: C.green,
+    position: "absolute", bottom: 28, right: 20,
+    width: 52, height: 52, borderRadius: 999,
+    backgroundColor: "#5B4FD4",
     alignItems: "center", justifyContent: "center",
-    shadowColor: C.green, shadowOpacity: 0.5, shadowRadius: 16, shadowOffset: { width: 0, height: 8 },
-    elevation: 10, zIndex: 10,
+    shadowColor: "#5B4FD4", shadowOpacity: 0.45, shadowRadius: 16, shadowOffset: { width: 0, height: 8 },
+    elevation: 12, zIndex: 10,
   },
   nearbyPill: {
-    position: "absolute", bottom: 42, left: "50%",
-    transform: [{ translateX: -58 }],
-    width: 116, height: 42,
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
+    position: "absolute", bottom: 34, left: "50%",
+    transform: [{ translateX: -62 }],
+    width: 124, height: 44,
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
     borderRadius: 999,
-    backgroundColor: "rgba(76, 80, 78, 0.7)",
-    borderWidth: 1, borderColor: C.green + "40",
-    shadowColor: C.green, shadowOpacity: 0.2, shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
-    elevation: 6, zIndex: 10,
+    backgroundColor: "rgba(255,255,255,0.96)",
+    borderWidth: 1.5, borderColor: "rgba(0,0,0,0.06)",
+    shadowColor: "#000", shadowOpacity: 0.14, shadowRadius: 16, shadowOffset: { width: 0, height: 6 },
+    elevation: 8, zIndex: 10,
   },
-  nearbyText: { color: C.greenText, fontWeight: "700", fontSize: 13, letterSpacing: 0.3 },
+  nearbyIconWrap: {
+    width: 24, height: 24, borderRadius: 999,
+    backgroundColor: "#5B4FD4",
+    alignItems: "center", justifyContent: "center",
+  },
+  nearbyText: { color: "#1C1A17", fontWeight: "800", fontSize: 13, letterSpacing: 0.2 },
 });
 
 // ─── Picker sheet styles ──────────────────────────────────────────────────────

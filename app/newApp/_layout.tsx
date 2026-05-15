@@ -321,11 +321,11 @@ export default function NewAppLayout() {
         }}
       />
 
-      {/* 2 — Trip */}
+      {/* 2 — Explore */}
       <Tabs.Screen
         name="trip"
         options={{
-          title: "Trip",
+          title: "Explore",
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
               name={focused ? "paper-plane" : "paper-plane-outline"}

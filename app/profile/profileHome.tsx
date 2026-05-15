@@ -12,6 +12,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import Constants from "expo-constants";
 import * as ImagePicker from "expo-image-picker";
+import * as Location from "expo-location";
 import { LinearGradient } from "expo-linear-gradient";
 import { apiFetch } from "../../lib/apiFetch";
 import PhotosManagerModal from "../../components/profile/PhotosManagerModal";
@@ -99,6 +100,30 @@ export default function ProfileHome() {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewUri, setPreviewUri] = useState<string | null>(null);
   const [scrolled, setScrolled] = useState(false);
+  const [detectedCity, setDetectedCity] = useState<string | null>(null);
+
+  // Auto-detect location once on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== "granted") return;
+        const pos = await Location.getLastKnownPositionAsync().catch(() => null)
+          ?? await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Low });
+        if (!pos) return;
+        const rev = await Location.reverseGeocodeAsync({
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+        });
+        const r = rev?.[0];
+        const city = (r?.city || r?.district || r?.subregion || r?.name || "").trim();
+        const region = (r?.region || "").trim();
+        const country = (r?.country || "").trim();
+        const label = [city || region, country].filter(Boolean).join(", ");
+        if (label) setDetectedCity(label);
+      } catch {}
+    })();
+  }, []);
 
   const photos = useMemo(() => sanitizePhotos(profile.photos), [profile.photos]);
   const previewPhotos = photos.slice(0, 4);
@@ -473,9 +498,9 @@ export default function ProfileHome() {
             <View style={S.coverMetaRow}>
               <Ionicons name="location-outline" size={11} color="rgba(255,255,255,0.75)" />
               <Text style={S.coverMeta} numberOfLines={1}>
-                {profile.city || profile.country 
+                {profile.city || profile.country
                   ? `${profile.city || ""}${profile.city && profile.country ? ", " : ""}${profile.country || ""}`
-                  : "Location not added"}
+                  : detectedCity || "Location not added"}
               </Text>
             </View>
           </Animated.View>

@@ -4,8 +4,10 @@ export function buildMapHtml(args: {
   eventsJson: string;
   center: { lat: number; lng: number };
   zoom: number;
+  userId?: string | null;
 }) {
-  const { googleKey, eventsJson, center, zoom } = args;
+  const { googleKey, eventsJson, center, zoom, userId } = args;
+  const safeUserId = userId ? JSON.stringify(userId) : 'null';
 
   const html =
 `<!doctype html>
@@ -17,85 +19,121 @@ export function buildMapHtml(args: {
     *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
     html,body,#map{height:100%;margin:0;padding:0;overflow:hidden}
 
-    /* ══ PIN pill ══ */
+    /* ══ PIN — emoji bubble ══ */
     .ep{
       position:absolute;
-      height:36px;padding:0 11px 0 7px;border-radius:18px;
-      display:inline-flex;align-items:center;gap:5px;
-      background:#fff;
-      border:1.5px solid rgba(0,0,0,0.09);
-      box-shadow:0 2px 10px rgba(0,0,0,0.13),0 0 0 0.5px rgba(0,0,0,0.04);
-      transform:translate(-50%,-100%) translateY(-6px) scale(1);
-      transform-origin:50% 100%;
+      display:flex;flex-direction:column;align-items:center;
       pointer-events:auto;cursor:pointer;touch-action:manipulation;
-      will-change:transform,opacity;white-space:nowrap;
-      transition:transform 0.25s cubic-bezier(0.34,1.56,0.64,1),box-shadow 0.2s ease,opacity 0.2s ease;
+      transform:translate(-50%,-100%) translateY(-8px) scale(1);
+      transform-origin:50% 100%;
+      will-change:transform,opacity;
+      transition:transform 0.28s cubic-bezier(0.34,1.56,0.64,1),opacity 0.2s ease;
     }
-    .ep::after{
-      content:"";position:absolute;bottom:-6px;left:50%;
-      width:10px;height:10px;
-      transform: translateX(-50%) translateY(-50%) rotate(45deg);
-      border-bottom-right-radius: 2px;
-      z-index: -1;
-    }
-    .ep .em{font-size:16px;line-height:1;flex-shrink:0;display:flex;align-items:center;justify-content:center;}
-    .ep .em svg{width:16px;height:16px;}
-    .ep .et{
-      font-size:12px;font-weight:600;color:#111;
-      font-family:-apple-system,system-ui,sans-serif;
-      max-width:80px;overflow:hidden;text-overflow:ellipsis;letter-spacing:-0.2px;
-    }
-    .ep.free   { border: 1.5px solid #22C55E; background: #DCFCE7; }
-    .ep.free .et { color: #166534; }
-    .ep.free::after { background: #DCFCE7; border-right: 1.5px solid #22C55E; border-bottom: 1.5px solid #22C55E; }
 
-    .ep.paid   { border: 1.5px solid #F59E0B; background: #FEF3C7; }
-    .ep.paid .et { color: #92400E; }
-    .ep.paid::after { background: #FEF3C7; border-right: 1.5px solid #F59E0B; border-bottom: 1.5px solid #F59E0B; }
+    /* bubble circle */
+    .ep-b{
+      width:46px;height:46px;border-radius:23px;
+      display:flex;align-items:center;justify-content:center;
+      font-size:23px;line-height:1;
+      background:#fff;
+      border:2.5px solid rgba(0,0,0,0.14);
+      box-shadow:0 3px 14px rgba(0,0,0,0.18),0 1px 4px rgba(0,0,0,0.07);
+      position:relative;overflow:visible;flex-shrink:0;
+    }
 
-    .ep.service{ border: 1.5px solid #8B5CF6; background: #F3E8FF; }
-    .ep.service .et { color: #5B21B6; }
-    .ep.service::after { background: #F3E8FF; border-right: 1.5px solid #8B5CF6; border-bottom: 1.5px solid #8B5CF6; }
-    .ep.live{
-      border-left:3px solid #ef4444;
-      box-shadow:0 2px 10px rgba(239,68,68,0.28),0 0 0 0 rgba(239,68,68,0.4);
+    /* downward tail */
+    .ep-t{
+      width:0;height:0;
+      border-left:6px solid transparent;
+      border-right:6px solid transparent;
+      border-top:8px solid #fff;
+      margin-top:-1px;
+      filter:drop-shadow(0 2px 1px rgba(0,0,0,0.10));
+    }
+
+    /* ── free events ── */
+    .ep.free .ep-b{
+      border-color:#22C55E;
+      box-shadow:0 3px 14px rgba(34,197,94,0.28),0 1px 4px rgba(0,0,0,0.07);
+    }
+
+    /* ── paid events ── */
+    .ep.paid .ep-b{
+      border-color:#F59E0B;
+      box-shadow:0 3px 14px rgba(245,158,11,0.28),0 1px 4px rgba(0,0,0,0.07);
+    }
+
+    /* ── service events ── */
+    .ep.service .ep-b{
+      border-color:#8B5CF6;
+      box-shadow:0 3px 14px rgba(139,92,246,0.28),0 1px 4px rgba(0,0,0,0.07);
+    }
+
+    /* ── MY events — dark filled bubble ── */
+    .ep.mine .ep-b{
+      background:#1C1B3A;
+      border-color:#6366F1;
+      box-shadow:0 4px 18px rgba(99,102,241,0.50),0 1px 6px rgba(0,0,0,0.18);
+      font-size:21px;
+    }
+    .ep.mine .ep-t{
+      border-top-color:#1C1B3A;
+      filter:drop-shadow(0 2px 2px rgba(99,102,241,0.35));
+    }
+
+    /* owner badge (star) on mine pins */
+    .ep-badge{
+      position:absolute;top:-5px;right:-5px;
+      width:17px;height:17px;border-radius:50%;
+      background:#6366F1;border:2px solid #fff;
+      display:flex;align-items:center;justify-content:center;
+      font-size:8px;color:#fff;line-height:1;
+      box-shadow:0 1px 4px rgba(99,102,241,0.4);
+      pointer-events:none;
+    }
+
+    /* ── LIVE ── */
+    .ep.live .ep-b{
+      border:2.5px solid #ef4444;
+      box-shadow:0 3px 14px rgba(239,68,68,0.35),0 1px 4px rgba(0,0,0,0.08);
       animation:liveGlow 1.8s ease-in-out infinite;
     }
-    .ep.live .et{color:#dc2626;font-weight:700;}
-    .ep.live .live-dot{
-      width:7px;height:7px;border-radius:50%;background:#ef4444;
+    .ep.live .ep-t{border-top-color:#fff;}
+    .live-dot{
+      position:absolute;top:-4px;right:-4px;
+      width:12px;height:12px;border-radius:50%;
+      background:#ef4444;border:2px solid #fff;
+      box-shadow:0 0 0 0 rgba(239,68,68,0.5);
       animation:livePulse 1.2s ease-in-out infinite;
-      flex-shrink:0;
     }
-    /* ══ PAUSED state ══ */
-    .ep.paused{
-      opacity:0.65;
-      filter:grayscale(1);
-      border-left:3px solid #64748b;
-    }
-    .ep.paused .et{color:#64748b;}
     @keyframes liveGlow{
-      0%,100%{box-shadow:0 2px 10px rgba(239,68,68,0.25),0 0 0 0 rgba(239,68,68,0.35)}
-      50%{box-shadow:0 2px 16px rgba(239,68,68,0.45),0 0 0 5px rgba(239,68,68,0)}
+      0%,100%{box-shadow:0 3px 14px rgba(239,68,68,0.28)}
+      50%{box-shadow:0 3px 22px rgba(239,68,68,0.55),0 0 0 5px rgba(239,68,68,0)}
     }
-    @keyframes livePulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.5);opacity:0.6}}
-    .ep.pressing{transform:translate(-50%,-100%) translateY(-6px) scale(0.88)!important;transition:transform 0.07s ease!important;}
-    .ep.sel{
-      background:#111;border-color:#111;
-      box-shadow:0 4px 18px rgba(0,0,0,0.28),0 0 0 3px rgba(255,255,255,0.9);
-      transform:translate(-50%,-100%) translateY(-12px) scale(1.07)!important;z-index:9000!important;
+    @keyframes livePulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.6);opacity:0.5}}
+
+    /* ── PAUSED ── */
+    .ep.paused{opacity:0.5;filter:grayscale(0.8);}
+
+    /* ── press / selected states ── */
+    .ep.pressing{transform:translate(-50%,-100%) translateY(-8px) scale(0.87)!important;transition:transform 0.07s ease!important;}
+    .ep.sel .ep-b{
+      box-shadow:0 6px 24px rgba(0,0,0,0.30),0 0 0 3.5px rgba(255,255,255,0.95)!important;
+      transform:scale(1.08);
     }
-    .ep.sel .et{color:#fff;}.ep.sel::after{background:#111;}
+    .ep.sel{transform:translate(-50%,-100%) translateY(-14px) scale(1)!important;z-index:9000!important;}
+
+    /* entrance animation */
     @keyframes pinIn{
-      0%{opacity:0;transform:translate(-50%,-100%) translateY(4px) scale(0.5)}
-      65%{transform:translate(-50%,-100%) translateY(-9px) scale(1.06)}
-      100%{opacity:1;transform:translate(-50%,-100%) translateY(-6px) scale(1)}
+      0%{opacity:0;transform:translate(-50%,-100%) translateY(4px) scale(0.45)}
+      65%{transform:translate(-50%,-100%) translateY(-11px) scale(1.07)}
+      100%{opacity:1;transform:translate(-50%,-100%) translateY(-8px) scale(1)}
     }
     .ep.entering{animation:pinIn 0.38s cubic-bezier(0.34,1.56,0.64,1) both}
 
     /* ══ CLUSTER circle ══ */
     .cb{
-      position:absolute;width:46px;height:46px;border-radius:50%;
+      position:absolute;width:48px;height:48px;border-radius:50%;
       display:flex;flex-direction:column;align-items:center;justify-content:center;
       background:linear-gradient(145deg,#4f46e5 0%,#7c3aed 100%);
       border:3px solid rgba(255,255,255,0.95);
@@ -104,13 +142,13 @@ export function buildMapHtml(args: {
       pointer-events:auto;cursor:pointer;touch-action:manipulation;will-change:transform;
       transition:transform 0.25s cubic-bezier(0.34,1.56,0.64,1);
     }
-    .cb.sz2{width:54px;height:54px;}.cb.sz3{width:62px;height:62px;}
+    .cb.sz2{width:56px;height:56px;}.cb.sz3{width:64px;height:64px;}
     .cb.pressing{transform:translate(-50%,-50%) scale(0.88)!important;transition:transform 0.07s ease!important;}
     .cb .cn{font-size:15px;font-weight:800;color:#fff;line-height:1;font-family:-apple-system,system-ui,sans-serif;letter-spacing:-0.5px;}
     .cb.sz2 .cn{font-size:17px;}.cb.sz3 .cn{font-size:20px;}
-    .cb .ce{font-size:12px;line-height:1;margin-top:2px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.2));}
-    .cb::before{content:"";position:absolute;inset:-7px;border-radius:50%;border:2px solid rgba(99,102,241,0.25);animation:halo 2.8s ease-in-out infinite;pointer-events:none;}
-    @keyframes halo{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.16);opacity:0.1}}
+    .cb .ce{font-size:13px;line-height:1;margin-top:2px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.2));}
+    .cb::before{content:"";position:absolute;inset:-8px;border-radius:50%;border:2px solid rgba(99,102,241,0.25);animation:halo 2.8s ease-in-out infinite;pointer-events:none;}
+    @keyframes halo{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.18);opacity:0.1}}
     @keyframes clusterIn{
       0%{opacity:0;transform:translate(-50%,-50%) scale(0.3)}
       70%{transform:translate(-50%,-50%) scale(1.12)}
@@ -131,60 +169,23 @@ export function buildMapHtml(args: {
       max-height:58vh;
     }
     #stack-popup.open{transform:translateY(0);}
-
-    #stack-handle{
-      width:40px;height:4px;border-radius:2px;
-      background:rgba(0,0,0,0.12);margin:12px auto 0;flex-shrink:0;
-    }
-    #stack-header{
-      display:flex;align-items:center;justify-content:space-between;
-      padding:14px 20px 8px;flex-shrink:0;
-    }
-    #stack-label{
-      font-size:11px;font-weight:700;letter-spacing:0.6px;
-      color:#94a3b8;text-transform:uppercase;
-      font-family:-apple-system,system-ui,sans-serif;
-    }
-    #stack-count-pill{
-      font-size:12px;font-weight:700;
-      background:rgba(79,70,229,0.1);color:#4f46e5;
-      border-radius:20px;padding:3px 10px;
-      font-family:-apple-system,system-ui,sans-serif;
-    }
-    #stack-close{
-      width:30px;height:30px;border-radius:50%;
-      background:rgba(0,0,0,0.07);border:none;outline:none;
-      display:flex;align-items:center;justify-content:center;
-      cursor:pointer;color:#64748b;font-size:14px;font-weight:600;flex-shrink:0;
-    }
-    #stack-list{
-      overflow-y:auto;flex:1;
-      padding:4px 14px 20px;
-      -webkit-overflow-scrolling:touch;
-    }
-    .si{
-      display:flex;align-items:center;gap:14px;
-      padding:11px 10px;border-radius:16px;
-      cursor:pointer;touch-action:manipulation;
-      transition:background 0.14s ease;position:relative;
-    }
+    #stack-handle{width:40px;height:4px;border-radius:2px;background:rgba(0,0,0,0.12);margin:12px auto 0;flex-shrink:0;}
+    #stack-header{display:flex;align-items:center;justify-content:space-between;padding:14px 20px 8px;flex-shrink:0;}
+    #stack-label{font-size:11px;font-weight:700;letter-spacing:0.6px;color:#94a3b8;text-transform:uppercase;font-family:-apple-system,system-ui,sans-serif;}
+    #stack-count-pill{font-size:12px;font-weight:700;background:rgba(79,70,229,0.1);color:#4f46e5;border-radius:20px;padding:3px 10px;font-family:-apple-system,system-ui,sans-serif;}
+    #stack-close{width:30px;height:30px;border-radius:50%;background:rgba(0,0,0,0.07);border:none;outline:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#64748b;font-size:14px;font-weight:600;flex-shrink:0;}
+    #stack-list{overflow-y:auto;flex:1;padding:4px 14px 20px;-webkit-overflow-scrolling:touch;}
+    .si{display:flex;align-items:center;gap:14px;padding:11px 10px;border-radius:16px;cursor:pointer;touch-action:manipulation;transition:background 0.14s ease;position:relative;}
     .si:active{background:rgba(0,0,0,0.05);}
     .si+.si::before{content:"";position:absolute;top:0;left:68px;right:10px;height:1px;background:rgba(0,0,0,0.06);}
     .si-icon{width:50px;height:50px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;background:rgba(0,0,0,0.04);}
-    .si-icon.free   {background:rgba(22,163,74,0.10);}
-    .si-icon.paid   {background:rgba(234,88,12,0.10);}
-    .si-icon.service{background:rgba(124,58,237,0.10);}
+    .si-icon.free{background:rgba(22,163,74,0.10);}.si-icon.paid{background:rgba(234,88,12,0.10);}.si-icon.service{background:rgba(124,58,237,0.10);}.si-icon.mine{background:rgba(99,102,241,0.12);}
     .si-body{flex:1;min-width:0;}
     .si-title{font-size:15px;font-weight:600;color:#0f172a;font-family:-apple-system,system-ui,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-0.2px;}
     .si-sub{font-size:12px;color:#94a3b8;margin-top:2px;font-family:-apple-system,system-ui,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
     .si-pill{font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;flex-shrink:0;letter-spacing:0.1px;font-family:-apple-system,system-ui,sans-serif;}
-    .si-pill.free   {background:rgba(22,163,74,0.12);color:#16a34a;}
-    .si-pill.paid   {background:rgba(234,88,12,0.12);color:#ea580c;}
-    .si-pill.service{background:rgba(124,58,237,0.12);color:#7c3aed;}
+    .si-pill.free{background:rgba(22,163,74,0.12);color:#16a34a;}.si-pill.paid{background:rgba(234,88,12,0.12);color:#ea580c;}.si-pill.service{background:rgba(124,58,237,0.12);color:#7c3aed;}.si-pill.mine{background:rgba(99,102,241,0.12);color:#4f46e5;}
     .si-arrow{color:#cbd5e1;font-size:16px;flex-shrink:0;margin-left:2px;}
-
-    /* location dot */
-    @keyframes lp{0%,100%{box-shadow:0 0 0 0 rgba(10,132,255,0.5)}60%{box-shadow:0 0 0 10px rgba(10,132,255,0)}}
 
     /* toast */
     #toast{
@@ -219,6 +220,7 @@ export function buildMapHtml(args: {
     var DATA       = ` + eventsJson + `;
     var CENTER     = {lat:` + center.lat + `,lng:` + center.lng + `};
     var ZOOM       = ` + zoom + `;
+    var MY_ID      = ` + safeUserId + `;
     var CLUSTER_PX = 52;
     var POOL_SIZE  = 80;
 
@@ -235,29 +237,39 @@ export function buildMapHtml(args: {
       clearTimeout(toastTimer);
       toastTimer=setTimeout(function(){el.classList.remove('show');},2200);
     }
-    function kindClass(k,isLive,status){
+
+    function isOwn(ev){
+      return MY_ID && String(ev.creatorClerkId||'')===MY_ID;
+    }
+
+    function kindClass(ev,isLive){
       var cls='';
-      if(status==='paused')cls+='paused ';
-      if(isLive)return cls+'live';
-      if(!k)return cls;
-      if(k.indexOf('free')>=0)return cls+'free';
-      if(k.indexOf('paid')>=0)return cls+'paid';
-      if(k==='service')return cls+'service';
-      return cls;
+      if(ev.status==='paused') cls+='paused ';
+      if(isOwn(ev)) cls+='mine ';
+      if(isLive) return cls+'live';
+      var k=ev.kind||'';
+      if(k.indexOf('free')>=0) return cls+'free';
+      if(k.indexOf('paid')>=0) return cls+'paid';
+      if(k==='service')        return cls+'service';
+      return cls.trim();
     }
-    function kindIcon(k){
-      if(!k) return '<svg viewBox="0 0 512 512" fill="none" stroke="currentColor" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"><path d="M256 32C167.67 32 96 96.51 96 176c0 128 160 304 160 304s160-176 160-304c0-79.49-71.67-144-160-144zm0 224a64 64 0 1164-64 64.07 64.07 0 01-64 64z"/></svg>';
-      if(k.indexOf('free')>=0) return '<svg viewBox="0 0 512 512" fill="none" stroke="currentColor" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"><path d="M448 160H64a32 32 0 00-32 32v16a32 32 0 0032 32h384a32 32 0 0032-32v-16a32 32 0 00-32-32z"/><path d="M80 240v184a40 40 0 0040 40h272a40 40 0 0040-40V240M256 160V464M256 160c-14.86-53.64-51.52-80-88-80-45.74 0-72 31.84-72 65.5 0 29.23 20.35 48.51 48 48.51 31.42 0 88-34 88-34zM256 160s56.58 34 88 34c27.65 0 48-19.28 48-48.51 0-33.66-26.26-65.5-72-65.5-36.48 0-73.14 26.36-88 80z"/></svg>';
-      if(k.indexOf('paid')>=0) return '<svg viewBox="0 0 512 512" fill="none" stroke="currentColor" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"><rect x="32" y="80" width="448" height="352" rx="48" ry="48"/><path d="M256 304a64 64 0 10-64-64 64 64 0 0064 64z"/><path d="M480 160a80 80 0 01-80-80M32 160a80 80 0 0080-80M480 352a80 80 0 00-80 80M32 352a80 80 0 0180 80"/></svg>';
-      if(k==='service') return '<svg viewBox="0 0 512 512" fill="none" stroke="currentColor" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"><rect x="32" y="128" width="448" height="320" rx="48" ry="48"/><path d="M144 128V96a64 64 0 0164-64h88a64 64 0 0164 64v32M480 240H32M320 240v24a8 8 0 01-8 8H200a8 8 0 01-8-8v-24"/></svg>';
-      return '<svg viewBox="0 0 512 512" fill="none" stroke="currentColor" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"><path d="M256 32C167.67 32 96 96.51 96 176c0 128 160 304 160 304s160-176 160-304c0-79.49-71.67-144-160-144zm0 224a64 64 0 1164-64 64.07 64.07 0 01-64 64z"/></svg>';
+
+    function kindLabel(ev){
+      if(isOwn(ev)) return 'My event';
+      var k=ev.kind||'';
+      if(k.indexOf('free')>=0) return 'Free';
+      if(k.indexOf('paid')>=0) return 'Paid';
+      if(k==='service')        return 'Service';
+      return '';
     }
-    function kindLabel(k){
-      if(!k)return'';
-      if(k.indexOf('free')>=0)return'Free';
-      if(k.indexOf('paid')>=0)return'Paid';
-      if(k==='service')return'Service';
-      return'';
+
+    function kindPillClass(ev){
+      if(isOwn(ev)) return 'mine';
+      var k=ev.kind||'';
+      if(k.indexOf('free')>=0) return 'free';
+      if(k.indexOf('paid')>=0) return 'paid';
+      if(k==='service')        return 'service';
+      return '';
     }
 
     /* ══ Stack popup ══ */
@@ -266,28 +278,26 @@ export function buildMapHtml(args: {
     function openStack(items){
       if(stackOpen)return;
       stackOpen=true;
-
-      /* Tell React Native to hide its overlaying UI (FAB, Nearby, locBtn) */
       post('stackOpen',{});
-
       document.getElementById('stack-count-pill').textContent=items.length;
       var list=document.getElementById('stack-list');
       list.innerHTML='';
       for(var i=0;i<items.length;i++){
         (function(ev){
-          var kc=kindClass(ev.kind);
-          var kl=kindLabel(ev.kind);
+          var pc=kindPillClass(ev);
+          var ic=isOwn(ev)?'mine':pc;
+          var kl=kindLabel(ev);
           var sub=ev.address||ev.when||ev.description||'Tap to view details';
           if(sub&&sub.length>40)sub=sub.slice(0,40)+'…';
           var el=document.createElement('div');
           el.className='si';
           el.innerHTML=
-            '<div class="si-icon '+kc+'">'+(ev.emoji||'📍')+'</div>'+
+            '<div class="si-icon '+ic+'">'+(ev.emoji||'📍')+'</div>'+
             '<div class="si-body">'+
               '<div class="si-title">'+(ev.title||'Event')+'</div>'+
               '<div class="si-sub">'+sub+'</div>'+
             '</div>'+
-            (kl?'<span class="si-pill '+kc+'">'+kl+'</span>':'')+
+            (kl?'<span class="si-pill '+pc+'">'+kl+'</span>':'')+
             '<span class="si-arrow">›</span>';
           el.addEventListener('click',function(e){
             e.stopPropagation();
@@ -305,8 +315,6 @@ export function buildMapHtml(args: {
       if(!stackOpen)return;
       stackOpen=false;
       document.getElementById('stack-popup').classList.remove('open');
-
-      /* Tell React Native to show its UI again */
       post('stackClose',{});
     }
 
@@ -326,19 +334,42 @@ export function buildMapHtml(args: {
     function makePinOverlay(ev,idx){
       var rec={ev:ev,px:null,div:null};
       var live=isEventLive(ev);
+      var own=isOwn(ev);
       var ov=new google.maps.OverlayView();
       ov.onAdd=function(){
         var div=document.createElement('div');
-        div.className='ep entering '+(kindClass(ev.kind,live,ev.status));
-        var title=ev.title||'';
-        var inner=live
-          ? '<span class="live-dot"></span><span class="et">LIVE · '+title.slice(0,14)+(title.length>14?'…':'')+'</span>'
-          : '<span class="em">'+kindIcon(ev.kind)+'</span>'+(title.length>0&&title.length<=18?'<span class="et">'+title+'</span>':'');
-        div.innerHTML=inner;
+        div.className='ep entering '+(kindClass(ev,live));
+
+        var bubble=document.createElement('div');
+        bubble.className='ep-b';
+        bubble.textContent=ev.emoji||'📍';
+
+        // Live red dot
+        if(live){
+          var ld=document.createElement('div');
+          ld.className='live-dot';
+          bubble.appendChild(ld);
+        }
+
+        // My-event star badge
+        if(own&&!live){
+          var badge=document.createElement('div');
+          badge.className='ep-badge';
+          badge.textContent='✦';
+          bubble.appendChild(badge);
+        }
+
+        var tail=document.createElement('div');
+        tail.className='ep-t';
+
+        div.appendChild(bubble);
+        div.appendChild(tail);
         rec.div=div;
+
         div.addEventListener('pointerdown',function(e){e.preventDefault();e.stopPropagation();div.classList.add('pressing');},{passive:false});
         div.addEventListener('pointerup',function(e){e.stopPropagation();div.classList.remove('pressing');},{passive:false});
         div.addEventListener('pointercancel',function(){div.classList.remove('pressing');});
+
         var fired=false;
         div.addEventListener('click',function(e){
           e.preventDefault();e.stopPropagation();
@@ -349,6 +380,7 @@ export function buildMapHtml(args: {
           post('pinClick',{event:ev});
           showToast((ev.emoji||'📍')+' '+(ev.title||''));
         });
+
         google.maps.OverlayView.preventMapHitsAndGesturesFrom&&
           google.maps.OverlayView.preventMapHitsAndGesturesFrom(div);
         this.getPanes().overlayMouseTarget.appendChild(div);
@@ -362,7 +394,7 @@ export function buildMapHtml(args: {
         rec.div.style.top=Math.round(pt.y)+'px';
       };
       ov.onRemove=function(){};
-      rec.show=function(v){if(rec.div)rec.div.style.display=v?'inline-flex':'none';};
+      rec.show=function(v){if(rec.div)rec.div.style.display=v?'flex':'none';};
       rec.ov=ov;return rec;
     }
 
@@ -463,21 +495,18 @@ export function buildMapHtml(args: {
           if(ci<clusterPool.length){showCluster(clusterPool[ci],grp.items,grp.cx,grp.cy);ci++;}
         } else {
           var r=grp.items[0];r.show(true);
-          if(r.div){r.div.style.transform='translate(-50%,-100%) translateY(-6px) scale(1)';r.div.style.zIndex='10';}
+          if(r.div){r.div.style.zIndex='10';}
         }
       }
     }
 
     /* ══ initMap ══ */
     window.gm_authFailure = function() {
-      post('log', { msg: 'Google Maps Authentication Failed! Please check if "Maps JavaScript API" is enabled in Cloud Console and billing is active.' });
+      post('log', { msg: 'Google Maps auth failed — check Maps JS API + billing.' });
     };
 
     function initMap(){
-      if(!window.google||!google.maps){
-        post('log', { msg: 'Google object not found in initMap' });
-        return;
-      }
+      if(!window.google||!google.maps){post('log',{msg:'Google object not found'});return;}
       map=new google.maps.Map(document.getElementById('map'),{
         center:CENTER,zoom:ZOOM,
         disableDefaultUI:true,clickableIcons:false,gestureHandling:'greedy'
@@ -486,38 +515,27 @@ export function buildMapHtml(args: {
       for(var i=0;i<DATA.length;i++){var pr=makePinOverlay(DATA[i],i);pr.ov.setMap(map);pinRecs.push(pr);}
       google.maps.event.addListener(map,'idle',scheduleLayout);
       google.maps.event.addListener(map,'zoom_changed',function(){closeStack();scheduleLayout();});
-      /* close stack on map tap */
       google.maps.event.addListener(map,'click',function(){closeStack();});
       showToast('✦ '+DATA.length+' events nearby');
     }
     window.initMap=initMap;
 
-    /* ══ goToLocation — handles both window & document message events ══ */
-    /* Android WebView sometimes fires on document instead of window */
+    /* ══ goToLocation ══ */
     function handleLocationMsg(data){
       try{
         var msg=JSON.parse(data);
         if(!msg||msg.type!=='goToLocation')return;
         var lat=Number(msg.lat),lng=Number(msg.lng);
         if(!isFinite(lat)||!isFinite(lng))return;
-
-        /* If map not ready yet, retry after 500ms */
         if(!map){setTimeout(function(){handleLocationMsg(data);},500);return;}
-
         map.panTo({lat:lat,lng:lng});
         map.setZoom(Math.max(map.getZoom()||0,15));
-
-        /* Remove old location dot */
         if(window._locOv){window._locOv.setMap(null);window._locOv=null;}
-
-        /* Inject pulse keyframe once */
         if(!document.getElementById('lpStyle')){
           var st=document.createElement('style');st.id='lpStyle';
           st.textContent='@keyframes lp{0%,100%{box-shadow:0 0 0 0 rgba(10,132,255,0.5)}60%{box-shadow:0 0 0 10px rgba(10,132,255,0)}}';
           document.head.appendChild(st);
         }
-
-        /* Draw blue dot at current location */
         var lOv=new google.maps.OverlayView();
         lOv._pos=new google.maps.LatLng(lat,lng);
         lOv.onAdd=function(){
@@ -534,8 +552,6 @@ export function buildMapHtml(args: {
         showToast('📍 Current location');
       }catch(ex){}
     }
-
-    /* Listen on BOTH window and document — covers all WebView versions */
     window.addEventListener('message',function(e){handleLocationMsg(e.data);});
     document.addEventListener('message',function(e){handleLocationMsg(e.data);});
     window.addEventListener('error',function(e){post('log',{msg:'JS error: '+(e.message||'?')});});

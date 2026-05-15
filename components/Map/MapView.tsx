@@ -167,8 +167,8 @@ export default function MapView({
   // This prevents the WebView from reloading every time 'center' changes.
   const initialHtmlCenter = useRef(center);
   const html = useMemo(
-    () => buildMapHtml({ googleKey: GOOGLE_KEY, eventsJson: safeEventsJson, center: initialHtmlCenter.current, zoom }),
-    [GOOGLE_KEY, safeEventsJson, zoom] // Removed center.lat/lng from deps
+    () => buildMapHtml({ googleKey: GOOGLE_KEY, eventsJson: safeEventsJson, center: initialHtmlCenter.current, zoom, userId }),
+    [GOOGLE_KEY, safeEventsJson, zoom, userId]
   );
 
   const goToCurrentLocation = async () => {

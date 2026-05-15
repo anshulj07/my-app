@@ -6,7 +6,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Constants from "expo-constants";
-import { useAuth } from "@clerk/clerk-expo";
+import { useAuth, useUser } from "@clerk/clerk-expo";
 import { useRouter } from "expo-router";
 import { apiFetch } from "../../lib/apiFetch";
 import CreatedTab, { EventDoc } from "./Tabs/CreatedTab";
@@ -60,6 +60,8 @@ function getEventState(ev: EventDoc): "upcoming" | "ongoing" | "past" {
 export default function MyBookingsScreen() {
   const router = useRouter();
   const { userId } = useAuth();
+  const { user } = useUser();
+  const onboardingComplete = user?.unsafeMetadata?.onboardingComplete === true;
   const insets = useSafeAreaInsets();
   const API_BASE = (Constants.expoConfig?.extra as any)?.apiBaseUrl;
   const EVENT_API_KEY = (Constants.expoConfig?.extra as any)?.eventApiKey;
@@ -90,7 +92,7 @@ export default function MyBookingsScreen() {
   }, [tabIndex, tabsW]);
 
   const load = useCallback(async () => {
-    if (!API_BASE || !userId) return;
+    if (!API_BASE || !userId || !onboardingComplete) return;
     setLoading(true);
     try {
       const headers = { "Content-Type": "application/json", "x-api-key": EVENT_API_KEY || "" };
@@ -108,7 +110,7 @@ export default function MyBookingsScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [API_BASE, userId, EVENT_API_KEY]);
+  }, [API_BASE, userId, EVENT_API_KEY, onboardingComplete]);
 
   useEffect(() => { load(); }, [load]);
   const [summaryModal, setSummaryModal] = useState<{ visible: boolean; event: EventDoc | null }>({ visible: false, event: null });

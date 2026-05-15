@@ -87,7 +87,7 @@ const PROFILE_ENDPOINT = "/api/profile";
 // ─────────────────────────────────────────────────────────────────────────────
 export default function ProfileHome() {
   const router = useRouter();
-  const { signOut, userId } = useAuth();
+  const { userId } = useAuth();
   const { user } = useUser();
   const API_BASE = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
   const EVENT_API_KEY = (Constants.expoConfig?.extra as any)?.eventApiKey as string | undefined;
@@ -98,13 +98,13 @@ export default function ProfileHome() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewUri, setPreviewUri] = useState<string | null>(null);
-  const [logoutModalOpen, setLogoutModalOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
   const photos = useMemo(() => sanitizePhotos(profile.photos), [profile.photos]);
   const previewPhotos = photos.slice(0, 4);
-  const hasAvatar = !!(profile.avatar);
-  const avatarUri = profile.avatar ?? null;
+  const mainPhoto = photos[0] ?? profile.avatar ?? user?.imageUrl ?? null;
+  const hasAvatar = !!mainPhoto;
+  const avatarUri = mainPhoto;
 
   const scrollY = useRef(new Animated.Value(0)).current;
 
@@ -207,13 +207,6 @@ export default function ProfileHome() {
       setRefreshing(false);
     }
   }, [API_BASE, EVENT_API_KEY, userId, fetchProfile]);
-
-  const handleConfirmedLogout = async () => {
-    setLogoutModalOpen(false);
-    await AsyncStorage.removeItem(STORAGE_KEY);
-    await signOut();
-    router.replace("/sign-in");
-  };
 
   const openPreview = useCallback((uri: string | null) => {
     if (!uri) return;
@@ -738,15 +731,6 @@ export default function ProfileHome() {
           <View style={S.secDiv} />
           <MyEventsSection userId={userId} router={router} />
 
-          {/* Logout */}
-          <TouchableOpacity
-            style={S.logoutBtn}
-            activeOpacity={0.88}
-            onPress={() => setLogoutModalOpen(true)}
-          >
-            <Ionicons name="log-out-outline" size={18} color={C.dangerText} />
-            <Text style={S.logoutTxt}>Log out</Text>
-          </TouchableOpacity>
         </Animated.View>
       </Animated.ScrollView>
 
@@ -814,39 +798,6 @@ export default function ProfileHome() {
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
-      </Modal>
-
-      <Modal
-        visible={logoutModalOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setLogoutModalOpen(false)}
-      >
-        <View style={S.modalOverlay}>
-          <View style={S.modalCard}>
-            <View style={[S.modalIconBg, { backgroundColor: C.dangerBg }]}>
-              <Ionicons name="log-out" size={28} color={C.danger} />
-            </View>
-            <Text style={S.modalTitle}>Log out</Text>
-            <Text style={S.modalSub}>
-              Are you sure you want to log out from your account?
-            </Text>
-            <View style={S.modalBtnRow}>
-              <TouchableOpacity
-                style={[S.modalBtn, { backgroundColor: "#F3F4F6", borderWidth: 1.5, borderColor: "#E5E7EB" }]}
-                onPress={() => setLogoutModalOpen(false)}
-              >
-                <Text style={[S.modalBtnTxt, { color: C.muted }]}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[S.modalBtn, { backgroundColor: C.danger }]}
-                onPress={handleConfirmedLogout}
-              >
-                <Text style={[S.modalBtnTxt, { color: "#fff" }]}>Log out</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
       </Modal>
 
       {/* Floating Support Button */}
@@ -1047,14 +998,6 @@ const S = StyleSheet.create({
   chip:      { flexDirection: "row", alignItems: "center", paddingVertical: 7, paddingHorizontal: 14, borderRadius: 999, backgroundColor: "#F7F7F9", borderWidth: 1, borderColor: "#E8E8EC" },
   chipTxt:   { fontSize: 12, fontWeight: "600", color: "#333" },
 
-  // Logout
-  logoutBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
-    marginHorizontal: 14, marginTop: 12,
-    paddingVertical: 15, borderRadius: 18,
-    backgroundColor: "#FFF5F5", borderWidth: 1.5, borderColor: "#FFCDD2",
-  },
-  logoutTxt: { fontSize: 14, fontWeight: "800", color: "#C62828" },
 
   // Modals
   previewOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.92)", justifyContent: "center", alignItems: "center" },

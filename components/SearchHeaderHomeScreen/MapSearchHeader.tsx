@@ -996,17 +996,16 @@ const C = {
 type Filter     = { key: string; label: string; icon: any };
 type KindFilter = { key: string; label: string; emoji: string; dotColor: string; activeBg: string; activeText: string; activeBorder: string; icon: any };
 
+// Community activity filters — shown as chips below search bar
 const ACTIVITY_FILTERS: Filter[] = [
-  { key: "coffee",  label: "Coffee",  icon: "cafe-outline" },
-  { key: "yoga",    label: "Yoga",    icon: "body-outline" },
-  { key: "running", label: "Running", icon: "fitness-outline" },
-  { key: "game",    label: "Game",    icon: "game-controller-outline" },
-  { key: "movie",   label: "Movie",   icon: "film-outline" },
-  { key: "dinner",  label: "Dinner",  icon: "restaurant-outline" },
-  { key: "walking", label: "Walking", icon: "walk-outline" },
-  { key: "hiking",  label: "Hiking",  icon: "trail-sign-outline" },
-  { key: "music",   label: "Music",   icon: "musical-notes-outline" },
-  { key: "party",   label: "Party",   icon: "sparkles-outline" },
+  { key: "walking",    label: "Walking",    icon: "walk-outline" },
+  { key: "running",    label: "Running",    icon: "fitness-outline" },
+  { key: "pickleball", label: "Pickleball", icon: "tennisball-outline" },
+  { key: "hiking",     label: "Hiking",     icon: "trail-sign-outline" },
+  { key: "fitness",    label: "Fitness",    icon: "barbell-outline" },
+  { key: "networking", label: "Networking", icon: "people-outline" },
+  { key: "social",     label: "Social",     icon: "sparkles-outline" },
+  { key: "sports",     label: "Sports",     icon: "football-outline" },
 ];
 
 const KIND_FILTERS: KindFilter[] = [
@@ -1017,10 +1016,6 @@ const KIND_FILTERS: KindFilter[] = [
   {
     key: "paid", label: "Paid", emoji: "💳", icon: "card-outline",
     dotColor: "#F59E0B", activeBg: "#FEF3C7", activeText: "#92400E", activeBorder: "#F59E0B",
-  },
-  {
-    key: "service", label: "Service", emoji: "💼", icon: "briefcase-outline",
-    dotColor: "#8B5CF6", activeBg: "#F3E8FF", activeText: "#5B21B6", activeBorder: "#8B5CF6",
   },
 ];
 
@@ -1053,8 +1048,9 @@ export default function MapSearchHeader({
   // Animated value 0 = idle, 1 = focused
   const glowAnim  = useRef(new Animated.Value(0)).current;
 
-  const quickActivity = useMemo(() => ACTIVITY_FILTERS.slice(0, 4), []);
-  const restActivity  = useMemo(() => ACTIVITY_FILTERS.slice(4), []);
+  // Show all 8 community categories in the scrollable row
+  const quickActivity = ACTIVITY_FILTERS;
+  const restActivity: Filter[] = []; // none hidden — all shown in row
 
   // Glow transition on focus/blur
   const triggerGlow = (on: boolean) => {
@@ -1304,9 +1300,9 @@ export default function MapSearchHeader({
             })}
           </View>
 
-          <Text style={[S.sheetSectionLbl, { marginTop: 20 }]}>Activity</Text>
+          <Text style={[S.sheetSectionLbl, { marginTop: 20 }]}>Community Activity</Text>
           <View style={S.grid}>
-            {restActivity.map((f) => {
+            {ACTIVITY_FILTERS.map((f) => {
               const active = activeFilter === f.key;
               return (
                 <TouchableOpacity

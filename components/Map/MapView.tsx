@@ -1,5 +1,5 @@
 // components/Map/MapView.tsx
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   View, StyleSheet, Platform, Text,
   TouchableOpacity, ActivityIndicator,
@@ -10,15 +10,18 @@ import * as Location from "expo-location";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { buildMapHtml } from "./mapHtml";
 
+export type EventCategory =
+  | "walking" | "running" | "pickleball" | "hiking"
+  | "fitness" | "networking" | "social" | "sports" | "other";
+
 export type EventPin = {
-  
   _id: string;
   title: string;
   lat: number;
   lng: number;
   emoji: string;
   bannerImage?: string | null;
-bannerUri?: string | null;
+  bannerUri?: string | null;
   creatorClerkId?: string;
   kind?: "free" | "paid" | "service" | "event_free" | "event_paid";
   priceCents?: number | string | null;
@@ -48,8 +51,11 @@ bannerUri?: string | null;
     placeId?: string;
     lat?: number | string;
     lng?: number | string;
-   
   };
+  // Community discovery fields
+  category?: EventCategory | null;
+  source?: "eventbrite" | "meetup" | "luma" | "manual";
+  sourceUrl?: string | null;
 };
 
 function toNumber(v: any): number | null {
@@ -109,10 +115,8 @@ export default function MapView({
   initialCenter?: { lat: number; lng: number } | null;
   locationStatus?: "unknown" | "granted" | "denied";
   onPinPress?: (pin: EventPin) => void;
-  /** Called with fresh lat/lng whenever the map pans to user's location */
   onLocationUpdate?: (lat: number, lng: number) => void;
   onStackOpen?: () => void;
-  /** Called when same-location popup closes — use to show FAB / Nearby / locBtn */
   onStackClose?: () => void;
   userId?: string | null;
 }) {
@@ -128,10 +132,9 @@ export default function MapView({
   const webViewRef = useRef<any>(null);
   const [locLoading, setLocLoading] = useState(false);
   const [locError, setLocError] = useState(false);
-
-  // ✅ NEW — hide RN overlay buttons when stack popup is open
   const [stackVisible, setStackVisible] = useState(false);
 
+  // ── Normalize + filter events ──────────────────────────────────────────────
   const safeEvents: EventPin[] = useMemo(() => {
     const list = Array.isArray(events) ? events : [];
     const out: EventPin[] = [];
@@ -144,6 +147,13 @@ export default function MapView({
     }
     return out;
   }, [events, userId]);
+
+  // Stable JSON string — used ONLY as change-detection signal, not as key
+  const safeEventsJson = useMemo(() => JSON.stringify(safeEvents), [safeEvents]);
+
+  // Keep latest events in a ref so onLoadEnd always reads current value
+  const latestEventsRef = useRef<EventPin[]>(safeEvents);
+  latestEventsRef.current = safeEvents;
 
   if (!GOOGLE_KEY) {
     return (
@@ -158,19 +168,23 @@ export default function MapView({
     initialCenter ??
     (canFallbackToEvents && safeEvents[0]
       ? { lat: safeEvents[0].lat, lng: safeEvents[0].lng }
-      : { lat: 40.7128, lng: -74.006 }); // Default to NYC for worldwide neutral start
+      : { lat: 40.7128, lng: -74.006 });
   const zoom = initialCenter || (canFallbackToEvents && safeEvents[0]) ? 12 : 10;
 
-  const safeEventsJson = useMemo(() => JSON.stringify(safeEvents), [safeEvents]);
-
-  // ✅ Use a ref to capture the initial center for the HTML payload.
-  // This prevents the WebView from reloading every time 'center' changes.
+  // ── HTML built ONCE (no events embedded — events sent via postMessage) ──────
   const initialHtmlCenter = useRef(center);
   const html = useMemo(
-    () => buildMapHtml({ googleKey: GOOGLE_KEY, eventsJson: safeEventsJson, center: initialHtmlCenter.current, zoom, userId }),
-    [GOOGLE_KEY, safeEventsJson, zoom, userId]
+    () => buildMapHtml({ googleKey: GOOGLE_KEY, eventsJson: "[]", center: initialHtmlCenter.current, zoom, userId }),
+    [GOOGLE_KEY, zoom, userId]   // NOT safeEventsJson — no reload on event changes
   );
 
+  // ── Push event updates via postMessage (no WebView reload) ─────────────────
+  useEffect(() => {
+    if (!webViewRef.current) return;
+    webViewRef.current.postMessage(JSON.stringify({ type: "updateEvents", events: safeEvents }));
+  }, [safeEventsJson]); // fires whenever events change
+
+  // ── Location button ────────────────────────────────────────────────────────
   const goToCurrentLocation = async () => {
     if (locLoading) return;
     setLocError(false);
@@ -184,30 +198,19 @@ export default function MapView({
         return;
       }
 
-      // 1. Try last known position for instant feedback
       const last = await Location.getLastKnownPositionAsync().catch(() => null);
       if (last) {
         const { latitude: lat, longitude: lng } = last.coords;
         webViewRef.current?.postMessage(JSON.stringify({ type: "goToLocation", lat, lng }));
         onLocationUpdate?.(lat, lng);
-        // Stop spinner early if we have a last known position
         setLocLoading(false);
       }
 
-      // 2. Get fresh position with a timeout to prevent hanging
-      const freshPromise = Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
-
-      // 8-second timeout for the fresh fix
+      const freshPromise = Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       const timeoutPromise = new Promise<null>((_, reject) =>
         setTimeout(() => reject(new Error("timeout")), 8000)
       );
-
-      const fresh = await Promise.race([freshPromise, timeoutPromise]).catch((err) => {
-        console.log("[MapView] Fresh location failed or timed out:", err.message);
-        return null;
-      });
+      const fresh = await Promise.race([freshPromise, timeoutPromise]).catch(() => null);
 
       if (fresh) {
         const { latitude: flat, longitude: flng } = fresh.coords;
@@ -216,14 +219,15 @@ export default function MapView({
       } else if (!last) {
         setLocError(true);
       }
-
-    } catch (err) {
-      console.log("[MapView] Location error:", err);
+    } catch {
       setLocError(true);
     } finally {
       setLocLoading(false);
     }
   };
+
+  // WebView key: only remount when user or location permission changes (NOT events)
+  const webViewKey = `map-${userId ?? "anon"}-${locationStatus}`;
 
   return (
     <View style={styles.container}>
@@ -233,7 +237,13 @@ export default function MapView({
         javaScriptEnabled
         domStorageEnabled
         source={{ html }}
-        key={safeEventsJson + locationStatus} // Removed center from key
+        key={webViewKey}
+        onLoadEnd={() => {
+          // Re-send events after (re)load — handles key-change remounts
+          webViewRef.current?.postMessage(
+            JSON.stringify({ type: "updateEvents", events: latestEventsRef.current })
+          );
+        }}
         onMessage={(e) => {
           try {
             const msg = JSON.parse(e.nativeEvent.data);
@@ -241,18 +251,8 @@ export default function MapView({
               console.log("[MapView]", msg.msg || msg.message, msg.extra ?? "");
               return;
             }
-            // ✅ Stack popup open — hide RN overlay UI
-            if (msg?.type === "stackOpen") {
-              setStackVisible(true);
-              onStackOpen?.();
-              return;
-            }
-            // ✅ Stack popup closed — show RN overlay UI again
-            if (msg?.type === "stackClose") {
-              setStackVisible(false);
-              onStackClose?.();
-              return;
-            }
+            if (msg?.type === "stackOpen") { setStackVisible(true); onStackOpen?.(); return; }
+            if (msg?.type === "stackClose") { setStackVisible(false); onStackClose?.(); return; }
             if (msg?.type === "pinClick" && msg.event) {
               const n = normalizeEvent(msg.event, 0);
               if (n) onPinPress?.(n);
@@ -261,7 +261,6 @@ export default function MapView({
         }}
       />
 
-      {/* ✅ Location button — hidden when stack popup open */}
       {!stackVisible && (
         <TouchableOpacity
           style={[styles.locBtn, locError && styles.locBtnError]}
@@ -289,21 +288,13 @@ const styles = StyleSheet.create({
   center: { alignItems: "center", justifyContent: "center" },
   locBtn: {
     position: "absolute",
-    bottom: 32,
-    left: 20,
-    width: 46,
-    height: 46,
-    borderRadius: 999,
+    bottom: 32, left: 20,
+    width: 46, height: 46, borderRadius: 999,
     backgroundColor: "rgba(255,255,255,0.97)",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1.5,
-    borderColor: "rgba(91,79,212,0.18)",
-    shadowColor: "#000",
-    shadowOpacity: 0.14,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 8,
+    alignItems: "center", justifyContent: "center",
+    borderWidth: 1.5, borderColor: "rgba(91,79,212,0.18)",
+    shadowColor: "#000", shadowOpacity: 0.14, shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 }, elevation: 8,
   },
   locBtnError: {
     borderColor: "rgba(220,38,38,0.25)",

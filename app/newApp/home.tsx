@@ -84,13 +84,16 @@ function normalizeEvent(e: any): EventPin | null {
     when:        [e?.date, e?.time].filter(Boolean).join(" · "),
     address:     e?.location?.formattedAddress ?? e?.location?.address ?? e?.address ?? "",
     status:      e?.status ?? "active",
-    // ✅ Needed for live pin detection in map
     startsAt:    e?.startsAt ?? null,
     date:        e?.date ?? null,
     time:        e?.time ?? null,
     endsAt:      e?.endsAt ?? null,
     endDate:     e?.endDate ?? null,
     endTime:     e?.endTime ?? null,
+    // Community discovery fields
+    category:   e?.category  ?? null,
+    source:     e?.source    ?? "manual",
+    sourceUrl:  e?.sourceUrl ?? null,
   };
 }
 
@@ -211,7 +214,7 @@ export default function Home() {
   const loadEvents = useCallback(async () => {
     if (!API_BASE) return [];
     try {
-      const res = await fetch(`${API_BASE.replace(/\/$/, "")}/api/events/get-events?limit=200`, {
+      const res = await fetch(`${API_BASE.replace(/\/$/, "")}/api/events/get-events?limit=5000`, {
         headers: { ...(EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {}), "ngrok-skip-browser-warning": "1" },
       });
       if (!res.ok) return [];
@@ -297,14 +300,50 @@ export default function Home() {
       return st === "active" || st === "live" || (st === "paused" && isMine);
     });
     if (!activeFilter) return active;
+
+    const COMMUNITY_CATS = new Set([
+      "walking", "running", "pickleball", "hiking",
+      "fitness", "networking", "social", "sports",
+    ]);
+
     return active.filter(e => {
-      const kind = String((e as any).kind ?? "").toLowerCase(), f = activeFilter.toLowerCase();
-      if (f === "free"  || f === "event_free") return kind === "free"  || kind === "event_free";
-      if (f === "paid"  || f === "event_paid") return kind === "paid"  || kind === "event_paid";
+      const f    = activeFilter.toLowerCase();
+      const kind = String((e as any).kind     ?? "").toLowerCase();
+      const cat  = String((e as any).category ?? "").toLowerCase();
+      const tags = Array.isArray((e as any).tags) ? (e as any).tags as string[] : [];
+
+      // Kind filters
+      if (f === "free"    || f === "event_free") return kind === "free" || kind === "event_free";
+      if (f === "paid"    || f === "event_paid") return kind === "paid" || kind === "event_paid";
       if (f === "service") return kind === "service";
+
+      // Community category filters
+      if (COMMUNITY_CATS.has(f)) {
+        // Match on category field (external events) or tags/title (manual events)
+        if (cat === f) return true;
+        const title = String((e as any).title ?? "").toLowerCase();
+        if (title.includes(f)) return true;
+        if (tags.some(t => t.toLowerCase().includes(f))) return true;
+        return false;
+      }
+
       return true;
     });
   }, [events, activeFilter, userId]);
+
+  /* Cap events sent to MapView at 500 nearest to user — WebView can't handle 5000 */
+  const mapEvents = useMemo(() => {
+    if (!myLoc || filteredEvents.length <= 500) return filteredEvents;
+    const { lat: ulat, lng: ulng } = myLoc;
+    return filteredEvents
+      .map(e => {
+        const dlat = e.lat - ulat, dlng = e.lng - ulng;
+        return { e, d2: dlat * dlat + dlng * dlng };
+      })
+      .sort((a, b) => a.d2 - b.d2)
+      .slice(0, 500)
+      .map(x => x.e);
+  }, [filteredEvents, myLoc]);
 
   const [pinsVersion, setPinsVersion] = useState(0);
   const mapKey = `map:${activeFilter ?? "all"}:${pinsVersion}`;
@@ -322,7 +361,7 @@ export default function Home() {
       {locReady && (
         <MapView
           key={mapKey}
-          events={filteredEvents}
+          events={mapEvents}
           initialCenter={myLoc}
           locationStatus={locStatus}
           onPinPress={onPinPress}

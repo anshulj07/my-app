@@ -482,20 +482,10 @@ export default function Security() {
                     <SecurityBlock icon="shield-checkmark-outline" label="Two-Factor Auth">
                         <View style={S.rowLayout}>
                             <View style={{ flex: 1 }}>
-                                <Text style={S.blockValue}>Managed via Clerk</Text>
+                                <Text style={S.blockValue}>Managed Securely</Text>
                                 <Text style={S.blockHint}>Configure in your account dashboard</Text>
                             </View>
                             <Ionicons name="open-outline" size={18} color={COLORS.lightMuted} />
-                        </View>
-                    </SecurityBlock>
-
-                    <SecurityBlock 
-                        icon="key-outline" label="Change Password" 
-                        onPress={() => Alert.alert("Change Password", "Password management is handled through Clerk. Check your email for reset instructions.", [{ text: "OK" }])}
-                    >
-                        <View style={S.rowLayout}>
-                            <Text style={[S.blockValue, { flex: 1 }]}>Update your password</Text>
-                            <Ionicons name="chevron-forward" size={18} color={COLORS.lightMuted} />
                         </View>
                     </SecurityBlock>
 

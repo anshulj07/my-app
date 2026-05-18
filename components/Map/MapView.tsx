@@ -233,7 +233,7 @@ export default function MapView({
         javaScriptEnabled
         domStorageEnabled
         source={{ html }}
-        key={safeEventsJson + locationStatus} // Removed center from key
+        key={locationStatus}
         onMessage={(e) => {
           try {
             const msg = JSON.parse(e.nativeEvent.data);

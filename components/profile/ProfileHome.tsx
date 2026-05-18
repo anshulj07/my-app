@@ -24,7 +24,7 @@ type ProfileData = {
   username?: string;
   about?: string;
   interests?: string[];
-  languages?: string[];
+  languages?: string[] | null;
   photos?: string[];
   avatar?: string | null;
 };
@@ -109,7 +109,7 @@ export default function ProfileHome() {
         username: typeof src?.username === "string" ? src.username : undefined,
         about: typeof src?.about === "string" ? src.about : undefined,
         interests: Array.isArray(src?.interests) ? src.interests : [],
-        languages: Array.isArray(src?.languages) ? src.languages : [],
+        languages: Array.isArray(src?.languages) && src.languages.length > 0 ? src.languages : null,
         photos: Array.isArray(src?.photos) ? src.photos : [],
         avatar: typeof src?.avatar === "string" ? src.avatar : null,
       };
@@ -421,11 +421,15 @@ export default function ProfileHome() {
         </View>
 
         <View style={styles.chipsWrap}>
-          {(profile.interests?.length ? profile.interests : ["Foodie", "Cooking", "Coffee", "Wine Tasting"]).map((x) => (
-            <View key={x} style={styles.chip}>
-              <Text style={styles.chipTxt}>{x}</Text>
-            </View>
-          ))}
+          {profile.interests?.length ? (
+            profile.interests.map((x) => (
+              <View key={x} style={styles.chip}>
+                <Text style={styles.chipTxt}>{x}</Text>
+              </View>
+            ))
+          ) : (
+            <Text style={{ color: "#9CA3AF", fontSize: 14 }}>Select your interests</Text>
+          )}
         </View>
       </View>
 
@@ -438,11 +442,15 @@ export default function ProfileHome() {
           </TouchableOpacity>
         </View>
         <View style={styles.chipsWrap}>
-          {(profile.languages?.length ? profile.languages : ["English", "Hindi"]).map((x) => (
-            <View key={x} style={styles.chip}>
-              <Text style={styles.chipTxt}>{x}</Text>
-            </View>
-          ))}
+          {profile.languages?.length ? (
+            profile.languages.map((x) => (
+              <View key={x} style={styles.chip}>
+                <Text style={styles.chipTxt}>{x}</Text>
+              </View>
+            ))
+          ) : (
+            <Text style={{ color: "#9CA3AF", fontSize: 14 }}>No languages selected. Tap to choose.</Text>
+          )}
         </View>
       </View>
 

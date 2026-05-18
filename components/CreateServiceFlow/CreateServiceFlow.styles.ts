@@ -840,7 +840,7 @@ export const styles = StyleSheet.create({
 
   // Banner Image
   bannerZone: {
-    height: 180,
+    height: 220,
     borderRadius: 24,
     overflow: "hidden",
     borderWidth: 2,
@@ -860,11 +860,11 @@ export const styles = StyleSheet.create({
   bannerPlaceholder: {
     alignItems: "center",
     justifyContent: "center",
-    gap: 10,
+    gap: 12,
   },
   bannerPlaceholderIcon: {
-    width: 64,
-    height: 64,
+    width: 72,
+    height: 72,
     borderRadius: 20,
     backgroundColor: C.purple + "18",
     borderWidth: 2,
@@ -964,6 +964,29 @@ export const styles = StyleSheet.create({
     fontSize: 12,
     color: C.muted,
     fontWeight: "500",
+  },
+  
+  // Corner actions (matching AddEventFields)
+  cornerActions: {
+    position: "absolute",
+    top: 12,
+    right: 12,
+    flexDirection: "row",
+    gap: 8,
+  },
+  cornerBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+  },
+  cornerBtnRed: {
+    backgroundColor: "rgba(220,38,38,0.8)",
+    borderColor: "rgba(255,255,255,0.3)",
   },
 
   // Step 6 & Success

@@ -522,7 +522,7 @@ export default function AccountSettings() {
                                 />
                                 <NavItem 
                                     icon="shield-checkmark-outline" label="Two-Factor Auth" 
-                                    hint="Managed via Clerk" onPress={() => {}} 
+                                    hint="Managed Securely" onPress={() => {}} 
                                     showChevron last 
                                 />
                             </View>

@@ -55,9 +55,25 @@ const CATS = [
 ];
 
 type TripEvent = {
-  _id: string; title: string; emoji?: string; bannerUri?: string;
-  kind?: string; priceCents?: number; date?: string; time?: string;
-  location?: { city?: string; admin1?: string; formattedAddress?: string; address?: string; };
+  _id: string;
+  title: string;
+  emoji?: string;
+  bannerUri?: string;
+  kind?: string;
+  priceCents?: number;
+  date?: string;
+  time?: string;
+  description?: string;
+  location?: {
+    lat?: number | null;
+    lng?: number | null;
+    city?: string;
+    admin1?: string;
+    formattedAddress?: string;
+    address?: string;
+    countryName?: string;
+    countryCode?: string;
+  };
   creatorName?: string;
 };
 
@@ -157,10 +173,10 @@ export default function TripScreen() {
   const [city, setCity] = useState("Nearby");
   const [showFilters, setShowFilters] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<EventPin | null>(null);
-  const [page, setPage] = useState(0);
   const [filters, setFilters] = useState<FilterData | null>(null);
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
-  const PAGE_SIZE = 10;
+  const [displayCount, setDisplayCount] = useState(50);
+  const LOAD_MORE_SIZE = 50;
 
   const fade = useRef(new Animated.Value(0)).current;
   const API_BASE = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string;
@@ -198,7 +214,7 @@ export default function TripScreen() {
   }, [API_BASE, headers]);
 
   useEffect(() => { load(); }, [load]);
-  const onRefresh = useCallback(() => { setRefreshing(true); load(); }, [load]);
+  const onRefresh = useCallback(() => { setRefreshing(true); setDisplayCount(50); load(); }, [load]);
 
   const filtered = useMemo(() => {
     let list = events.filter(e => {
@@ -207,14 +223,39 @@ export default function TripScreen() {
       return st === "active" || st === "live" || (st === "paused" && isMine);
     });
 
-    // 1. Search
+    // Reset display count on filter change
+    setDisplayCount(50);
+
+    // 1. Search (Smart Multi-field Search: City, Country, Event title, etc.)
     if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter(e =>
-        e.title.toLowerCase().includes(q) ||
-        (e.location?.city ?? "").toLowerCase().includes(q) ||
-        (e.location?.address ?? "").toLowerCase().includes(q)
-      );
+      const q = search.toLowerCase().trim();
+      list = list.filter(e => {
+        const titleMatch = e.title.toLowerCase().includes(q);
+        const descriptionMatch = (e.description ?? "").toLowerCase().includes(q);
+        const cityMatch = (e.location?.city ?? "").toLowerCase().includes(q);
+        const addressMatch = (e.location?.address ?? "").toLowerCase().includes(q);
+        const formattedAddressMatch = (e.location?.formattedAddress ?? "").toLowerCase().includes(q);
+        const admin1Match = (e.location?.admin1 ?? "").toLowerCase().includes(q);
+        const countryMatch = (e.location?.countryName ?? "").toLowerCase().includes(q) || 
+                             (e.location?.countryCode ?? "").toLowerCase().includes(q);
+        const creatorMatch = (e.creatorName ?? "").toLowerCase().includes(q);
+        const kindMatch = (e.kind ?? "").toLowerCase().includes(q) ||
+                          (e.kind === "service" && "service".includes(q)) ||
+                          (e.kind === "paid" && "paid".includes(q)) ||
+                          (e.kind === "free" && "free".includes(q));
+
+        return (
+          titleMatch ||
+          descriptionMatch ||
+          cityMatch ||
+          addressMatch ||
+          formattedAddressMatch ||
+          admin1Match ||
+          countryMatch ||
+          creatorMatch ||
+          kindMatch
+        );
+      });
     }
 
     // 2. Category Tabs (Main UI)
@@ -294,9 +335,8 @@ export default function TripScreen() {
     return filtered.filter(e => e.kind === "service" || e.title.toLowerCase().includes("service"));
   }, [filtered]);
 
-  const allEvents = useMemo(() => filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE), [filtered, page]);
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-
+  const allEvents = useMemo(() => filtered.slice(0, displayCount), [filtered, displayCount]);
+  const hasMore = filtered.length > displayCount;
   const TOP = Math.max(insets.top, Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0) + 8;
 
   const openSheet = (ev: TripEvent) => {
@@ -321,12 +361,6 @@ export default function TripScreen() {
         <View style={S.headerRow}>
           <View>
             <Text style={S.headerTitle}>Explore</Text>
-            <View style={S.headerLocRow}>
-              <View style={S.locBadge}>
-                <Ionicons name="location-sharp" size={12} color={C.accent} />
-                <Text style={S.headerLoc}>{city}</Text>
-              </View>
-            </View>
           </View>
           <TouchableOpacity style={S.filterBtn} onPress={() => setShowFilters(true)}>
             <Ionicons name="options-outline" size={20} color={C.accent} />
@@ -339,8 +373,8 @@ export default function TripScreen() {
         <View style={S.searchShell}>
           <Ionicons name="search-outline" size={17} color={C.hint} />
           <TextInput
-            value={search} onChangeText={t => { setSearch(t); setPage(0); }}
-            placeholder="Search events, places..."
+            value={search} onChangeText={t => { setSearch(t); setDisplayCount(50); }}
+            placeholder="Search events, cities, countries..."
             placeholderTextColor={C.hint}
             style={S.searchInput}
           />
@@ -358,7 +392,7 @@ export default function TripScreen() {
         initialFilters={filters || {}}
         onApply={(data) => {
           setFilters(data);
-          setPage(0);
+          setDisplayCount(50);
         }}
       />
 
@@ -420,7 +454,7 @@ export default function TripScreen() {
                 {CATS.map(cat => {
                   const active = catFilter === cat.key;
                   return (
-                    <TouchableOpacity key={cat.key} style={S.catItem} onPress={() => { setCatFilter(cat.key); setPage(0); }} activeOpacity={0.78}>
+                    <TouchableOpacity key={cat.key} style={S.catItem} onPress={() => { setCatFilter(cat.key); setDisplayCount(50); }} activeOpacity={0.78}>
                       <View style={[S.catCircle, { backgroundColor: active ? cat.color : "#F0F0F0" }]}>
                         <Ionicons name={cat.icon as any} size={22} color={active ? "#fff" : cat.color} />
                       </View>
@@ -504,27 +538,14 @@ export default function TripScreen() {
                   <SmallCard key={ev._id} ev={ev} width={(SW - PAD * 2 - 12) / 2} onPress={() => openSheet(ev)} />
                 ))}
               </View>
-
-              {totalPages > 1 && (
-                <View style={S.pageRow}>
-                  <TouchableOpacity
-                    style={[S.pageBtn, page === 0 && S.pageBtnOff]}
-                    disabled={page === 0}
-                    onPress={() => setPage(p => Math.max(0, p - 1))}
-                  >
-                    <Ionicons name="chevron-back" size={20} color={page === 0 ? C.hint : "#fff"} />
-                  </TouchableOpacity>
-                  <View style={S.pageLabel}>
-                    <Text style={S.pageLabelTxt}>{page + 1} / {totalPages}</Text>
-                  </View>
-                  <TouchableOpacity
-                    style={[S.pageBtn, page >= totalPages - 1 && S.pageBtnOff]}
-                    disabled={page >= totalPages - 1}
-                    onPress={() => setPage(p => Math.min(totalPages - 1, p + 1))}
-                  >
-                    <Ionicons name="chevron-forward" size={20} color={page >= totalPages - 1 ? C.hint : "#fff"} />
-                  </TouchableOpacity>
-                </View>
+              {hasMore && (
+                <TouchableOpacity
+                  style={S.loadMoreBtn}
+                  onPress={() => setDisplayCount(c => c + LOAD_MORE_SIZE)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={S.loadMoreTxt}>Load More ({filtered.length - displayCount} remaining)</Text>
+                </TouchableOpacity>
               )}
             </View>
           </>
@@ -667,6 +688,13 @@ const S = StyleSheet.create({
   emptyBoxTxt: { color: C.muted, fontWeight: "700", fontSize: 14 },
   clearBtn: { backgroundColor: C.accent, paddingHorizontal: 25, paddingVertical: 14, borderRadius: 16, shadowColor: C.accent, shadowOpacity: 0.3, shadowRadius: 10, elevation: 5 },
   clearBtnTxt: { color: "#fff", fontWeight: "800", fontSize: 15 },
+  loadMoreBtn: {
+    marginHorizontal: PAD, marginTop: 16, marginBottom: 8,
+    backgroundColor: C.white, borderWidth: 1, borderColor: C.border,
+    borderRadius: 16, paddingVertical: 14, alignItems: "center",
+    shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 6, elevation: 2,
+  },
+  loadMoreTxt: { fontSize: 14, fontWeight: "800", color: C.accent },
 
   // New Services Grid Styles
   hGridScroll: { paddingHorizontal: PAD, gap: 16 },

@@ -92,25 +92,33 @@ export default function MyBookingsScreen() {
   }, [tabIndex, tabsW]);
 
   const load = useCallback(async () => {
-    if (!API_BASE || !userId || !onboardingComplete) return;
+    console.log("[MyBookingsScreen] load called. API_BASE:", API_BASE, "userId:", userId, "onboardingComplete:", onboardingComplete);
+    if (!API_BASE || !userId) {
+      console.log("[MyBookingsScreen] load aborted: missing API_BASE or userId");
+      return;
+    }
     setLoading(true);
     try {
       const headers = { "Content-Type": "application/json", "x-api-key": EVENT_API_KEY || "" };
+      console.log("[MyBookingsScreen] Fetching bookings from:", `${API_BASE}/api/bookings/...`);
       const [cRes, gRes] = await Promise.all([
         apiFetch(`${API_BASE}/api/bookings/my-bookings?clerkUserId=${userId}`, { headers }),
         apiFetch(`${API_BASE}/api/bookings/going?clerkUserId=${userId}`, { headers }),
       ]);
+      console.log("[MyBookingsScreen] Fetch responses received. my-bookings status:", cRes.status, "going status:", gRes.status);
+      
       const cJson = await cRes.json();
       const gJson = await gRes.json();
+      
       setAllCreated(cJson.createdEvents || []);
       setGoingEvents(gJson.events || []);
     } catch (e) {
-      console.log("Load error", e);
+      console.error("[MyBookingsScreen] Load error:", e);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [API_BASE, userId, EVENT_API_KEY, onboardingComplete]);
+  }, [API_BASE, userId, EVENT_API_KEY]);
 
   useEffect(() => { load(); }, [load]);
   const [summaryModal, setSummaryModal] = useState<{ visible: boolean; event: EventDoc | null }>({ visible: false, event: null });

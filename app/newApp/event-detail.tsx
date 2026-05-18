@@ -154,6 +154,15 @@ export default function EventDetailScreen() {
 
   const isJoined = !!joinedInfo;
   const isPast   = params.isPast === "true" || ev?.status === "completed" || ev?.status === "past";
+  
+  const pendingInfo = useMemo(() => {
+    if (!userId || !ev?.pendingRequests) return null;
+    return (ev.pendingRequests as any[]).find(p => (p.clerkUserId || p.userId) === userId);
+  }, [userId, ev?.pendingRequests]);
+
+  const isPending = !!pendingInfo;
+  const isFull   = ev?.maxCapacity && attendees.length >= ev.maxCapacity;
+  const isButtonDisabled = submitting || (isFull && !isJoined && !isPending);
 
   const startMs = useMemo(() => {
     if (!ev) return Number.POSITIVE_INFINITY;
@@ -176,9 +185,14 @@ export default function EventDetailScreen() {
 
 
   const handleLeave = async () => {
+    const titleText = isPending ? "Cancel Join Request" : "Leave Event";
+    const msgText = isPending 
+      ? "Are you sure you want to cancel your registration request?" 
+      : "Are you sure you want to cancel your registration?";
+
     Alert.alert(
-      "Leave Event",
-      "Are you sure you want to cancel your registration?",
+      titleText,
+      msgText,
       [
         { text: "No", style: "cancel" },
         { 
@@ -196,11 +210,11 @@ export default function EventDetailScreen() {
                 }),
               });
               if (res.ok) {
-                Alert.alert("Cancelled", "You have left the event.");
+                Alert.alert("Cancelled", isPending ? "Your request has been cancelled." : "You have left the event.");
                 loadAll();
               } else {
                 const json = await res.json();
-                Alert.alert("Error", json.error || "Failed to leave");
+                Alert.alert("Error", json.error || "Failed to cancel");
               }
             } catch {
               Alert.alert("Error", "Something went wrong");
@@ -304,8 +318,29 @@ export default function EventDetailScreen() {
         {/* FLOATING INFO CARD */}
         <View style={S.floatingCard}>
           <View style={S.rowBetween}>
-            <View style={S.categoryTag}>
-              <Text style={S.categoryText}>{(ev?.kind || "Event").toUpperCase()}</Text>
+            <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+              <View style={S.categoryTag}>
+                <Text style={S.categoryText}>{(ev?.kind || "Event").toUpperCase()}</Text>
+              </View>
+              {/* JOIN POLICY BADGE */}
+              <View style={[
+                S.policyTag, 
+                ev?.joinPolicy === "approval" 
+                  ? { backgroundColor: "#FDF2F8", borderColor: "#FBCFE8" } // Soft pink/rose for approval
+                  : { backgroundColor: "#ECFDF5", borderColor: "#A7F3D0" } // Soft emerald green for open join
+              ]}>
+                <Ionicons 
+                  name={ev?.joinPolicy === "approval" ? "shield-checkmark-outline" : "globe-outline"} 
+                  size={12} 
+                  color={ev?.joinPolicy === "approval" ? "#DB2777" : "#059669"} 
+                />
+                <Text style={[
+                  S.policyTagText, 
+                  { color: ev?.joinPolicy === "approval" ? "#DB2777" : "#059669" }
+                ]}>
+                  {ev?.joinPolicy === "approval" ? "Approval Required" : "Anyone Can Join"}
+                </Text>
+              </View>
             </View>
             <View style={S.ratingBadge}>
               <Ionicons name="star" size={14} color={C.gold} />
@@ -326,14 +361,13 @@ export default function EventDetailScreen() {
             </View>
           </View>
 
-          {ev?.maxCapacity && (
-            <View style={[S.row, { marginTop: 12, backgroundColor: "#F1F5F9", alignSelf: "flex-start", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }]}>
-              <Ionicons name="people-outline" size={14} color={C.ink2} />
-              <Text style={[S.statText, { fontSize: 11, color: C.ink2 }]}>
-                {attendees.length} / {ev.maxCapacity} {isService ? "Spots Booked" : "Joined"}
-              </Text>
-            </View>
-          )}
+          {/* REAL-TIME CAPACITY PILL */}
+          <View style={[S.row, { marginTop: 15, backgroundColor: "#F1F5F9", alignSelf: "flex-start", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }]}>
+            <Ionicons name="people-outline" size={14} color={C.ink2} />
+            <Text style={[S.statText, { fontSize: 11, color: C.ink2 }]}>
+              {ev?.maxCapacity ? `${attendees.length}/${ev.maxCapacity}` : "No Limit"}
+            </Text>
+          </View>
         </View>
 
         {/* ── JOINED OTP DISPLAY ── */}
@@ -527,7 +561,12 @@ export default function EventDetailScreen() {
               {isJoined ? (
                 <>
                   <Text style={S.footerLabel}>Status</Text>
-                  <Text style={[S.footerPrice, { color: C.green }]}>Registered</Text>
+                  <Text style={[S.footerPrice, { color: C.green, fontSize: 16 }]}>Joined ✓</Text>
+                </>
+              ) : isPending ? (
+                <>
+                  <Text style={S.footerLabel}>Status</Text>
+                  <Text style={[S.footerPrice, { color: C.gold, fontSize: 16 }]}>Pending Approval</Text>
                 </>
               ) : (
                 <>
@@ -537,36 +576,45 @@ export default function EventDetailScreen() {
               )}
             </View>
             <JoinEventButton
-              eventId={params.eventId}
-              kind={kind as any}
-              priceCents={ev?.priceCents}
-              eventTitle={title}
-              eventLocation={ev?.location?.formattedAddress}
-              creatorClerkId={ev?.creatorClerkId || ev?.clerkUserId}
-              startDate={ev?.startsAt || ev?.date}
-              durationHrs={ev?.durationHours || 1}
-              autoOpen={params.booking === "true"}
-              eventLat={ev?.location?.lat}
-              eventLng={ev?.location?.lng}
-              onJoined={() => loadAll()}
-              customTrigger={(onPress) => (
-                <TouchableOpacity 
-                  style={[S.reserveBtn, isJoined && { backgroundColor: C.red }]} 
-                  onPress={isJoined ? handleLeave : onPress}
-                  disabled={submitting}
-                >
-                  {submitting ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <>
-                      <Text style={S.reserveText}>{isJoined ? "Cancel Booking" : isService ? "Book Now" : "Join Now"}</Text>
-                      {!isJoined && <Ionicons name="arrow-forward" size={18} color="#fff" />}
-                      {isJoined && <Ionicons name="close-circle" size={18} color="#fff" />}
-                    </>
-                  )}
-                </TouchableOpacity>
-              )}
-            />
+               eventId={params.eventId}
+               kind={kind as any}
+               priceCents={ev?.priceCents}
+               eventTitle={title}
+               eventLocation={ev?.location?.formattedAddress}
+               creatorClerkId={ev?.creatorClerkId || ev?.clerkUserId}
+               startDate={ev?.startsAt || ev?.date}
+               durationHrs={ev?.durationHours || 1}
+               autoOpen={params.booking === "true"}
+               eventLat={ev?.location?.lat}
+               eventLng={ev?.location?.lng}
+               onJoined={() => loadAll()}
+               joinPolicy={ev?.joinPolicy}
+               disabled={isButtonDisabled}
+               customTrigger={(onPress) => (
+                 <TouchableOpacity 
+                   style={[
+                     S.reserveBtn, 
+                     (isJoined || isPending) && { backgroundColor: C.red },
+                     (isFull && !isJoined && !isPending) && { backgroundColor: "#9CA3AF" }
+                   ]} 
+                   onPress={(isJoined || isPending) ? handleLeave : onPress}
+                   disabled={isButtonDisabled}
+                 >
+                   {submitting ? (
+                     <ActivityIndicator color="#fff" />
+                   ) : (
+                     <>
+                       <Text style={S.reserveText}>
+                         {isJoined ? "Cancel Booking" : (isPending ? "Cancel Request" : (isFull ? "Event Full" : (isService ? "Book Now" : "Join Now")))}
+                       </Text>
+                       {!isJoined && !isPending && !isFull && <Ionicons name="arrow-forward" size={18} color="#fff" />}
+                       {!isJoined && isFull && !isPending && <Ionicons name="lock-closed" size={18} color="#fff" />}
+                       {(isJoined || isPending) && <Ionicons name="close-circle" size={18} color="#fff" />}
+                     </>
+                   )}
+                 </TouchableOpacity>
+               )}
+             />
           </>
         ) : (
           // ── ACTIVE EVENT (HOST) ──
@@ -673,10 +721,64 @@ const S = StyleSheet.create({
   },
   categoryTag: { backgroundColor: "#EEF2FF", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   categoryText: { color: C.accent, fontSize: 10, fontFamily: "Outfit_700Bold" },
+  policyTag: {
+     flexDirection: "row",
+     alignItems: "center",
+     gap: 4,
+     paddingHorizontal: 8,
+     paddingVertical: 4,
+     borderRadius: 8,
+     borderWidth: 1,
+   },
+   policyTagText: {
+     fontSize: 10,
+     fontFamily: "Outfit_700Bold",
+   },
   ratingBadge: { flexDirection: "row", alignItems: "center", gap: 4 },
   ratingText: { fontFamily: "Outfit_700Bold", color: C.ink },
   mainTitle: { fontSize: 26, fontFamily: "Outfit_700Bold", color: C.ink, marginTop: 10 },
   statText: { fontSize: 13, fontFamily: "Outfit_500Medium", color: C.ink2, marginLeft: 6 },
+  capacityContainer: {
+     marginTop: 15,
+     paddingTop: 15,
+     borderTopWidth: 1,
+     borderTopColor: "#F1F5F9",
+     width: "100%",
+   },
+   capacityLabel: {
+     fontSize: 12,
+     fontFamily: "Outfit_700Bold",
+     color: C.muted,
+   },
+   capacityValue: {
+     fontSize: 13,
+     fontFamily: "Outfit_800ExtraBold",
+     color: C.ink,
+   },
+   progressBarBackground: {
+     height: 8,
+     backgroundColor: "#F1F5F9",
+     borderRadius: 4,
+     marginTop: 8,
+     overflow: "hidden",
+     width: "100%",
+   },
+   progressBarFill: {
+     height: "100%",
+     borderRadius: 4,
+   },
+   capacityLeft: {
+     fontSize: 11,
+     fontFamily: "Outfit_600SemiBold",
+     color: C.muted,
+     marginTop: 6,
+   },
+   capacityWarning: {
+     fontSize: 11,
+     fontFamily: "Outfit_700Bold",
+     color: C.red,
+     marginTop: 6,
+   },
 
   section: { paddingHorizontal: PAD, marginTop: 30 },
   sectionTitle: { fontSize: 20, fontFamily: "Outfit_700Bold", color: C.ink, marginBottom: 15 },

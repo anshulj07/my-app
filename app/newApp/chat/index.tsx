@@ -60,7 +60,7 @@ export default function ChatListScreen() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchConversations = useCallback(async () => {
-    if (!API_BASE || !userId || !onboardingComplete) return;
+    if (!API_BASE || !userId) return;
     try {
       const res  = await apiFetch(
         `${API_BASE}/api/messages/conversations?clerkUserId=${encodeURIComponent(userId)}`,
@@ -70,7 +70,7 @@ export default function ChatListScreen() {
       if (res.ok && Array.isArray(json?.conversations)) setConversations(json.conversations);
     } catch {}
     finally { setLoading(false); setRefreshing(false); }
-  }, [API_BASE, EVENT_API_KEY, userId, onboardingComplete]);
+  }, [API_BASE, EVENT_API_KEY, userId]);
 
   useEffect(() => {
     fetchConversations();

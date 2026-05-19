@@ -294,7 +294,20 @@ export default function SectionEventsScreen() {
   const handleEventPress = (ev: TripEvent) => {
     router.push({
       pathname: "/newApp/event-detail",
-      params: { eventId: ev._id, title: ev.title, emoji: ev.emoji }
+      params: { 
+        eventId: ev._id, 
+        title: ev.title, 
+        emoji: ev.emoji,
+        bannerUri: ev.bannerUri || (ev as any).bannerImage || (ev as any).banner || "",
+        date: ev.date || "",
+        time: ev.time || "",
+        formattedAddress: ev.location?.formattedAddress || ev.location?.address || "",
+        creatorName: (ev as any).creatorName || "",
+        creatorAvatar: (ev as any).creatorAvatar || "",
+        kind: ev.kind || "event",
+        priceCents: String((ev as any).priceCents ?? 0),
+        joinPolicy: (ev as any).joinPolicy || "anyone_can_join"
+      }
     });
   };
 

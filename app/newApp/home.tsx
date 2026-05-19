@@ -325,7 +325,20 @@ export default function Home() {
   const onPinPress = useCallback((pin: EventPin) => {
     router.push({
       pathname: "/newApp/event-detail",
-      params: { eventId: pin._id, title: pin.title, emoji: pin.emoji }
+      params: { 
+        eventId: pin._id, 
+        title: pin.title, 
+        emoji: pin.emoji,
+        bannerUri: pin.bannerUri || (pin as any).bannerImage || "",
+        date: pin.date || "",
+        time: pin.time || "",
+        formattedAddress: pin.address || "",
+        creatorName: (pin as any).creatorName || "",
+        creatorAvatar: (pin as any).creatorAvatar || "",
+        kind: (pin as any).kind || "event",
+        priceCents: String((pin as any).priceCents ?? 0),
+        joinPolicy: (pin as any).joinPolicy || "anyone_can_join"
+      }
     });
   }, [router]);
 

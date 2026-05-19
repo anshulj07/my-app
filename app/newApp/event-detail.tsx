@@ -3,8 +3,9 @@ import React, { useCallback, useEffect, useRef, useState, useMemo } from "react"
 import {
   View, Text, ScrollView, TouchableOpacity, ActivityIndicator,
   StyleSheet, Platform, StatusBar, Animated, BackHandler,
-  Dimensions, Image, Share, Modal, TextInput, Alert
+  Dimensions, Share, Modal, TextInput, Alert, InteractionManager
 } from "react-native";
+import { Image } from "expo-image";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import Constants from "expo-constants";
 import { useAuth } from "@clerk/clerk-expo";
@@ -37,7 +38,27 @@ export default function EventDetailScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { userId } = useAuth();
-  const params = useLocalSearchParams<{ eventId: string; title: string; emoji: string; booking?: string; isPast?: string }>();
+  const params = useLocalSearchParams<{ 
+    eventId: string; 
+    title: string; 
+    emoji: string; 
+    booking?: string; 
+    isPast?: string;
+    bannerUri?: string;
+    date?: string;
+    time?: string;
+    formattedAddress?: string;
+    creatorName?: string;
+    creatorAvatar?: string;
+    kind?: string;
+    priceCents?: string;
+    joinPolicy?: string;
+    isJoined?: string;
+    isPending?: string;
+    lat?: string;
+    lng?: string;
+    maxCapacity?: string;
+  }>();
 
   const [event, setEvent] = useState<any>(null);
   const [reviews, setReviews] = useState<any[]>([]);
@@ -75,7 +96,12 @@ export default function EventDetailScreen() {
     }
   }, [params.eventId, API_BASE, EVENT_API_KEY]);
 
-  useEffect(() => { loadAll(); }, [loadAll]);
+  useEffect(() => {
+    const task = InteractionManager.runAfterInteractions(() => {
+      loadAll();
+    });
+    return () => task.cancel();
+  }, [loadAll]);
 
   // ✅ Android hardware back button — always go exactly one page back
   useEffect(() => {
@@ -138,41 +164,51 @@ export default function EventDetailScreen() {
   };
 
   const ev = event;
-  const kind = ev?.kind || "event";
+  const kind = ev?.kind || params.kind || "event";
   const isService = kind === "service";
 
   const title = ev?.title || params.title || "Event";
-  const banner = ev?.bannerUri || (ev as any)?.bannerImage || "";
+  const banner = ev?.bannerUri || (ev as any)?.bannerImage || params.bannerUri || "";
   const attendees = ev?.attendees ?? [];
-  const price = ev?.kind === "free" ? "Free" : `₹${((ev?.priceCents ?? 0)/100).toFixed(0)}`;
-  const isHost = userId === (ev?.creatorClerkId || ev?.clerkUserId);
+  const price = ev?.kind === "free" || params.kind === "free" ? "Free" : `₹${(((ev?.priceCents || Number(params.priceCents || 0)) ?? 0)/100).toFixed(0)}`;
+  const isHost = userId === (ev?.creatorClerkId || ev?.clerkUserId) || (ev == null && (params.creatorName && userId === params.creatorName));
 
   const joinedInfo = useMemo(() => {
-    if (!userId || !ev?.attendees) return null;
-    return (ev.attendees as any[]).find(a => (a.clerkId || a.clerkUserId || a.userId) === userId);
-  }, [userId, ev?.attendees]);
+    if (!userId) return null;
+    if (ev?.attendees) {
+      return (ev.attendees as any[]).find(a => (a.clerkId || a.clerkUserId || a.userId) === userId);
+    }
+    return params.isJoined === "true" ? { clerkId: userId } : null;
+  }, [userId, ev?.attendees, params.isJoined]);
 
   const isJoined = !!joinedInfo;
   const isPast   = params.isPast === "true" || ev?.status === "completed" || ev?.status === "past";
   
   const pendingInfo = useMemo(() => {
-    if (!userId || !ev?.pendingRequests) return null;
-    return (ev.pendingRequests as any[]).find(p => (p.clerkUserId || p.userId) === userId);
-  }, [userId, ev?.pendingRequests]);
+    if (!userId) return null;
+    if (ev?.pendingRequests) {
+      return (ev.pendingRequests as any[]).find(p => (p.clerkUserId || p.userId) === userId);
+    }
+    return params.isPending === "true" ? { clerkUserId: userId } : null;
+  }, [userId, ev?.pendingRequests, params.isPending]);
 
   const isPending = !!pendingInfo;
   const isFull   = ev?.maxCapacity && attendees.length >= ev.maxCapacity;
   const isButtonDisabled = submitting || (isFull && !isJoined && !isPending);
 
   const startMs = useMemo(() => {
-    if (!ev) return Number.POSITIVE_INFINITY;
-    if (ev.startsAt) { const t = new Date(ev.startsAt).getTime(); if (Number.isFinite(t)) return t; }
-    const date = (ev.date ?? "").trim();
-    const time = (ev.time ?? "").trim();
-    if (date && time) { const t = new Date(`${date} ${time}`).getTime(); if (Number.isFinite(t)) return t; }
-    if (date) { const t = new Date(date).getTime(); if (Number.isFinite(t)) return t; }
+    if (ev?.startsAt) { const t = new Date(ev.startsAt).getTime(); if (Number.isFinite(t)) return t; }
+    if (ev?.date || params.date) {
+      const date = (ev?.date || params.date || "").trim();
+      const time = (ev?.time || params.time || "").trim();
+      if (date && time) { const t = new Date(`${date} ${time}`).getTime(); if (Number.isFinite(t)) return t; }
+      if (date) { const t = new Date(date).getTime(); if (Number.isFinite(t)) return t; }
+    }
     return Number.POSITIVE_INFINITY;
-  }, [ev]);
+  }, [ev, params.date, params.time]);
+
+  const joinPolicy = ev?.joinPolicy || params.joinPolicy || "anyone_can_join";
+  const maxCapacity = ev?.maxCapacity || (params.maxCapacity ? Number(params.maxCapacity) : undefined);
 
   const showOtp = useMemo(() => {
     if (!isJoined) return false;
@@ -255,13 +291,7 @@ export default function EventDetailScreen() {
     });
   };
 
-  if (loading) {
-    return (
-      <View style={[S.screen, { justifyContent: "center", alignItems: "center" }]}>
-        <ActivityIndicator size="large" color={C.accent} />
-      </View>
-    );
-  }
+  // Removed full-screen white loading spinner early-return block to enable instant 0ms preloading!
 
   return (
     <View style={S.screen}>
@@ -274,9 +304,12 @@ export default function EventDetailScreen() {
             <Ionicons name="chevron-back" size={24} color={C.ink} />
           </TouchableOpacity>
           <Text style={S.stickyTitle} numberOfLines={1}>{title}</Text>
-          <TouchableOpacity onPress={handleShare} style={S.navIconBtn}>
-            <Ionicons name="share-social-outline" size={22} color={C.ink} />
-          </TouchableOpacity>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            {loading && <ActivityIndicator size="small" color={C.accent} />}
+            <TouchableOpacity onPress={handleShare} style={S.navIconBtn}>
+              <Ionicons name="share-social-outline" size={22} color={C.ink} />
+            </TouchableOpacity>
+          </View>
         </View>
       </Animated.View>
 
@@ -293,7 +326,7 @@ export default function EventDetailScreen() {
         {/* HERO BANNER */}
         <View style={S.bannerContainer}>
           {banner ? (
-            <Image source={{ uri: banner }} style={S.banner} resizeMode="cover" />
+            <Image source={{ uri: banner }} style={S.banner} contentFit="cover" transition={300} />
           ) : (
             <View style={[S.banner, { backgroundColor: "#E5E7EB", justifyContent: "center", alignItems: "center" }]}>
               <Text style={{ fontSize: 80 }}>{ev?.emoji || "📍"}</Text>
@@ -320,25 +353,25 @@ export default function EventDetailScreen() {
           <View style={S.rowBetween}>
             <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
               <View style={S.categoryTag}>
-                <Text style={S.categoryText}>{(ev?.kind || "Event").toUpperCase()}</Text>
+                <Text style={S.categoryText}>{kind.toUpperCase()}</Text>
               </View>
               {/* JOIN POLICY BADGE */}
               <View style={[
                 S.policyTag, 
-                ev?.joinPolicy === "approval" 
+                joinPolicy === "approval" 
                   ? { backgroundColor: "#FDF2F8", borderColor: "#FBCFE8" } // Soft pink/rose for approval
                   : { backgroundColor: "#ECFDF5", borderColor: "#A7F3D0" } // Soft emerald green for open join
               ]}>
                 <Ionicons 
-                  name={ev?.joinPolicy === "approval" ? "shield-checkmark-outline" : "globe-outline"} 
+                  name={joinPolicy === "approval" ? "shield-checkmark-outline" : "globe-outline"} 
                   size={12} 
-                  color={ev?.joinPolicy === "approval" ? "#DB2777" : "#059669"} 
+                  color={joinPolicy === "approval" ? "#DB2777" : "#059669"} 
                 />
                 <Text style={[
                   S.policyTagText, 
-                  { color: ev?.joinPolicy === "approval" ? "#DB2777" : "#059669" }
+                  { color: joinPolicy === "approval" ? "#DB2777" : "#059669" }
                 ]}>
-                  {ev?.joinPolicy === "approval" ? "Approval Required" : "Anyone Can Join"}
+                  {joinPolicy === "approval" ? "Approval Required" : "Anyone Can Join"}
                 </Text>
               </View>
             </View>
@@ -353,11 +386,11 @@ export default function EventDetailScreen() {
           <View style={[S.row, { gap: 20, marginTop: 12 }]}>
             <View style={S.row}>
               <Ionicons name={isService ? "calendar-clear-outline" : "calendar-outline"} size={16} color={C.accent} />
-              <Text style={S.statText}>{ev?.date || (isService ? "Flexible Schedule" : "TBD")}</Text>
+              <Text style={S.statText}>{ev?.date || params.date || (isService ? "Flexible Schedule" : "TBD")}</Text>
             </View>
             <View style={S.row}>
               <Ionicons name={isService ? "timer-outline" : "time-outline"} size={16} color={C.accent} />
-              <Text style={S.statText}>{isService ? (ev?.duration || "1 Hour Session") : (ev?.time || "TBD")}</Text>
+              <Text style={S.statText}>{isService ? (ev?.duration || "1 Hour Session") : (ev?.time || params.time || "TBD")}</Text>
             </View>
           </View>
 
@@ -365,7 +398,7 @@ export default function EventDetailScreen() {
           <View style={[S.row, { marginTop: 15, backgroundColor: "#F1F5F9", alignSelf: "flex-start", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }]}>
             <Ionicons name="people-outline" size={14} color={C.ink2} />
             <Text style={[S.statText, { fontSize: 11, color: C.ink2 }]}>
-              {ev?.maxCapacity ? `${attendees.length}/${ev.maxCapacity}` : "No Limit"}
+              {maxCapacity ? `${attendees.length}/${maxCapacity}` : (loading ? "..." : "No Limit")}
             </Text>
           </View>
         </View>
@@ -399,7 +432,7 @@ export default function EventDetailScreen() {
 
         {/* HOST ROW */}
         <View style={S.hostCard}>
-          <Image source={{ uri: ev?.creatorAvatar || "https://i.pravatar.cc/100" }} style={S.hostImg} />
+          <Image source={{ uri: ev?.creatorAvatar || "https://i.pravatar.cc/100" }} style={S.hostImg} contentFit="cover" transition={200} />
           <View style={{ flex: 1 }}>
             <Text style={S.hostName}>{ev?.creatorName || "Local Host"}</Text>
             <Text style={S.hostSub}>HOST & ORGANIZER</Text>
@@ -415,7 +448,7 @@ export default function EventDetailScreen() {
         <View style={S.section}>
           <Text style={S.sectionTitle}>About the {isService ? "Service" : "Event"}</Text>
           <Text style={S.aboutText}>
-            {ev?.description || `Experience an unforgettable ${isService ? "service" : "evening"}. Join us for a perfect blend of networking, music, and great vibes.`}
+            {ev?.description || (loading ? "Loading details from network..." : `Experience an unforgettable ${isService ? "service" : "evening"}. Join us for a perfect blend of networking, music, and great vibes.`)}
           </Text>
         </View>
 
@@ -449,23 +482,32 @@ export default function EventDetailScreen() {
             </TouchableOpacity>
           </View>
           <View style={S.attendeeRow}>
-            <View style={S.avatarStack}>
-              {attendees.slice(0, 4).map((att: any, i: number) => (
-                <View key={i} style={[S.avatarWrap, { marginLeft: i === 0 ? 0 : -15 }]}>
-                  <Image source={{ uri: att.userAvatar || `https://i.pravatar.cc/100?u=${i}` }} style={S.avatar} />
+            {loading && attendees.length === 0 ? (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 10 }}>
+                <ActivityIndicator size="small" color={C.accent} />
+                <Text style={[S.goingCountText, { color: C.muted }]}>Refreshing guest list...</Text>
+              </View>
+            ) : (
+              <>
+                <View style={S.avatarStack}>
+                  {attendees.slice(0, 4).map((att: any, i: number) => (
+                    <View key={i} style={[S.avatarWrap, { marginLeft: i === 0 ? 0 : -15 }]}>
+                      <Image source={{ uri: att.userAvatar || `https://i.pravatar.cc/100?u=${i}` }} style={S.avatar} contentFit="cover" transition={200} />
+                    </View>
+                  ))}
+                  {attendees.length > 4 && (
+                    <View style={[S.avatarWrap, S.extraAvatar, { marginLeft: -15 }]}>
+                      <Text style={S.extraText}>+{attendees.length - 4}</Text>
+                    </View>
+                  )}
                 </View>
-              ))}
-              {attendees.length > 4 && (
-                <View style={[S.avatarWrap, S.extraAvatar, { marginLeft: -15 }]}>
-                  <Text style={S.extraText}>+{attendees.length - 4}</Text>
-                </View>
-              )}
-            </View>
-            <Text style={S.goingCountText}>
-              {attendees.length > 0 
-                ? `${attendees.length} ${isService ? "people have booked this" : "people have already joined"}` 
-                : isService ? "Be the first one to book!" : "Be the first one to join!"}
-            </Text>
+                <Text style={S.goingCountText}>
+                  {attendees.length > 0 
+                    ? `${attendees.length} ${isService ? "people have booked this" : "people have already joined"}` 
+                    : isService ? "Be the first one to book!" : "Be the first one to join!"}
+                </Text>
+              </>
+            )}
           </View>
         </View>
 
@@ -483,13 +525,18 @@ export default function EventDetailScreen() {
           </View>
           
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 15, paddingRight: 20, paddingTop: 15 }}>
-            {reviews.length > 0 ? (
+            {loading ? (
+              <View style={[S.reviewCard, { width: SW - 80, alignItems: 'center', justifyContent: 'center', minHeight: 100 }]}>
+                <ActivityIndicator size="small" color={C.accent} />
+                <Text style={[S.muted, { marginTop: 8 }]}>Loading reviews...</Text>
+              </View>
+            ) : reviews.length > 0 ? (
               <>
                 {reviews.slice(0, 10).map((r, i) => (
                   <View key={i} style={S.reviewCard}>
                     <View style={S.rowBetween}>
                       <View style={S.row}>
-                        <Image source={{ uri: r.userAvatar || "https://i.pravatar.cc/100" }} style={S.reviewAvatar} />
+                        <Image source={{ uri: r.userAvatar || "https://i.pravatar.cc/100" }} style={S.reviewAvatar} contentFit="cover" transition={200} />
                         <View style={{ marginLeft: 10 }}>
                           <Text style={S.reviewName}>{r.userName || "Guest"}</Text>
                           <Text style={S.reviewTime}>3 weeks ago</Text>
@@ -525,6 +572,8 @@ export default function EventDetailScreen() {
              <Image 
               source={{ uri: `https://maps.googleapis.com/maps/api/staticmap?center=${ev?.location?.lat || 22.7196},${ev?.location?.lng || 75.8577}&zoom=14&size=600x400&scale=2&markers=color:purple%7C${ev?.location?.lat || 22.7196},${ev?.location?.lng || 75.8577}&key=${(Constants.expoConfig?.extra as any)?.googleMapsKey}` }} 
               style={StyleSheet.absoluteFill} 
+              contentFit="cover"
+              transition={300}
             />
           </View>
         </View>
@@ -578,17 +627,17 @@ export default function EventDetailScreen() {
             <JoinEventButton
                eventId={params.eventId}
                kind={kind as any}
-               priceCents={ev?.priceCents}
+               priceCents={ev?.priceCents || Number(params.priceCents || 0)}
                eventTitle={title}
-               eventLocation={ev?.location?.formattedAddress}
+               eventLocation={ev?.location?.formattedAddress || params.formattedAddress}
                creatorClerkId={ev?.creatorClerkId || ev?.clerkUserId}
-               startDate={ev?.startsAt || ev?.date}
+               startDate={ev?.startsAt || ev?.date || params.date}
                durationHrs={ev?.durationHours || 1}
                autoOpen={params.booking === "true"}
-               eventLat={ev?.location?.lat}
-               eventLng={ev?.location?.lng}
+               eventLat={ev?.location?.lat || (params.lat ? Number(params.lat) : undefined)}
+               eventLng={ev?.location?.lng || (params.lng ? Number(params.lng) : undefined)}
                onJoined={() => loadAll()}
-               joinPolicy={ev?.joinPolicy}
+               joinPolicy={joinPolicy}
                disabled={isButtonDisabled}
                customTrigger={(onPress) => (
                  <TouchableOpacity 

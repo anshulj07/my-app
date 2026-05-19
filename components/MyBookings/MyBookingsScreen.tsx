@@ -134,7 +134,16 @@ export default function MyBookingsScreen() {
         eventId: ev._id, 
         title: ev.title, 
         emoji: ev.emoji,
-        isPast: isPast ? "true" : "false"
+        isPast: isPast ? "true" : "false",
+        bannerUri: ev.bannerUri || (ev as any).bannerImage || (ev as any).banner || "",
+        date: ev.date || "",
+        time: ev.time || "",
+        formattedAddress: ev.location?.formattedAddress || ev.address || "",
+        creatorName: (ev as any).creatorName || "",
+        creatorAvatar: (ev as any).creatorAvatar || "",
+        kind: ev.kind || "event",
+        priceCents: String((ev as any).priceCents ?? 0),
+        joinPolicy: (ev as any).joinPolicy || "anyone_can_join"
       }
     });
   };

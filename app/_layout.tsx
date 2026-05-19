@@ -59,7 +59,16 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     if (!needsCheck) return;
     lastCheckUserRef.current = user.id;
 
-    const onboardingComplete = user.unsafeMetadata?.onboardingComplete === true;
+    let onboardingComplete = user.unsafeMetadata?.onboardingComplete === true;
+
+    // Auto-bypass onboarding for returning users or those who already have a username
+    const createdAtTime = user.createdAt ? new Date(user.createdAt).getTime() : 0;
+    const lastSignInTime = user.lastSignInAt ? new Date(user.lastSignInAt).getTime() : 0;
+    const isReturningUser = lastSignInTime - createdAtTime > 2 * 60 * 1000; // > 2 mins difference means it's a subsequent login
+    
+    if (!onboardingComplete && (isReturningUser || user.username)) {
+      onboardingComplete = true; // treat as complete
+    }
 
     if (!onboardingComplete) {
       if (!inOnboardingGroup) {

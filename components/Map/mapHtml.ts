@@ -111,11 +111,11 @@
 //     function isOwn(ev){ return MY_ID && String(ev.creatorClerkId||'')===MY_ID; }
 
 //     function pinColor(ev){
-//       if(isOwn(ev)) return '#4f46e5';
 //       var k=ev.kind||'';
 //       if(k.indexOf('free')>=0) return '#22c55e';
 //       if(k.indexOf('paid')>=0) return '#f59e0b';
 //       if(k==='service')        return '#8b5cf6';
+//       if(isOwn(ev)) return '#4f46e5';
 //       return '#6c63ff';
 //     }
 
@@ -642,11 +642,11 @@ export function buildMapHtml(args: {
     function isOwn(ev){ return MY_ID && String(ev.creatorClerkId||'')===MY_ID; }
 
     function pinColor(ev){
-      if(isOwn(ev)) return '#4f46e5';
       var k=ev.kind||'';
       if(k.indexOf('free')>=0) return '#22c55e';
       if(k.indexOf('paid')>=0) return '#f59e0b';
       if(k==='service')        return '#8b5cf6';
+      if(isOwn(ev)) return '#4f46e5';
       return '#6c63ff';
     }
 
@@ -1051,21 +1051,28 @@ export function buildMapHtml(args: {
     }
     window.initMap=initMap;
 
-    /* ══ goToLocation ══ */
-    function handleLocationMsg(data){
+    /* ══ message handler ══ */
+    function handleMsg(data){
       try{
         var msg=JSON.parse(data);
-        if(!msg||msg.type!=='goToLocation')return;
-        var lat=Number(msg.lat),lng=Number(msg.lng);
-        if(!isFinite(lat)||!isFinite(lng))return;
-        if(!map){setTimeout(function(){handleLocationMsg(data);},500);return;}
-        map.panTo({lat:lat,lng:lng});
-        map.setZoom(Math.max(map.getZoom()||0,15));
-        showToast('📍 Current location');
+        if(!msg)return;
+        if(msg.type==='updateEvents'){
+          DATA=msg.events||[];
+          scheduleLayout();
+          return;
+        }
+        if(msg.type==='goToLocation'){
+          var lat=Number(msg.lat),lng=Number(msg.lng);
+          if(!isFinite(lat)||!isFinite(lng))return;
+          if(!map){setTimeout(function(){handleMsg(data);},500);return;}
+          map.panTo({lat:lat,lng:lng});
+          map.setZoom(Math.max(map.getZoom()||0,15));
+          showToast('📍 Current location');
+        }
       }catch(ex){}
     }
-    window.addEventListener('message',function(e){handleLocationMsg(e.data);});
-    document.addEventListener('message',function(e){handleLocationMsg(e.data);});
+    window.addEventListener('message',function(e){handleMsg(e.data);});
+    document.addEventListener('message',function(e){handleMsg(e.data);});
     window.addEventListener('error',function(e){post('log',{msg:'JS error: '+(e.message||'?')});});
   })();
   </script>

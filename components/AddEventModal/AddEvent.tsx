@@ -185,6 +185,7 @@ const [bannerUri, setBannerUri] = useState<string | null>(null);
     setEndDateOpen(false); setEndTimeOpen(false);
     setQuery(""); setSuggestions([]); setSelectedAddress(""); setCoord(null); setLocationPayload(null);
     setErr(null); setSubmitting(false); setMapReady(false); setLoadingSug(false); setLocLoading(false);
+    setBannerUri(null);
   };
 
   const handleFullClose = () => { hardReset(); onClose(); };

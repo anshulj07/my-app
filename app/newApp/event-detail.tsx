@@ -97,6 +97,10 @@ export default function EventDetailScreen() {
   }, [params.eventId, API_BASE, EVENT_API_KEY]);
 
   useEffect(() => {
+    setEvent(null);
+    setReviews([]);
+    setLoading(true);
+    
     const task = InteractionManager.runAfterInteractions(() => {
       loadAll();
     });
@@ -163,7 +167,8 @@ export default function EventDetailScreen() {
     } as any);
   };
 
-  const ev = event;
+  // ✅ INSTANT FIX: If the local 'event' state belongs to a previous page visit, ignore it completely until the new one loads.
+  const ev = (event?._id === params.eventId || event?.eventId === params.eventId) ? event : null;
   const kind = ev?.kind || params.kind || "event";
   const isService = kind === "service";
 
@@ -171,7 +176,7 @@ export default function EventDetailScreen() {
   const banner = ev?.bannerUri || (ev as any)?.bannerImage || params.bannerUri || "";
   const attendees = ev?.attendees ?? [];
   const price = ev?.kind === "free" || params.kind === "free" ? "Free" : `₹${(((ev?.priceCents || Number(params.priceCents || 0)) ?? 0)/100).toFixed(0)}`;
-  const isHost = userId === (ev?.creatorClerkId || ev?.clerkUserId) || (ev == null && (params.creatorName && userId === params.creatorName));
+  const isHost = userId === (ev?.creatorClerkId || ev?.clerkUserId) || (ev == null && !!params.creatorClerkId && userId === params.creatorClerkId);
 
   const joinedInfo = useMemo(() => {
     if (!userId) return null;
@@ -432,11 +437,31 @@ export default function EventDetailScreen() {
 
         {/* HOST ROW */}
         <View style={S.hostCard}>
-          <Image source={{ uri: ev?.creatorAvatar || "https://i.pravatar.cc/100" }} style={S.hostImg} contentFit="cover" transition={200} />
-          <View style={{ flex: 1 }}>
-            <Text style={S.hostName}>{ev?.creatorName || "Local Host"}</Text>
-            <Text style={S.hostSub}>HOST & ORGANIZER</Text>
-          </View>
+          <TouchableOpacity 
+            style={{ flexDirection: "row", alignItems: "center", gap: 15, flex: 1 }}
+            onPress={() => {
+              const hostId = ev?.creatorClerkId || ev?.clerkUserId || params.creatorClerkId;
+              if (hostId) {
+                router.push({ pathname: "/profile/[clerkUserId]", params: { clerkUserId: hostId } } as any);
+              }
+            }}
+            activeOpacity={0.7}
+          >
+            <Image 
+              source={{ uri: ev?.creatorAvatar || params.creatorAvatar || "https://i.pravatar.cc/100" }} 
+              style={S.hostImg} 
+              contentFit="cover" 
+              transition={200} 
+            />
+            <View style={{ flex: 1, justifyContent: "center" }}>
+              {loading && !ev?.creatorName && !params.creatorName ? (
+                <ActivityIndicator size="small" color={C.accent} style={{ alignSelf: "flex-start", marginBottom: 2 }} />
+              ) : (
+                <Text style={S.hostName}>{ev?.creatorName || params.creatorName || "Local Host"}</Text>
+              )}
+              <Text style={S.hostSub}>HOST & ORGANIZER</Text>
+            </View>
+          </TouchableOpacity>
           {!isHost && (
             <TouchableOpacity style={S.messageBtn} onPress={handleMessageHost}>
               <Text style={S.messageBtnText}>Message</Text>
@@ -649,7 +674,7 @@ export default function EventDetailScreen() {
                    onPress={(isJoined || isPending) ? handleLeave : onPress}
                    disabled={isButtonDisabled}
                  >
-                   {submitting ? (
+                   {submitting || (loading && !ev) ? (
                      <ActivityIndicator color="#fff" />
                    ) : (
                      <>

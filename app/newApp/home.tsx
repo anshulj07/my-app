@@ -221,21 +221,52 @@ export default function Home() {
     return () => loop.stop();
   }, []);
 
-  const loadEvents = useCallback(async () => {
+  const loadEvents = useCallback(async (customLat?: number, customLng?: number) => {
     if (!API_BASE) return [];
+    
+    const lat = customLat ?? myLoc?.lat;
+    const lng = customLng ?? myLoc?.lng;
+    
+    let baseQuery = `?limit=200`;
+    if (lat && lng) {
+      baseQuery += `&nearLat=${lat}&nearLng=${lng}&radiusM=50000`;
+    }
+
     try {
-      const res = await fetch(`${API_BASE.replace(/\/$/, "")}/api/events/get-events?limit=200`, {
+      // 1. Fetch DB events fast
+      const res = await fetch(`${API_BASE.replace(/\/$/, "")}/api/events/get-events${baseQuery}&source=db`, {
         headers: { ...(EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {}), "ngrok-skip-browser-warning": "1" },
       });
-      if (!res.ok) return [];
-      const json = await res.json().catch(() => ({}));
-      const newEvents = (Array.isArray(json?.events) ? json.events : []).map(normalizeEvent).filter(Boolean) as EventPin[];
-      setEvents(newEvents);
-      return newEvents;
+      
+      let dbEvents: EventPin[] = [];
+      if (res.ok) {
+        const json = await res.json().catch(() => ({}));
+        dbEvents = (Array.isArray(json?.events) ? json.events : []).map(normalizeEvent).filter(Boolean) as EventPin[];
+        setEvents(dbEvents);
+      }
+
+      // 2. Fetch Ticketmaster events in background
+      fetch(`${API_BASE.replace(/\/$/, "")}/api/events/get-events${baseQuery}&source=tm`, {
+        headers: { ...(EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {}), "ngrok-skip-browser-warning": "1" },
+      })
+      .then(r => r.json().catch(() => ({})))
+      .then(tmJson => {
+        const tmEvents = (Array.isArray(tmJson?.events) ? tmJson.events : []).map(normalizeEvent).filter(Boolean) as EventPin[];
+        if (tmEvents.length > 0) {
+          setEvents(prev => {
+            const existingIds = new Set(prev.map(p => p._id));
+            const newEvents = tmEvents.filter(t => !existingIds.has(t._id));
+            return [...prev, ...newEvents];
+          });
+        }
+      })
+      .catch(console.error);
+
+      return dbEvents;
     } catch {
       return [];
     }
-  }, [API_BASE, EVENT_API_KEY]);
+  }, [API_BASE, EVENT_API_KEY, myLoc]);
 
   const loadMyLocation = useCallback(async () => {
     try {
@@ -243,17 +274,23 @@ export default function Home() {
       if (status !== "granted") {
         setLocStatus("denied");
         setLocReady(true); // ✅ Permission denied — still show map (events fallback)
+        loadEvents();
         return;
       }
       setLocStatus("granted");
 
+      let resolvedLat: number | null = null;
+      let resolvedLng: number | null = null;
+
       // 1. Try last known position for instant map jump
       const last = await Location.getLastKnownPositionAsync().catch(() => null);
       if (last) {
-        const { latitude: lat, longitude: lng } = last.coords;
-        setMyLoc({ lat, lng });
+        resolvedLat = last.coords.latitude;
+        resolvedLng = last.coords.longitude;
+        setMyLoc({ lat: resolvedLat, lng: resolvedLng });
         setLocReady(true); // ✅ We have a cached location — show map immediately
-        Location.reverseGeocodeAsync({ latitude: lat, longitude: lng })
+        loadEvents(resolvedLat, resolvedLng);
+        Location.reverseGeocodeAsync({ latitude: resolvedLat, longitude: resolvedLng })
           .then(rev => {
             const c = (rev?.[0]?.city || rev?.[0]?.district || rev?.[0]?.subregion || rev?.[0]?.name || "").trim();
             if (c) setMyCity(c);
@@ -275,7 +312,11 @@ export default function Home() {
       if (fresh) {
         const { latitude: flat, longitude: flng } = fresh.coords;
         setMyLoc({ lat: flat, lng: flng });
-        setLocReady(true); // ✅ Fresh GPS fix — map will update
+        if (!last) {
+          setLocReady(true); // ✅ Fresh GPS fix — map will update
+          loadEvents(flat, flng);
+        }
+        
         const rev = await Location.reverseGeocodeAsync({ latitude: flat, longitude: flng }).catch(() => null);
         if (rev?.[0]) {
           const c = (rev[0].city || rev[0].district || rev[0].subregion || rev[0].name || "").trim();
@@ -284,14 +325,19 @@ export default function Home() {
       } else if (!last) {
         // No last known and fresh timed out — show map anyway (events fallback)
         setLocReady(true);
+        loadEvents();
       }
     } catch (err) {
       console.log("[Home] Location load error:", err);
       setLocReady(true); // ✅ On any error, still show the map
+      loadEvents();
     }
-  }, []);
+  }, [loadEvents]);
 
-  useEffect(() => { loadMyLocation(); loadEvents(); }, [loadEvents, loadMyLocation]);
+  useEffect(() => { 
+    loadMyLocation(); 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const filteredEvents = useMemo(() => {
     // ✅ Show active events + live events (started but status still "active")
@@ -325,7 +371,22 @@ export default function Home() {
   const onPinPress = useCallback((pin: EventPin) => {
     router.push({
       pathname: "/newApp/event-detail",
-      params: { eventId: pin._id, title: pin.title, emoji: pin.emoji }
+      params: { 
+        eventId: pin._id, 
+        title: pin.title, 
+        emoji: pin.emoji,
+        bannerUri: pin.bannerUri || (pin as any).bannerImage || "",
+        date: pin.date || "",
+        time: pin.time || "",
+        formattedAddress: pin.address || "",
+        creatorName: (pin as any).creatorName || "",
+        creatorAvatar: (pin as any).creatorAvatar || "",
+        creatorClerkId: pin.creatorClerkId || "",
+        kind: (pin as any).kind || "event",
+        priceCents: String((pin as any).priceCents ?? 0),
+        joinPolicy: (pin as any).joinPolicy || "anyone_can_join",
+        eventStr: JSON.stringify(pin)
+      }
     });
   }, [router]);
 

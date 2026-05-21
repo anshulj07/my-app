@@ -92,25 +92,33 @@ export default function MyBookingsScreen() {
   }, [tabIndex, tabsW]);
 
   const load = useCallback(async () => {
-    if (!API_BASE || !userId || !onboardingComplete) return;
+    console.log("[MyBookingsScreen] load called. API_BASE:", API_BASE, "userId:", userId, "onboardingComplete:", onboardingComplete);
+    if (!API_BASE || !userId) {
+      console.log("[MyBookingsScreen] load aborted: missing API_BASE or userId");
+      return;
+    }
     setLoading(true);
     try {
       const headers = { "Content-Type": "application/json", "x-api-key": EVENT_API_KEY || "" };
+      console.log("[MyBookingsScreen] Fetching bookings from:", `${API_BASE}/api/bookings/...`);
       const [cRes, gRes] = await Promise.all([
         apiFetch(`${API_BASE}/api/bookings/my-bookings?clerkUserId=${userId}`, { headers }),
         apiFetch(`${API_BASE}/api/bookings/going?clerkUserId=${userId}`, { headers }),
       ]);
+      console.log("[MyBookingsScreen] Fetch responses received. my-bookings status:", cRes.status, "going status:", gRes.status);
+      
       const cJson = await cRes.json();
       const gJson = await gRes.json();
+      
       setAllCreated(cJson.createdEvents || []);
       setGoingEvents(gJson.events || []);
     } catch (e) {
-      console.log("Load error", e);
+      console.error("[MyBookingsScreen] Load error:", e);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [API_BASE, userId, EVENT_API_KEY, onboardingComplete]);
+  }, [API_BASE, userId, EVENT_API_KEY]);
 
   useEffect(() => { load(); }, [load]);
   const [summaryModal, setSummaryModal] = useState<{ visible: boolean; event: EventDoc | null }>({ visible: false, event: null });
@@ -126,7 +134,17 @@ export default function MyBookingsScreen() {
         eventId: ev._id, 
         title: ev.title, 
         emoji: ev.emoji,
-        isPast: isPast ? "true" : "false"
+        isPast: isPast ? "true" : "false",
+        bannerUri: ev.bannerUri || (ev as any).bannerImage || (ev as any).banner || "",
+        date: ev.date || "",
+        time: ev.time || "",
+        formattedAddress: ev.location?.formattedAddress || ev.address || "",
+        creatorName: (ev as any).creatorName || "",
+        creatorAvatar: (ev as any).creatorAvatar || "",
+        kind: ev.kind || "event",
+        priceCents: String((ev as any).priceCents ?? 0),
+        joinPolicy: (ev as any).joinPolicy || "anyone_can_join",
+        eventStr: JSON.stringify(ev)
       }
     });
   };
@@ -209,18 +227,28 @@ export default function MyBookingsScreen() {
     });
   };
 
+  const sortActiveEvents = (list: EventDoc[]) => {
+    return [...list].sort((a, b) => {
+      const stateA = getEventState(a);
+      const stateB = getEventState(b);
+      if (stateA === "ongoing" && stateB !== "ongoing") return -1;
+      if (stateA !== "ongoing" && stateB === "ongoing") return 1;
+      return eventStartMs(a) - eventStartMs(b);
+    });
+  };
+
   const filteredCreated = useMemo(() => {
     let list = allCreated.filter(e => getEventState(e) !== "past");
     if (filterType === "event") list = list.filter(e => e.kind !== "service");
     if (filterType === "service") list = list.filter(e => e.kind === "service");
-    return list;
+    return sortActiveEvents(list);
   }, [allCreated, filterType]);
 
   const filteredGoing = useMemo(() => {
     let list = goingEvents.filter(e => getEventState(e) !== "past");
     if (filterType === "event") list = list.filter(e => e.kind !== "service");
     if (filterType === "service") list = list.filter(e => e.kind === "service");
-    return list;
+    return sortActiveEvents(list);
   }, [goingEvents, filterType]);
 
   const filteredPast = useMemo(() => {

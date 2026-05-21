@@ -564,7 +564,7 @@ export default function Preferences() {
     
     const [loading, setLoading] = useState(true);
     const [err, setErr] = useState<string | null>(null);
-    const [counts, setCounts] = useState({ interests: 0, languages: 0 });
+    const [counts, setCounts] = useState({ interests: 0, languages: 0, services: 0 });
 
     const baseUrl = useMemo(() => (API_BASE ? API_BASE.replace(/\/$/, "") : ""), [API_BASE]);
 
@@ -580,7 +580,8 @@ export default function Preferences() {
             const j = await res.json().catch(() => ({} as any));
             setCounts({
                 interests: Array.isArray(j?.interests) ? j.interests.length : 0,
-                languages: Array.isArray(j?.languages) ? j.languages.length : 0
+                languages: Array.isArray(j?.languages) ? j.languages.length : 0,
+                services: Array.isArray(j?.services) ? j.services.length : 0
             });
         } catch (e: any) { setErr(e?.message || "Failed to load preferences."); }
         finally { setLoading(false); }
@@ -588,9 +589,9 @@ export default function Preferences() {
 
     useEffect(() => { loadProfile(); }, [loadProfile]);
 
-    const navigateTo = (path: "/profile/settings/Languages" | "/profile/settings/Interests") => {
+    const navigateTo = (path: "/profile/settings/Languages" | "/profile/settings/Interests" | "/profile/settings/Services") => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        router.push(path);
+        router.push(path as any);
     };
 
     return (
@@ -639,6 +640,21 @@ export default function Preferences() {
                             <View style={S.cardInfo}>
                                 <Text style={S.cardLabel}>Interests</Text>
                                 <Text style={S.cardSub}>{counts.interests} interests selected</Text>
+                            </View>
+                            <Ionicons name="chevron-forward" size={20} color={COLORS.lightMuted} />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity 
+                            style={S.card} 
+                            onPress={() => navigateTo("/profile/settings/Services")}
+                            activeOpacity={0.7}
+                        >
+                            <View style={[S.iconBox, { backgroundColor: "#ECFDF5" }]}>
+                                <Ionicons name="briefcase-outline" size={24} color="#059669" />
+                            </View>
+                            <View style={S.cardInfo}>
+                                <Text style={S.cardLabel}>Services Provided</Text>
+                                <Text style={S.cardSub}>{counts.services} services selected</Text>
                             </View>
                             <Ionicons name="chevron-forward" size={20} color={COLORS.lightMuted} />
                         </TouchableOpacity>

@@ -67,7 +67,7 @@ function interestIcon(label: string) {
 // ─── Types ────────────────────────────────────────────────────────────────────
 type ProfileData = {
   name?: string; username?: string; about?: string;
-  interests?: string[]; languages?: string[]; photos?: string[]; avatar?: string | null;
+  interests?: string[]; languages?: string[] | null; photos?: string[]; avatar?: string | null;
   rating?: number; eventsHosted?: number; totalAttendees?: number;
   email?: string; city?: string; country?: string;
   // Stats
@@ -75,7 +75,7 @@ type ProfileData = {
   newAttendees?: number;
   thisMonthEarning?: number;
   overallEarning?: number;
-  services?: string[];
+  services?: string[] | null;
   reviewsCount?: number;
 };
 function sanitizePhotos(p?: unknown): string[] {
@@ -182,7 +182,7 @@ export default function ProfileHome() {
       const next: ProfileData = {
         name: s?.name, username: s?.username, about: s?.about,
         interests: Array.isArray(s?.interests) ? s.interests : [],
-        languages: Array.isArray(s?.languages) ? s.languages : [],
+        languages: Array.isArray(s?.languages) && s.languages.length > 0 ? s.languages : null,
         photos: Array.isArray(s?.photos) ? s.photos : [],
         avatar: typeof s?.avatar === "string" ? s.avatar : null,
         rating: s?.rating ?? s?.averageRating ?? 0,
@@ -192,7 +192,7 @@ export default function ProfileHome() {
         newAttendees: s?.newAttendees ?? 0,
         thisMonthEarning: s?.thisMonthEarning ?? 0,
         overallEarning: s?.overallEarning ?? 0,
-        services: Array.isArray(s?.services) ? s.services : [],
+        services: Array.isArray(s?.services) && s.services.length > 0 ? s.services : null,
         reviewsCount: s?.reviewsCount ?? 0,
         email: s?.email ?? "",
         city: s?.city ?? "",
@@ -663,15 +663,16 @@ export default function ProfileHome() {
               </TouchableOpacity>
             </View>
             <View style={S.chipsWrap}>
-              {(profile.languages?.length
-                ? profile.languages
-                : ["English", "Hindi", "French"]
-              ).map(x => (
-                <View key={x} style={S.chip}>
-                  <Ionicons name="language-outline" size={13} color="#555" style={{ marginRight: 4 }} />
-                  <Text style={S.chipTxt}>{x}</Text>
-                </View>
-              ))}
+              {profile.languages?.length ? (
+                profile.languages.map(x => (
+                  <View key={x} style={S.chip}>
+                    <Ionicons name="language-outline" size={13} color="#555" style={{ marginRight: 4 }} />
+                    <Text style={S.chipTxt}>{x}</Text>
+                  </View>
+                ))
+              ) : (
+                <Text style={{ color: "#9CA3AF", fontSize: 14 }}>No languages selected. Tap to choose.</Text>
+              )}
             </View>
           </View>
 
@@ -680,22 +681,35 @@ export default function ProfileHome() {
           <View style={S.sec}>
             <View style={S.secHead}>
               <Text style={S.secTitle}>Services Provided</Text>
-              <TouchableOpacity
-                activeOpacity={0.8}
-                onPress={() => router.push("/profile/settings" as any)}
-              >
-                <Text style={S.viewAllText}>View All</Text>
-              </TouchableOpacity>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                {profile.services?.length ? (
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => router.push("/newApp/home" as any)}
+                  >
+                    <Text style={S.viewAllText}>View All</Text>
+                  </TouchableOpacity>
+                ) : null}
+                <TouchableOpacity
+                  style={S.secEdit}
+                  onPress={() => router.push("/profile/settings/Services" as any)}
+                >
+                  <Ionicons name="pencil" size={13} color="#6C63FF" />
+                </TouchableOpacity>
+              </View>
             </View>
             <View style={S.chipsWrap}>
-              {(profile.services?.length
-                ? profile.services
-                : ["Yoga Classes", "Meditation Session", "Workshops", "Photowalk"]
-              ).map(s => (
-                <View key={s} style={S.chip}>
-                  <Text style={S.chipTxt}>{s}</Text>
-                </View>
-              ))}
+              {profile.services?.length ? (
+                profile.services.map(s => (
+                  <View key={s} style={S.chip}>
+                    <Text style={S.chipTxt}>{s}</Text>
+                  </View>
+                ))
+              ) : (
+                <TouchableOpacity onPress={() => router.push("/profile/settings/Services" as any)}>
+                  <Text style={{ color: "#9CA3AF", fontSize: 14 }}>No services provided. Tap to add.</Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
 

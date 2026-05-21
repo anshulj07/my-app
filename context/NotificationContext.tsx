@@ -55,7 +55,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   }, []);
 
   const refresh = useCallback(async () => {
-    if (!API_BASE || !userId || !onboardingComplete) return;
+    if (!API_BASE || !userId) return;
     setLoading(true);
     try {
       const res = await apiFetch(
@@ -71,10 +71,10 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     } finally {
       setLoading(false);
     }
-  }, [API_BASE, userId, onboardingComplete, headers]);
+  }, [API_BASE, userId, headers]);
 
   useEffect(() => {
-    if (userId && onboardingComplete) {
+    if (userId) {
       refresh();
       // Optional: Polling every 60 seconds
       const timer = setInterval(refresh, 60000);

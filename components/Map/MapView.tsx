@@ -52,6 +52,8 @@ bannerUri?: string | null;
   };
 };
 
+import { textToEmoji } from "../AddEventModal/utils/emoji";
+
 function toNumber(v: any): number | null {
   const n =
     typeof v === "number" ? v : typeof v === "string" && v.trim() ? Number(v) : NaN;
@@ -63,7 +65,7 @@ function normalizeEvent(e: any, i: number): EventPin | null {
   const lng = toNumber(e?.lng ?? e?.location?.lng);
   if (lat == null || lng == null) return null;
   const title = typeof e?.title === "string" ? e.title : "";
-  const emoji = typeof e?.emoji === "string" && e.emoji.trim() ? e.emoji : "📍";
+  const emoji = typeof e?.emoji === "string" && e.emoji.trim() ? e.emoji : textToEmoji(title);
   const rawId = e?._id ?? e?.id ?? e?.eventId ?? "";
   const _id =
     typeof rawId === "string" && rawId.trim()
@@ -92,6 +94,10 @@ function normalizeEvent(e: any, i: number): EventPin | null {
     pendingRequests: Array.isArray(e?.pendingRequests) ? e.pendingRequests : undefined,
     startsAt: e?.startsAt ?? null,
     description: typeof e?.description === "string" ? e.description : undefined,
+    bannerUri: e?.bannerUri ?? e?.bannerImage ?? undefined,
+    bannerImage: e?.bannerImage ?? undefined,
+    creatorName: e?.creatorName ?? undefined,
+    creatorAvatar: e?.creatorAvatar ?? undefined,
   };
 }
 
@@ -163,13 +169,22 @@ export default function MapView({
 
   const safeEventsJson = useMemo(() => JSON.stringify(safeEvents), [safeEvents]);
 
-  // ✅ Use a ref to capture the initial center for the HTML payload.
-  // This prevents the WebView from reloading every time 'center' changes.
+  // ✅ Use a ref to capture the initial center AND initial events for the HTML payload.
+  // This prevents the WebView from reloading when they change.
   const initialHtmlCenter = useRef(center);
+  const initialEventsJson = useRef(safeEventsJson);
+  
   const html = useMemo(
-    () => buildMapHtml({ googleKey: GOOGLE_KEY, eventsJson: safeEventsJson, center: initialHtmlCenter.current, zoom, userId }),
-    [GOOGLE_KEY, safeEventsJson, zoom, userId]
+    () => buildMapHtml({ googleKey: GOOGLE_KEY, eventsJson: initialEventsJson.current, center: initialHtmlCenter.current, zoom, userId }),
+    [GOOGLE_KEY, zoom, userId]
   );
+
+  // ✅ Silently update events in the WebView without reloading the HTML
+  React.useEffect(() => {
+    if (webViewRef.current) {
+      webViewRef.current.postMessage(JSON.stringify({ type: "updateEvents", events: safeEvents }));
+    }
+  }, [safeEventsJson]);
 
   const goToCurrentLocation = async () => {
     if (locLoading) return;
@@ -233,7 +248,7 @@ export default function MapView({
         javaScriptEnabled
         domStorageEnabled
         source={{ html }}
-        key={safeEventsJson + locationStatus} // Removed center from key
+        key={locationStatus}
         onMessage={(e) => {
           try {
             const msg = JSON.parse(e.nativeEvent.data);

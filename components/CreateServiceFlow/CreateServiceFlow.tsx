@@ -25,15 +25,11 @@ import { fetchAutocomplete, fetchPlaceDetails } from "../AddEventModal/google/pl
 import { reverseGeocode } from "../AddEventModal/google/geocode";
 import { buildLocationFromAddressComponents } from "../AddEventModal/location/buildLocation";
 import { makeGoogleMapHtml } from "../AddEventModal/map/googleMapHtml";
+import * as ImagePicker from "expo-image-picker";
+import { CropModal } from "../AddEventModal/CropModal";
 import { styles, C } from "./CreateServiceFlow.styles";
-import { generateReactNativeHelpers } from "@uploadthing/expo";
 
 const API_BASE_RAW = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
-const UT_ENDPOINT = API_BASE_RAW ? `${API_BASE_RAW.replace(/\/$/, "")}/api/uploadthing` : undefined;
-
-const { useImageUploader } = generateReactNativeHelpers({
-  url: UT_ENDPOINT || "http://localhost:3000/api/uploadthing",
-});
 
 interface CompanionType {
   id: string;
@@ -292,6 +288,8 @@ export default function CreateServiceFlow({
   const [chargeMethod, setChargeMethod] = useState<"hour" | "day">("hour");
   const [rate, setRate] = useState("");
   const [bannerUri, setBannerUri] = useState<string | null>(null);
+  const [rawImage, setRawImage] = useState<{ uri: string; w: number; h: number } | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   const [minDuration, setMinDuration] = useState("1 hr");
   const [schedule, setSchedule] = useState([
@@ -329,39 +327,61 @@ export default function CreateServiceFlow({
   const [isSuccess, setIsSuccess] = useState(false);
   const [showEditMenu, setShowEditMenu] = useState(false);
   const [showErrors, setShowErrors] = useState(false);
-  const [overlayVisible, setOverlayVisible] = useState(false);
 
   React.useEffect(() => {
     if (!mapReady || !selectedLoc) return;
     mapRef.current?.postMessage(JSON.stringify({ type: "setMarker", lat: selectedLoc.lat, lng: selectedLoc.lng }));
   }, [selectedLoc, mapReady]);
 
-  const { openImagePicker, isUploading } = useImageUploader("bannerImage", {
-    headers: {
-      ...(EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {}),
-      "ngrok-skip-browser-warning": "1",
-    },
-    onUploadBegin(fileName) { console.log("🟦 [UT][banner] Upload begin:", fileName); },
-    onClientUploadComplete(res) {
-      console.log("🟩 [UT][banner] Upload complete:", res);
-      if (Array.isArray(res) && res.length > 0) {
-        setBannerUri(res[0].url);
-      }
-    },
-    onUploadError(e) {
-      console.log("🟥 [UT][banner] Upload error:", e);
-      Alert.alert("Upload Failed", e.message || "Failed to upload banner.");
-    },
-  });
-
   const handlePick = async (source: "camera" | "gallery") => {
-    await openImagePicker({
-      source: source === "camera" ? "camera" : "library",
-      quality: 0.85,
-      allowsEditing: true,
-      aspect: [16, 9],
-    });
-    setOverlayVisible(false);
+    const result = source === "camera"
+      ? await ImagePicker.launchCameraAsync({ quality: 1, allowsEditing: false })
+      : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 1, allowsEditing: false });
+
+    if (result.canceled || !result.assets?.[0]) return;
+    const asset = result.assets[0];
+    setRawImage({ uri: asset.uri, w: asset.width, h: asset.height });
+  };
+
+  const handleCropConfirm = async (croppedUri: string, base64: string) => {
+    setRawImage(null);
+    console.log("[BannerUpload] crop confirmed, base64 length:", base64.length, "uri:", croppedUri);
+
+    if (!base64) {
+      Alert.alert("Error", "No image data received from crop.");
+      return;
+    }
+    if (!API_BASE_RAW) {
+      Alert.alert("Error", "API base URL not configured.");
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      const endpoint = `${API_BASE_RAW.replace(/\/$/, "")}/api/events/upload-banner`;
+      console.log("[BannerUpload] posting to:", endpoint);
+
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {}),
+        },
+        body: JSON.stringify({ imageBase64: base64, mimeType: "image/jpeg" }),
+      });
+
+      const json = await res.json().catch(() => ({}));
+      console.log("[BannerUpload] response status:", res.status, "body:", JSON.stringify(json));
+
+      if (!res.ok || !json.url) throw new Error(json.error || `Server returned ${res.status}`);
+      console.log("[BannerUpload] success, url:", json.url);
+      setBannerUri(json.url);
+    } catch (e: any) {
+      console.error("[BannerUpload] error:", e?.message ?? e);
+      Alert.alert("Upload Failed", e.message || "Failed to upload banner.");
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const toggleType = (id: string) => {
@@ -594,53 +614,46 @@ export default function CreateServiceFlow({
 
             {/* Banner Section */}
             <Text style={styles.label}>COVER PHOTO (OPTIONAL)</Text>
-            <View style={[styles.bannerZone, bannerUri ? styles.bannerZoneHasImage : {}]}>
-              {isUploading ? (
-                <View style={styles.bannerPlaceholder}>
-                  <ActivityIndicator size="large" color={C.purple} />
-                  <Text style={styles.bannerPlaceholderTitle}>Uploading banner…</Text>
+            
+            {isUploading ? (
+              <View style={styles.bannerZone}>
+                <ActivityIndicator size="large" color={C.purple} />
+                <Text style={styles.bannerPlaceholderTitle}>Uploading banner…</Text>
+              </View>
+            ) : bannerUri ? (
+              <View style={[styles.bannerZone, styles.bannerZoneHasImage]}>
+                <Image source={{ uri: bannerUri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+                <View style={styles.cornerActions}>
+                  <Pressable style={styles.cornerBtn} onPress={() => handlePick("gallery")} hitSlop={6}>
+                    <Ionicons name="pencil" size={14} color="#fff" />
+                  </Pressable>
+                  <Pressable style={[styles.cornerBtn, styles.cornerBtnRed]} onPress={() => setBannerUri(null)} hitSlop={6}>
+                    <Ionicons name="trash-outline" size={14} color="#fff" />
+                  </Pressable>
                 </View>
-              ) : bannerUri ? (
-                <>
-                  <Image source={{ uri: bannerUri }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
-                  <Pressable style={StyleSheet.absoluteFill} onPress={() => setOverlayVisible(v => !v)} />
-                  {overlayVisible && (
-                    <View style={styles.bannerOverlay}>
-                      <Pressable style={styles.bannerOverlayBtn} onPress={() => handlePick("gallery")}>
-                        <Ionicons name="image-outline" size={16} color="#fff" />
-                        <Text style={styles.bannerOverlayBtnText}>Change</Text>
-                      </Pressable>
-                      <Pressable style={[styles.bannerOverlayBtn, styles.bannerOverlayBtnDanger]}
-                        onPress={() => { setBannerUri(null); setOverlayVisible(false); }}>
-                        <Ionicons name="trash-outline" size={16} color="#fff" />
-                        <Text style={styles.bannerOverlayBtnText}>Remove</Text>
-                      </Pressable>
+              </View>
+            ) : (
+              <View>
+                <Pressable
+                  style={styles.bannerZone}
+                  onPress={() => handlePick("gallery")}
+                >
+                  <View style={styles.bannerPlaceholder}>
+                    <View style={styles.bannerPlaceholderIcon}>
+                      <Ionicons name="image-outline" size={28} color={C.purple} />
                     </View>
-                  )}
-                </>
-              ) : (
-                <View style={styles.bannerPlaceholder}>
-                  <View style={styles.bannerPlaceholderIcon}>
-                    <Ionicons name="image-outline" size={28} color={C.purple} />
+                    <Text style={styles.bannerPlaceholderTitle}>Add a cover photo</Text>
+                    <Text style={styles.bannerPlaceholderSub}>Give your service a face — 16:9 works best</Text>
                   </View>
-                  <Text style={styles.bannerPlaceholderTitle}>Add a cover photo</Text>
-                  <Text style={styles.bannerPlaceholderSub}>Give your service a face — 16:9 works best</Text>
-                </View>
-              )}
-            </View>
-
-            {!bannerUri && !isUploading && (
-              <View style={styles.bannerActions}>
-                <TouchableOpacity style={styles.bannerActionBtn}
-                  onPress={() => handlePick("gallery")} activeOpacity={0.88}>
-                  <Ionicons name="images-outline" size={16} color="#fff" />
-                  <Text style={styles.bannerActionBtnText}>Choose photo</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.bannerActionBtnOutline}
-                  onPress={() => handlePick("camera")} activeOpacity={0.88}>
-                  <Ionicons name="camera-outline" size={16} color={C.purple} />
-                  <Text style={styles.bannerActionBtnOutlineText}>Take photo</Text>
-                </TouchableOpacity>
+                </Pressable>
+                
+                <Pressable 
+                  style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, marginTop: 10, paddingVertical: 4 }}
+                  onPress={() => handlePick("camera")}
+                >
+                  <Ionicons name="camera-outline" size={14} color={C.muted} />
+                  <Text style={{ fontSize: 13, color: C.muted, fontWeight: '600' }}>Use Camera</Text>
+                </Pressable>
               </View>
             )}
 
@@ -1316,6 +1329,17 @@ export default function CreateServiceFlow({
           </View>
         </View>
       </Modal>
+  
+      {rawImage && (
+        <CropModal
+          visible
+          uri={rawImage.uri}
+          imgW={rawImage.w}
+          imgH={rawImage.h}
+          onConfirm={handleCropConfirm}
+          onCancel={() => setRawImage(null)}
+        />
+      )}
     </Modal>
   );
 }

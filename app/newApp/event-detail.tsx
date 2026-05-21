@@ -3,11 +3,12 @@ import React, { useCallback, useEffect, useRef, useState, useMemo } from "react"
 import {
   View, Text, ScrollView, TouchableOpacity, ActivityIndicator,
   StyleSheet, Platform, StatusBar, Animated, BackHandler,
-  Dimensions, Image, Share, Modal, TextInput, Alert
+  Dimensions, Share, Modal, TextInput, Alert, InteractionManager
 } from "react-native";
+import { Image } from "expo-image";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import Constants from "expo-constants";
-import { useAuth } from "@clerk/clerk-expo";
+import { useAuth, useUser } from "@clerk/clerk-expo";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { apiFetch } from "../../lib/apiFetch";
@@ -37,9 +38,32 @@ export default function EventDetailScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { userId } = useAuth();
-  const params = useLocalSearchParams<{ eventId: string; title: string; emoji: string; booking?: string; isPast?: string }>();
+  const { user } = useUser();
+  const params = useLocalSearchParams<{ 
+    eventId: string; 
+    title: string; 
+    emoji: string; 
+    booking?: string; 
+    isPast?: string;
+    bannerUri?: string;
+    date?: string;
+    time?: string;
+    formattedAddress?: string;
+    creatorName?: string;
+    creatorAvatar?: string;
+    kind?: string;
+    priceCents?: string;
+    joinPolicy?: string;
+    isJoined?: string;
+    isPending?: string;
+    lat?: string;
+    lng?: string;
+    maxCapacity?: string;
+  }>();
 
-  const [event, setEvent] = useState<any>(null);
+  const [event, setEvent] = useState<any>(() => {
+    try { return params.eventStr ? JSON.parse(params.eventStr) : null; } catch { return null; }
+  });
   const [reviews, setReviews] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showReviewModal, setShowReviewModal] = useState(false);
@@ -64,8 +88,8 @@ export default function EventDetailScreen() {
           method: "GET", headers: { "x-api-key": EVENT_API_KEY || "" },
         })
       ]);
-      const eJson = await eRes.json();
-      const rJson = await rRes.json();
+      const eJson = await eRes.json().catch(() => ({}));
+      const rJson = await rRes.json().catch(() => ({}));
       setEvent(eJson?.event ?? eJson);
       if (rJson.ok) setReviews(rJson.reviews || []);
     } catch (err) {
@@ -75,7 +99,21 @@ export default function EventDetailScreen() {
     }
   }, [params.eventId, API_BASE, EVENT_API_KEY]);
 
-  useEffect(() => { loadAll(); }, [loadAll]);
+  useEffect(() => {
+    try {
+      const parsed = params.eventStr ? JSON.parse(params.eventStr) : null;
+      setEvent(parsed);
+    } catch {
+      setEvent(null);
+    }
+    setReviews([]);
+    setLoading(true);
+    
+    const task = InteractionManager.runAfterInteractions(() => {
+      loadAll();
+    });
+    return () => task.cancel();
+  }, [loadAll]);
 
   // ✅ Android hardware back button — always go exactly one page back
   useEffect(() => {
@@ -110,7 +148,7 @@ export default function EventDetailScreen() {
         setShowReviewModal(false);
         loadAll();
       } else {
-        const errJson = await res.json();
+        const errJson = await res.json().catch(() => ({}));
         Alert.alert("Error", errJson.error || "Failed to submit review");
       }
     } catch (e) {
@@ -137,33 +175,74 @@ export default function EventDetailScreen() {
     } as any);
   };
 
-  const ev = event;
-  const kind = ev?.kind || "event";
+  // ✅ INSTANT FIX: Use parsed event immediately. Fallback to params if not present.
+  const ev = (event?._id === params.eventId || event?.eventId === params.eventId) ? event : null;
+  const kind = ev?.kind || params.kind || "event";
   const isService = kind === "service";
 
   const title = ev?.title || params.title || "Event";
-  const banner = ev?.bannerUri || (ev as any)?.bannerImage || "";
+  const banner = ev?.bannerUri || (ev as any)?.bannerImage || params.bannerUri || "";
   const attendees = ev?.attendees ?? [];
-  const price = ev?.kind === "free" ? "Free" : `₹${((ev?.priceCents ?? 0)/100).toFixed(0)}`;
-  const isHost = userId === (ev?.creatorClerkId || ev?.clerkUserId);
+  const price = ev?.kind === "free" || params.kind === "free" ? "Free" : `₹${(((ev?.priceCents || Number(params.priceCents || 0)) ?? 0)/100).toFixed(0)}`;
+  const isHost = userId === (ev?.creatorClerkId || ev?.clerkUserId) || (ev == null && !!params.creatorClerkId && userId === params.creatorClerkId);
+
+  // ✅ Fix: Instantly use the current user's profile if they are the host, instead of "Local Host"
+  let finalCreatorName = ev?.creatorName || params.creatorName || "Local Host";
+  let finalCreatorAvatar = ev?.creatorAvatar || params.creatorAvatar || "https://i.pravatar.cc/100";
+
+  if (isHost && (finalCreatorName === "Local Host" || !finalCreatorName)) {
+    finalCreatorName = user?.fullName || user?.firstName || "Local Host";
+  }
+  if (isHost && (!finalCreatorAvatar || finalCreatorAvatar.includes("pravatar"))) {
+    finalCreatorAvatar = user?.imageUrl || "https://i.pravatar.cc/100";
+  }
 
   const joinedInfo = useMemo(() => {
-    if (!userId || !ev?.attendees) return null;
-    return (ev.attendees as any[]).find(a => (a.clerkId || a.clerkUserId || a.userId) === userId);
-  }, [userId, ev?.attendees]);
+    if (!userId) return null;
+    if (ev?.attendees) {
+      return (ev.attendees as any[]).find(a => (a.clerkId || a.clerkUserId || a.userId) === userId);
+    }
+    return params.isJoined === "true" ? { clerkId: userId } : null;
+  }, [userId, ev?.attendees, params.isJoined]);
 
   const isJoined = !!joinedInfo;
   const isPast   = params.isPast === "true" || ev?.status === "completed" || ev?.status === "past";
+  
+  const pendingInfo = useMemo(() => {
+    if (!userId) return null;
+    if (ev?.pendingRequests) {
+      return (ev.pendingRequests as any[]).find(p => (p.clerkUserId || p.userId) === userId);
+    }
+    return params.isPending === "true" ? { clerkUserId: userId } : null;
+  }, [userId, ev?.pendingRequests, params.isPending]);
 
+  const isPending = !!pendingInfo;
   const startMs = useMemo(() => {
-    if (!ev) return Number.POSITIVE_INFINITY;
-    if (ev.startsAt) { const t = new Date(ev.startsAt).getTime(); if (Number.isFinite(t)) return t; }
-    const date = (ev.date ?? "").trim();
-    const time = (ev.time ?? "").trim();
-    if (date && time) { const t = new Date(`${date} ${time}`).getTime(); if (Number.isFinite(t)) return t; }
-    if (date) { const t = new Date(date).getTime(); if (Number.isFinite(t)) return t; }
+    if (ev?.startsAt) { const t = new Date(ev.startsAt).getTime(); if (Number.isFinite(t)) return t; }
+    if (ev?.date || params.date) {
+      const date = (ev?.date || params.date || "").trim();
+      const time = (ev?.time || params.time || "").trim();
+      if (date && time) { const t = new Date(`${date} ${time}`).getTime(); if (Number.isFinite(t)) return t; }
+      if (date) { const t = new Date(date).getTime(); if (Number.isFinite(t)) return t; }
+    }
     return Number.POSITIVE_INFINITY;
-  }, [ev]);
+  }, [ev, params.date, params.time]);
+
+  const isLive = useMemo(() => {
+    const status = String(ev?.status || "active").toLowerCase();
+    if (status === "ended" || status === "completed" || status === "past") return false;
+    if (status === "live" || status === "ongoing") return true;
+    if (!Number.isFinite(startMs) || startMs === Number.POSITIVE_INFINITY) return false;
+    const now = Date.now();
+    const endTs = ev?.endsAt ? new Date(ev.endsAt).getTime() : startMs + (4 * 3600000);
+    return now >= startMs && now <= endTs;
+  }, [ev?.status, ev?.endsAt, startMs]);
+
+  const joinPolicy = ev?.joinPolicy || params.joinPolicy || "anyone_can_join";
+  const maxCapacity = ev?.maxCapacity || (params.maxCapacity ? Number(params.maxCapacity) : undefined);
+  
+  const isFull   = ev?.maxCapacity && attendees.length >= ev.maxCapacity;
+  const isButtonDisabled = submitting || (isFull && !isJoined && !isPending) || (isLive && !isJoined && !isPending);
 
   const showOtp = useMemo(() => {
     if (!isJoined) return false;
@@ -176,9 +255,14 @@ export default function EventDetailScreen() {
 
 
   const handleLeave = async () => {
+    const titleText = isPending ? "Cancel Join Request" : "Leave Event";
+    const msgText = isPending 
+      ? "Are you sure you want to cancel your registration request?" 
+      : "Are you sure you want to cancel your registration?";
+
     Alert.alert(
-      "Leave Event",
-      "Are you sure you want to cancel your registration?",
+      titleText,
+      msgText,
       [
         { text: "No", style: "cancel" },
         { 
@@ -196,11 +280,11 @@ export default function EventDetailScreen() {
                 }),
               });
               if (res.ok) {
-                Alert.alert("Cancelled", "You have left the event.");
+                Alert.alert("Cancelled", isPending ? "Your request has been cancelled." : "You have left the event.");
                 loadAll();
               } else {
-                const json = await res.json();
-                Alert.alert("Error", json.error || "Failed to leave");
+                const json = await res.json().catch(() => ({}));
+                Alert.alert("Error", json.error || "Failed to cancel");
               }
             } catch {
               Alert.alert("Error", "Something went wrong");
@@ -241,13 +325,7 @@ export default function EventDetailScreen() {
     });
   };
 
-  if (loading) {
-    return (
-      <View style={[S.screen, { justifyContent: "center", alignItems: "center" }]}>
-        <ActivityIndicator size="large" color={C.accent} />
-      </View>
-    );
-  }
+  // Removed full-screen white loading spinner early-return block to enable instant 0ms preloading!
 
   return (
     <View style={S.screen}>
@@ -260,9 +338,12 @@ export default function EventDetailScreen() {
             <Ionicons name="chevron-back" size={24} color={C.ink} />
           </TouchableOpacity>
           <Text style={S.stickyTitle} numberOfLines={1}>{title}</Text>
-          <TouchableOpacity onPress={handleShare} style={S.navIconBtn}>
-            <Ionicons name="share-social-outline" size={22} color={C.ink} />
-          </TouchableOpacity>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            {loading && <ActivityIndicator size="small" color={C.accent} />}
+            <TouchableOpacity onPress={handleShare} style={S.navIconBtn}>
+              <Ionicons name="share-social-outline" size={22} color={C.ink} />
+            </TouchableOpacity>
+          </View>
         </View>
       </Animated.View>
 
@@ -279,7 +360,7 @@ export default function EventDetailScreen() {
         {/* HERO BANNER */}
         <View style={S.bannerContainer}>
           {banner ? (
-            <Image source={{ uri: banner }} style={S.banner} resizeMode="cover" />
+            <Image source={{ uri: banner }} style={S.banner} contentFit="cover" transition={300} />
           ) : (
             <View style={[S.banner, { backgroundColor: "#E5E7EB", justifyContent: "center", alignItems: "center" }]}>
               <Text style={{ fontSize: 80 }}>{ev?.emoji || "📍"}</Text>
@@ -304,8 +385,29 @@ export default function EventDetailScreen() {
         {/* FLOATING INFO CARD */}
         <View style={S.floatingCard}>
           <View style={S.rowBetween}>
-            <View style={S.categoryTag}>
-              <Text style={S.categoryText}>{(ev?.kind || "Event").toUpperCase()}</Text>
+            <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+              <View style={S.categoryTag}>
+                <Text style={S.categoryText}>{kind.toUpperCase()}</Text>
+              </View>
+              {/* JOIN POLICY BADGE */}
+              <View style={[
+                S.policyTag, 
+                joinPolicy === "approval" 
+                  ? { backgroundColor: "#FDF2F8", borderColor: "#FBCFE8" } // Soft pink/rose for approval
+                  : { backgroundColor: "#ECFDF5", borderColor: "#A7F3D0" } // Soft emerald green for open join
+              ]}>
+                <Ionicons 
+                  name={joinPolicy === "approval" ? "shield-checkmark-outline" : "globe-outline"} 
+                  size={12} 
+                  color={joinPolicy === "approval" ? "#DB2777" : "#059669"} 
+                />
+                <Text style={[
+                  S.policyTagText, 
+                  { color: joinPolicy === "approval" ? "#DB2777" : "#059669" }
+                ]}>
+                  {joinPolicy === "approval" ? "Approval Required" : "Anyone Can Join"}
+                </Text>
+              </View>
             </View>
             <View style={S.ratingBadge}>
               <Ionicons name="star" size={14} color={C.gold} />
@@ -318,22 +420,21 @@ export default function EventDetailScreen() {
           <View style={[S.row, { gap: 20, marginTop: 12 }]}>
             <View style={S.row}>
               <Ionicons name={isService ? "calendar-clear-outline" : "calendar-outline"} size={16} color={C.accent} />
-              <Text style={S.statText}>{ev?.date || (isService ? "Flexible Schedule" : "TBD")}</Text>
+              <Text style={S.statText}>{ev?.date || params.date || (isService ? "Flexible Schedule" : "TBD")}</Text>
             </View>
             <View style={S.row}>
               <Ionicons name={isService ? "timer-outline" : "time-outline"} size={16} color={C.accent} />
-              <Text style={S.statText}>{isService ? (ev?.duration || "1 Hour Session") : (ev?.time || "TBD")}</Text>
+              <Text style={S.statText}>{isService ? (ev?.duration || "1 Hour Session") : (ev?.time || params.time || "TBD")}</Text>
             </View>
           </View>
 
-          {ev?.maxCapacity && (
-            <View style={[S.row, { marginTop: 12, backgroundColor: "#F1F5F9", alignSelf: "flex-start", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }]}>
-              <Ionicons name="people-outline" size={14} color={C.ink2} />
-              <Text style={[S.statText, { fontSize: 11, color: C.ink2 }]}>
-                {attendees.length} / {ev.maxCapacity} {isService ? "Spots Booked" : "Joined"}
-              </Text>
-            </View>
-          )}
+          {/* REAL-TIME CAPACITY PILL */}
+          <View style={[S.row, { marginTop: 15, backgroundColor: "#F1F5F9", alignSelf: "flex-start", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }]}>
+            <Ionicons name="people-outline" size={14} color={C.ink2} />
+            <Text style={[S.statText, { fontSize: 11, color: C.ink2 }]}>
+              {maxCapacity ? `${attendees.length}/${maxCapacity}` : (loading ? "..." : "No Limit")}
+            </Text>
+          </View>
         </View>
 
         {/* ── JOINED OTP DISPLAY ── */}
@@ -365,11 +466,31 @@ export default function EventDetailScreen() {
 
         {/* HOST ROW */}
         <View style={S.hostCard}>
-          <Image source={{ uri: ev?.creatorAvatar || "https://i.pravatar.cc/100" }} style={S.hostImg} />
-          <View style={{ flex: 1 }}>
-            <Text style={S.hostName}>{ev?.creatorName || "Local Host"}</Text>
-            <Text style={S.hostSub}>HOST & ORGANIZER</Text>
-          </View>
+          <TouchableOpacity 
+            style={{ flexDirection: "row", alignItems: "center", gap: 15, flex: 1 }}
+            onPress={() => {
+              const hostId = ev?.creatorClerkId || ev?.clerkUserId || params.creatorClerkId;
+              if (hostId) {
+                router.push({ pathname: "/profile/[clerkUserId]", params: { clerkUserId: hostId } } as any);
+              }
+            }}
+            activeOpacity={0.7}
+          >
+            <Image 
+              source={{ uri: finalCreatorAvatar }} 
+              style={S.hostImg} 
+              contentFit="cover" 
+              transition={200} 
+            />
+            <View style={{ flex: 1, justifyContent: "center" }}>
+              {loading && finalCreatorName === "Local Host" && !isHost ? (
+                <ActivityIndicator size="small" color={C.accent} style={{ alignSelf: "flex-start", marginBottom: 2 }} />
+              ) : (
+                <Text style={S.hostName}>{finalCreatorName}</Text>
+              )}
+              <Text style={S.hostSub}>HOST & ORGANIZER</Text>
+            </View>
+          </TouchableOpacity>
           {!isHost && (
             <TouchableOpacity style={S.messageBtn} onPress={handleMessageHost}>
               <Text style={S.messageBtnText}>Message</Text>
@@ -381,7 +502,7 @@ export default function EventDetailScreen() {
         <View style={S.section}>
           <Text style={S.sectionTitle}>About the {isService ? "Service" : "Event"}</Text>
           <Text style={S.aboutText}>
-            {ev?.description || `Experience an unforgettable ${isService ? "service" : "evening"}. Join us for a perfect blend of networking, music, and great vibes.`}
+            {ev?.description || (loading ? "Loading details from network..." : `Experience an unforgettable ${isService ? "service" : "evening"}. Join us for a perfect blend of networking, music, and great vibes.`)}
           </Text>
         </View>
 
@@ -415,23 +536,34 @@ export default function EventDetailScreen() {
             </TouchableOpacity>
           </View>
           <View style={S.attendeeRow}>
-            <View style={S.avatarStack}>
-              {attendees.slice(0, 4).map((att: any, i: number) => (
-                <View key={i} style={[S.avatarWrap, { marginLeft: i === 0 ? 0 : -15 }]}>
-                  <Image source={{ uri: att.userAvatar || `https://i.pravatar.cc/100?u=${i}` }} style={S.avatar} />
+            {loading && attendees.length === 0 ? (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 10 }}>
+                <ActivityIndicator size="small" color={C.accent} />
+                <Text style={[S.goingCountText, { color: C.muted }]}>Refreshing guest list...</Text>
+              </View>
+            ) : (
+              <>
+                <View style={S.avatarStack}>
+                  {attendees.slice(0, 4).map((att: any, i: number) => (
+                    <View key={i} style={[S.avatarWrap, { marginLeft: i === 0 ? 0 : -15 }]}>
+                      <Image source={{ uri: att.imageUrl || `https://i.pravatar.cc/100?u=${att.clerkId || i}` }} style={S.avatar} contentFit="cover" transition={200} />
+                    </View>
+                  ))}
+                  {attendees.length > 4 && (
+                    <View style={[S.avatarWrap, S.extraAvatar, { marginLeft: -15 }]}>
+                      <Text style={S.extraText}>+{attendees.length - 4}</Text>
+                    </View>
+                  )}
                 </View>
-              ))}
-              {attendees.length > 4 && (
-                <View style={[S.avatarWrap, S.extraAvatar, { marginLeft: -15 }]}>
-                  <Text style={S.extraText}>+{attendees.length - 4}</Text>
-                </View>
-              )}
-            </View>
-            <Text style={S.goingCountText}>
-              {attendees.length > 0 
-                ? `${attendees.length} ${isService ? "people have booked this" : "people have already joined"}` 
-                : isService ? "Be the first one to book!" : "Be the first one to join!"}
-            </Text>
+                <Text style={S.goingCountText}>
+                  {attendees.length > 0 
+                    ? attendees.length === 1
+                      ? `${attendees[0].name || "1 person"} has already joined`
+                      : `${attendees[0].name || "1 person"} and ${attendees.length - 1} others joined`
+                    : isService ? "Be the first one to book!" : "Be the first one to join!"}
+                </Text>
+              </>
+            )}
           </View>
         </View>
 
@@ -449,13 +581,18 @@ export default function EventDetailScreen() {
           </View>
           
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 15, paddingRight: 20, paddingTop: 15 }}>
-            {reviews.length > 0 ? (
+            {loading ? (
+              <View style={[S.reviewCard, { width: SW - 80, alignItems: 'center', justifyContent: 'center', minHeight: 100 }]}>
+                <ActivityIndicator size="small" color={C.accent} />
+                <Text style={[S.muted, { marginTop: 8 }]}>Loading reviews...</Text>
+              </View>
+            ) : reviews.length > 0 ? (
               <>
                 {reviews.slice(0, 10).map((r, i) => (
                   <View key={i} style={S.reviewCard}>
                     <View style={S.rowBetween}>
                       <View style={S.row}>
-                        <Image source={{ uri: r.userAvatar || "https://i.pravatar.cc/100" }} style={S.reviewAvatar} />
+                        <Image source={{ uri: r.userAvatar || "https://i.pravatar.cc/100" }} style={S.reviewAvatar} contentFit="cover" transition={200} />
                         <View style={{ marginLeft: 10 }}>
                           <Text style={S.reviewName}>{r.userName || "Guest"}</Text>
                           <Text style={S.reviewTime}>3 weeks ago</Text>
@@ -491,6 +628,8 @@ export default function EventDetailScreen() {
              <Image 
               source={{ uri: `https://maps.googleapis.com/maps/api/staticmap?center=${ev?.location?.lat || 22.7196},${ev?.location?.lng || 75.8577}&zoom=14&size=600x400&scale=2&markers=color:purple%7C${ev?.location?.lat || 22.7196},${ev?.location?.lng || 75.8577}&key=${(Constants.expoConfig?.extra as any)?.googleMapsKey}` }} 
               style={StyleSheet.absoluteFill} 
+              contentFit="cover"
+              transition={300}
             />
           </View>
         </View>
@@ -527,7 +666,12 @@ export default function EventDetailScreen() {
               {isJoined ? (
                 <>
                   <Text style={S.footerLabel}>Status</Text>
-                  <Text style={[S.footerPrice, { color: C.green }]}>Registered</Text>
+                  <Text style={[S.footerPrice, { color: C.green, fontSize: 16 }]}>Joined ✓</Text>
+                </>
+              ) : isPending ? (
+                <>
+                  <Text style={S.footerLabel}>Status</Text>
+                  <Text style={[S.footerPrice, { color: C.gold, fontSize: 16 }]}>Pending Approval</Text>
                 </>
               ) : (
                 <>
@@ -537,36 +681,46 @@ export default function EventDetailScreen() {
               )}
             </View>
             <JoinEventButton
-              eventId={params.eventId}
-              kind={kind as any}
-              priceCents={ev?.priceCents}
-              eventTitle={title}
-              eventLocation={ev?.location?.formattedAddress}
-              creatorClerkId={ev?.creatorClerkId || ev?.clerkUserId}
-              startDate={ev?.startsAt || ev?.date}
-              durationHrs={ev?.durationHours || 1}
-              autoOpen={params.booking === "true"}
-              eventLat={ev?.location?.lat}
-              eventLng={ev?.location?.lng}
-              onJoined={() => loadAll()}
-              customTrigger={(onPress) => (
-                <TouchableOpacity 
-                  style={[S.reserveBtn, isJoined && { backgroundColor: C.red }]} 
-                  onPress={isJoined ? handleLeave : onPress}
-                  disabled={submitting}
-                >
-                  {submitting ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <>
-                      <Text style={S.reserveText}>{isJoined ? "Cancel Booking" : isService ? "Book Now" : "Join Now"}</Text>
-                      {!isJoined && <Ionicons name="arrow-forward" size={18} color="#fff" />}
-                      {isJoined && <Ionicons name="close-circle" size={18} color="#fff" />}
-                    </>
-                  )}
-                </TouchableOpacity>
-              )}
-            />
+               eventId={params.eventId}
+               kind={kind as any}
+               priceCents={ev?.priceCents || Number(params.priceCents || 0)}
+               eventTitle={title}
+               eventLocation={ev?.location?.formattedAddress || params.formattedAddress}
+               creatorClerkId={ev?.creatorClerkId || ev?.clerkUserId}
+               startDate={ev?.startsAt || ev?.date || params.date}
+               durationHrs={ev?.durationHours || 1}
+               autoOpen={params.booking === "true"}
+               eventLat={ev?.location?.lat || (params.lat ? Number(params.lat) : undefined)}
+               eventLng={ev?.location?.lng || (params.lng ? Number(params.lng) : undefined)}
+               onJoined={() => loadAll()}
+               joinPolicy={joinPolicy}
+               disabled={isButtonDisabled}
+               customTrigger={(onPress) => (
+                 <TouchableOpacity 
+                   style={[
+                     S.reserveBtn, 
+                     (isJoined || isPending) && { backgroundColor: C.red },
+                     (isFull && !isJoined && !isPending) && { backgroundColor: "#9CA3AF" },
+                     (isLive && !isJoined && !isPending) && { backgroundColor: "#ef4444" }
+                   ]} 
+                   onPress={(isJoined || isPending) ? handleLeave : onPress}
+                   disabled={isButtonDisabled}
+                 >
+                   {submitting || (loading && !ev) ? (
+                     <ActivityIndicator color="#fff" />
+                   ) : (
+                     <>
+                       <Text style={S.reserveText}>
+                         {isJoined ? "Cancel Booking" : (isPending ? "Cancel Request" : (isLive ? "Event Live" : (isFull ? "Event Full" : (isService ? "Book Now" : "Join Now"))))}
+                       </Text>
+                       {!isJoined && !isPending && !isFull && !isLive && <Ionicons name="arrow-forward" size={18} color="#fff" />}
+                       {!isJoined && (isFull || isLive) && !isPending && <Ionicons name="lock-closed" size={18} color="#fff" />}
+                       {(isJoined || isPending) && <Ionicons name="close-circle" size={18} color="#fff" />}
+                     </>
+                   )}
+                 </TouchableOpacity>
+               )}
+             />
           </>
         ) : (
           // ── ACTIVE EVENT (HOST) ──
@@ -673,10 +827,64 @@ const S = StyleSheet.create({
   },
   categoryTag: { backgroundColor: "#EEF2FF", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   categoryText: { color: C.accent, fontSize: 10, fontFamily: "Outfit_700Bold" },
+  policyTag: {
+     flexDirection: "row",
+     alignItems: "center",
+     gap: 4,
+     paddingHorizontal: 8,
+     paddingVertical: 4,
+     borderRadius: 8,
+     borderWidth: 1,
+   },
+   policyTagText: {
+     fontSize: 10,
+     fontFamily: "Outfit_700Bold",
+   },
   ratingBadge: { flexDirection: "row", alignItems: "center", gap: 4 },
   ratingText: { fontFamily: "Outfit_700Bold", color: C.ink },
   mainTitle: { fontSize: 26, fontFamily: "Outfit_700Bold", color: C.ink, marginTop: 10 },
   statText: { fontSize: 13, fontFamily: "Outfit_500Medium", color: C.ink2, marginLeft: 6 },
+  capacityContainer: {
+     marginTop: 15,
+     paddingTop: 15,
+     borderTopWidth: 1,
+     borderTopColor: "#F1F5F9",
+     width: "100%",
+   },
+   capacityLabel: {
+     fontSize: 12,
+     fontFamily: "Outfit_700Bold",
+     color: C.muted,
+   },
+   capacityValue: {
+     fontSize: 13,
+     fontFamily: "Outfit_800ExtraBold",
+     color: C.ink,
+   },
+   progressBarBackground: {
+     height: 8,
+     backgroundColor: "#F1F5F9",
+     borderRadius: 4,
+     marginTop: 8,
+     overflow: "hidden",
+     width: "100%",
+   },
+   progressBarFill: {
+     height: "100%",
+     borderRadius: 4,
+   },
+   capacityLeft: {
+     fontSize: 11,
+     fontFamily: "Outfit_600SemiBold",
+     color: C.muted,
+     marginTop: 6,
+   },
+   capacityWarning: {
+     fontSize: 11,
+     fontFamily: "Outfit_700Bold",
+     color: C.red,
+     marginTop: 6,
+   },
 
   section: { paddingHorizontal: PAD, marginTop: 30 },
   sectionTitle: { fontSize: 20, fontFamily: "Outfit_700Bold", color: C.ink, marginBottom: 15 },

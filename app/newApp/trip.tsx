@@ -75,6 +75,7 @@ type TripEvent = {
     countryCode?: string;
   };
   creatorName?: string;
+  distanceKm?: number;
 };
 
 async function apiFetch(url: string, opts: any) {
@@ -113,10 +114,12 @@ function HeroCard({ ev, onPress }: { ev: TripEvent; onPress?: () => void }) {
               <Ionicons name="time-outline" size={12} color="#fff" />
               <Text style={S.heroMetaText}>Today, {ev.time || "18:30"}</Text>
             </View>
-            <View style={[S.heroMetaItem, { marginLeft: 12 }]}>
-              <Ionicons name="navigate-outline" size={12} color="#fff" />
-              <Text style={S.heroMetaText}>1.2 km away</Text>
-            </View>
+            {ev.distanceKm !== undefined && (
+              <View style={[S.heroMetaItem, { marginLeft: 12 }]}>
+                <Ionicons name="navigate-outline" size={12} color="#fff" />
+                <Text style={S.heroMetaText}>{ev.distanceKm < 1 ? "< 1" : ev.distanceKm.toFixed(1)} km away</Text>
+              </View>
+            )}
           </View>
 
           <TouchableOpacity style={S.heroJoinBtn} onPress={onPress}>
@@ -175,6 +178,7 @@ export default function TripScreen() {
   const [selectedEvent, setSelectedEvent] = useState<EventPin | null>(null);
   const [filters, setFilters] = useState<FilterData | null>(null);
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [userCountry, setUserCountry] = useState<string>("");
   const [displayCount, setDisplayCount] = useState(50);
   const LOAD_MORE_SIZE = 50;
 
@@ -193,6 +197,7 @@ export default function TripScreen() {
         const rev = await Location.reverseGeocodeAsync({ latitude: cur.coords.latitude, longitude: cur.coords.longitude });
         const c = (rev?.[0]?.city || rev?.[0]?.district || rev?.[0]?.subregion || "").trim();
         if (c) setCity(c);
+        if (rev?.[0]?.country) setUserCountry(rev[0].country);
       } catch {}
     })();
   }, []);
@@ -316,10 +321,39 @@ export default function TripScreen() {
       }
     }
 
-    return list;
+    return list.map(e => {
+      let distanceKm = undefined;
+      const lat = Number(e.location?.lat);
+      const lng = Number(e.location?.lng);
+      if (userCoords && isFinite(lat) && isFinite(lng)) {
+        distanceKm = getDistance(userCoords.lat, userCoords.lng, lat, lng);
+      }
+      return { ...e, distanceKm };
+    });
   }, [events, search, catFilter, filters, userCoords, userId]);
 
-  const heroEvents = useMemo(() => filtered.slice(0, 3), [filtered]);
+  const heroEvents = useMemo(() => {
+    // Show most popular events in the Hero banner (Country-wise if available)
+    let candidates = filtered;
+    if (userCountry) {
+      const q = userCountry.toLowerCase();
+      const inCountry = filtered.filter(e => {
+        const cName = (e.location?.countryName || "").toLowerCase();
+        const cCode = (e.location?.countryCode || "").toLowerCase();
+        return cName.includes(q) || q.includes(cName) || cCode === q;
+      });
+      if (inCountry.length > 0) {
+        candidates = inCountry;
+      }
+    }
+
+    const sorted = [...candidates].sort((a, b) => {
+      const aAtt = (a as any).attendance || (a as any).attendees?.length || 0;
+      const bAtt = (b as any).attendance || (b as any).attendees?.length || 0;
+      return bAtt - aAtt;
+    });
+    return sorted.slice(0, 15);
+  }, [filtered, userCountry]);
 
   const nearbyEvents = useMemo(() => {
     if (!city || city === "Nearby") return filtered.slice(0, 8);
@@ -356,7 +390,8 @@ export default function TripScreen() {
         creatorAvatar: (ev as any).creatorAvatar || "",
         kind: ev.kind || "event",
         priceCents: String((ev as any).priceCents ?? 0),
-        joinPolicy: (ev as any).joinPolicy || "anyone_can_join"
+        joinPolicy: (ev as any).joinPolicy || "anyone_can_join",
+        eventStr: JSON.stringify(ev)
       }
     });
   };
@@ -410,7 +445,27 @@ export default function TripScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.accent} />}
         contentContainerStyle={{ paddingBottom: 110 }}
       >
-        {loading && !refreshing ? (
+        {/* BROWSE BY CATEGORY */}
+        <View style={[S.section, { marginTop: 10, marginBottom: 20 }]}>
+          <View style={S.sectionHead}>
+            <Text style={S.sectionTitle}>Browse by Category</Text>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={S.catScroll}>
+            {CATS.map(cat => {
+              const active = catFilter === cat.key;
+              return (
+                <TouchableOpacity key={cat.key} style={S.catItem} onPress={() => { setCatFilter(cat.key); setDisplayCount(50); }} activeOpacity={0.78}>
+                  <View style={[S.catCircle, { backgroundColor: active ? cat.color : "#F0F0F0" }]}>
+                    <Ionicons name={cat.icon as any} size={22} color={active ? "#fff" : cat.color} />
+                  </View>
+                  <Text style={[S.catLabel, { color: active ? cat.color : C.muted }]}>{cat.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        {loading && !refreshing && filtered.length === 0 ? (
           <View style={S.center}>
             <ActivityIndicator size="large" color={C.accent} />
             <Text style={S.loadingTxt}>Finding events…</Text>
@@ -454,25 +509,7 @@ export default function TripScreen() {
               </ScrollView>
             )}
 
-            {/* BROWSE BY CATEGORY */}
-            <View style={S.section}>
-              <View style={S.sectionHead}>
-                <Text style={S.sectionTitle}>Browse by Category</Text>
-              </View>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={S.catScroll}>
-                {CATS.map(cat => {
-                  const active = catFilter === cat.key;
-                  return (
-                    <TouchableOpacity key={cat.key} style={S.catItem} onPress={() => { setCatFilter(cat.key); setDisplayCount(50); }} activeOpacity={0.78}>
-                      <View style={[S.catCircle, { backgroundColor: active ? cat.color : "#F0F0F0" }]}>
-                        <Ionicons name={cat.icon as any} size={22} color={active ? "#fff" : cat.color} />
-                      </View>
-                      <Text style={[S.catLabel, { color: active ? cat.color : C.muted }]}>{cat.label}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            </View>
+
 
             {/* UPCOMING NEAR YOU */}
             <View style={S.section}>
@@ -523,7 +560,9 @@ export default function TripScreen() {
                             <Text style={S.compactServiceTitle} numberOfLines={1}>{ev.title}</Text>
                             <View style={S.compactServiceMeta}>
                               <Ionicons name="star" size={10} color={C.gold} />
-                              <Text style={S.compactServiceMetaTxt}>4.9 • 1.2km</Text>
+                              <Text style={S.compactServiceMetaTxt}>
+                                4.9 {ev.distanceKm !== undefined ? `• ${ev.distanceKm < 1 ? "< 1" : ev.distanceKm.toFixed(1)}km` : ""}
+                              </Text>
                             </View>
                           </View>
                         </TouchableOpacity>

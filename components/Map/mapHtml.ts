@@ -538,6 +538,18 @@ export function buildMapHtml(args: {
     *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
     html,body,#map{height:100%;margin:0;padding:0;overflow:hidden}
     #pin-canvas{position:absolute;top:0;left:0;pointer-events:none;z-index:1;}
+    #live-pins-container { position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:2; }
+    .live-ring {
+      position: absolute;
+      border: 3px solid #ef4444;
+      border-radius: 50%;
+      pointer-events: none;
+      animation: pulse-ring 1.5s infinite ease-out;
+    }
+    @keyframes pulse-ring {
+      0% { transform: scale(0.8); opacity: 1; }
+      100% { transform: scale(1.6); opacity: 0; }
+    }
 
     /* ══ BOTTOM SHEET ══ */
     #stack-popup{
@@ -585,6 +597,7 @@ export function buildMapHtml(args: {
 <body>
   <div id="map"></div>
   <canvas id="pin-canvas"></canvas>
+  <div id="live-pins-container"></div>
   <div id="stack-popup">
     <div id="stack-handle"></div>
     <div id="stack-header">
@@ -637,6 +650,24 @@ export function buildMapHtml(args: {
       el.textContent=t;el.classList.add('show');
       clearTimeout(toastTimer);
       toastTimer=setTimeout(function(){el.classList.remove('show');},2200);
+    }
+
+    function eventStartMs(ev) {
+      if (ev.startsAt) { var t = new Date(ev.startsAt).getTime(); if (isFinite(t)) return t; }
+      var date = (ev.date || "").trim(), time = (ev.time || "").trim();
+      if (date && time) { var t = new Date(date + ' ' + time).getTime(); if (isFinite(t)) return t; }
+      if (date) { var t = new Date(date).getTime(); if (isFinite(t)) return t; }
+      return Infinity;
+    }
+    function isEventLive(ev) {
+      var status = String(ev.status || "active").toLowerCase();
+      if (status === "ended" || status === "completed" || status === "past") return false;
+      if (status === "live" || status === "ongoing") return true;
+      var start = eventStartMs(ev);
+      if (!isFinite(start) || start === Infinity) return false;
+      var now = Date.now();
+      var endTs = ev.endsAt ? new Date(ev.endsAt).getTime() : start + (4 * 3600000);
+      return now >= start && now <= endTs;
     }
 
     function isOwn(ev){ return MY_ID && String(ev.creatorClerkId||'')===MY_ID; }
@@ -808,6 +839,9 @@ export function buildMapHtml(args: {
       ctx.clearRect(0,0,canvas.width,canvas.height);
       ctx.restore();
 
+      var liveContainer = document.getElementById('live-pins-container');
+      if(liveContainer) liveContainer.innerHTML = '';
+
       for(var i=0;i<clusters.length;i++){
         var g=clusters[i];
         var x=g.cx, y=g.cy;
@@ -815,9 +849,20 @@ export function buildMapHtml(args: {
         if(g.items.length===1){
           // ── Single Pin ─────────────────────────────────────
           var ev=g.items[0].ev;
-          var color=pinColor(ev);
+          var isLive = isEventLive(ev);
+          var color = isLive ? '#ef4444' : pinColor(ev);
           var isSel=ev._id&&ev._id===selectedId;
           var r=isSel?PIN_R+5:PIN_R;
+
+          if (isLive && liveContainer) {
+            var ring = document.createElement('div');
+            ring.className = 'live-ring';
+            ring.style.width = (r*2) + 'px';
+            ring.style.height = (r*2) + 'px';
+            ring.style.left = (x - r) + 'px';
+            ring.style.top = (y - r) + 'px';
+            liveContainer.appendChild(ring);
+          }
 
           ctx.save();
 

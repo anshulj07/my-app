@@ -143,7 +143,8 @@ export default function MyBookingsScreen() {
         creatorAvatar: (ev as any).creatorAvatar || "",
         kind: ev.kind || "event",
         priceCents: String((ev as any).priceCents ?? 0),
-        joinPolicy: (ev as any).joinPolicy || "anyone_can_join"
+        joinPolicy: (ev as any).joinPolicy || "anyone_can_join",
+        eventStr: JSON.stringify(ev)
       }
     });
   };
@@ -226,18 +227,28 @@ export default function MyBookingsScreen() {
     });
   };
 
+  const sortActiveEvents = (list: EventDoc[]) => {
+    return [...list].sort((a, b) => {
+      const stateA = getEventState(a);
+      const stateB = getEventState(b);
+      if (stateA === "ongoing" && stateB !== "ongoing") return -1;
+      if (stateA !== "ongoing" && stateB === "ongoing") return 1;
+      return eventStartMs(a) - eventStartMs(b);
+    });
+  };
+
   const filteredCreated = useMemo(() => {
     let list = allCreated.filter(e => getEventState(e) !== "past");
     if (filterType === "event") list = list.filter(e => e.kind !== "service");
     if (filterType === "service") list = list.filter(e => e.kind === "service");
-    return list;
+    return sortActiveEvents(list);
   }, [allCreated, filterType]);
 
   const filteredGoing = useMemo(() => {
     let list = goingEvents.filter(e => getEventState(e) !== "past");
     if (filterType === "event") list = list.filter(e => e.kind !== "service");
     if (filterType === "service") list = list.filter(e => e.kind === "service");
-    return list;
+    return sortActiveEvents(list);
   }, [goingEvents, filterType]);
 
   const filteredPast = useMemo(() => {

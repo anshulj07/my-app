@@ -8,7 +8,7 @@ import {
 import { Image } from "expo-image";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import Constants from "expo-constants";
-import { useAuth } from "@clerk/clerk-expo";
+import { useAuth, useUser } from "@clerk/clerk-expo";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { apiFetch } from "../../lib/apiFetch";
@@ -38,6 +38,7 @@ export default function EventDetailScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { userId } = useAuth();
+  const { user } = useUser();
   const params = useLocalSearchParams<{ 
     eventId: string; 
     title: string; 
@@ -60,7 +61,9 @@ export default function EventDetailScreen() {
     maxCapacity?: string;
   }>();
 
-  const [event, setEvent] = useState<any>(null);
+  const [event, setEvent] = useState<any>(() => {
+    try { return params.eventStr ? JSON.parse(params.eventStr) : null; } catch { return null; }
+  });
   const [reviews, setReviews] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showReviewModal, setShowReviewModal] = useState(false);
@@ -85,8 +88,8 @@ export default function EventDetailScreen() {
           method: "GET", headers: { "x-api-key": EVENT_API_KEY || "" },
         })
       ]);
-      const eJson = await eRes.json();
-      const rJson = await rRes.json();
+      const eJson = await eRes.json().catch(() => ({}));
+      const rJson = await rRes.json().catch(() => ({}));
       setEvent(eJson?.event ?? eJson);
       if (rJson.ok) setReviews(rJson.reviews || []);
     } catch (err) {
@@ -97,7 +100,12 @@ export default function EventDetailScreen() {
   }, [params.eventId, API_BASE, EVENT_API_KEY]);
 
   useEffect(() => {
-    setEvent(null);
+    try {
+      const parsed = params.eventStr ? JSON.parse(params.eventStr) : null;
+      setEvent(parsed);
+    } catch {
+      setEvent(null);
+    }
     setReviews([]);
     setLoading(true);
     
@@ -140,7 +148,7 @@ export default function EventDetailScreen() {
         setShowReviewModal(false);
         loadAll();
       } else {
-        const errJson = await res.json();
+        const errJson = await res.json().catch(() => ({}));
         Alert.alert("Error", errJson.error || "Failed to submit review");
       }
     } catch (e) {
@@ -167,7 +175,7 @@ export default function EventDetailScreen() {
     } as any);
   };
 
-  // ✅ INSTANT FIX: If the local 'event' state belongs to a previous page visit, ignore it completely until the new one loads.
+  // ✅ INSTANT FIX: Use parsed event immediately. Fallback to params if not present.
   const ev = (event?._id === params.eventId || event?.eventId === params.eventId) ? event : null;
   const kind = ev?.kind || params.kind || "event";
   const isService = kind === "service";
@@ -177,6 +185,17 @@ export default function EventDetailScreen() {
   const attendees = ev?.attendees ?? [];
   const price = ev?.kind === "free" || params.kind === "free" ? "Free" : `₹${(((ev?.priceCents || Number(params.priceCents || 0)) ?? 0)/100).toFixed(0)}`;
   const isHost = userId === (ev?.creatorClerkId || ev?.clerkUserId) || (ev == null && !!params.creatorClerkId && userId === params.creatorClerkId);
+
+  // ✅ Fix: Instantly use the current user's profile if they are the host, instead of "Local Host"
+  let finalCreatorName = ev?.creatorName || params.creatorName || "Local Host";
+  let finalCreatorAvatar = ev?.creatorAvatar || params.creatorAvatar || "https://i.pravatar.cc/100";
+
+  if (isHost && (finalCreatorName === "Local Host" || !finalCreatorName)) {
+    finalCreatorName = user?.fullName || user?.firstName || "Local Host";
+  }
+  if (isHost && (!finalCreatorAvatar || finalCreatorAvatar.includes("pravatar"))) {
+    finalCreatorAvatar = user?.imageUrl || "https://i.pravatar.cc/100";
+  }
 
   const joinedInfo = useMemo(() => {
     if (!userId) return null;
@@ -198,9 +217,6 @@ export default function EventDetailScreen() {
   }, [userId, ev?.pendingRequests, params.isPending]);
 
   const isPending = !!pendingInfo;
-  const isFull   = ev?.maxCapacity && attendees.length >= ev.maxCapacity;
-  const isButtonDisabled = submitting || (isFull && !isJoined && !isPending);
-
   const startMs = useMemo(() => {
     if (ev?.startsAt) { const t = new Date(ev.startsAt).getTime(); if (Number.isFinite(t)) return t; }
     if (ev?.date || params.date) {
@@ -212,8 +228,21 @@ export default function EventDetailScreen() {
     return Number.POSITIVE_INFINITY;
   }, [ev, params.date, params.time]);
 
+  const isLive = useMemo(() => {
+    const status = String(ev?.status || "active").toLowerCase();
+    if (status === "ended" || status === "completed" || status === "past") return false;
+    if (status === "live" || status === "ongoing") return true;
+    if (!Number.isFinite(startMs) || startMs === Number.POSITIVE_INFINITY) return false;
+    const now = Date.now();
+    const endTs = ev?.endsAt ? new Date(ev.endsAt).getTime() : startMs + (4 * 3600000);
+    return now >= startMs && now <= endTs;
+  }, [ev?.status, ev?.endsAt, startMs]);
+
   const joinPolicy = ev?.joinPolicy || params.joinPolicy || "anyone_can_join";
   const maxCapacity = ev?.maxCapacity || (params.maxCapacity ? Number(params.maxCapacity) : undefined);
+  
+  const isFull   = ev?.maxCapacity && attendees.length >= ev.maxCapacity;
+  const isButtonDisabled = submitting || (isFull && !isJoined && !isPending) || (isLive && !isJoined && !isPending);
 
   const showOtp = useMemo(() => {
     if (!isJoined) return false;
@@ -254,7 +283,7 @@ export default function EventDetailScreen() {
                 Alert.alert("Cancelled", isPending ? "Your request has been cancelled." : "You have left the event.");
                 loadAll();
               } else {
-                const json = await res.json();
+                const json = await res.json().catch(() => ({}));
                 Alert.alert("Error", json.error || "Failed to cancel");
               }
             } catch {
@@ -448,16 +477,16 @@ export default function EventDetailScreen() {
             activeOpacity={0.7}
           >
             <Image 
-              source={{ uri: ev?.creatorAvatar || params.creatorAvatar || "https://i.pravatar.cc/100" }} 
+              source={{ uri: finalCreatorAvatar }} 
               style={S.hostImg} 
               contentFit="cover" 
               transition={200} 
             />
             <View style={{ flex: 1, justifyContent: "center" }}>
-              {loading && !ev?.creatorName && !params.creatorName ? (
+              {loading && finalCreatorName === "Local Host" && !isHost ? (
                 <ActivityIndicator size="small" color={C.accent} style={{ alignSelf: "flex-start", marginBottom: 2 }} />
               ) : (
-                <Text style={S.hostName}>{ev?.creatorName || params.creatorName || "Local Host"}</Text>
+                <Text style={S.hostName}>{finalCreatorName}</Text>
               )}
               <Text style={S.hostSub}>HOST & ORGANIZER</Text>
             </View>
@@ -517,7 +546,7 @@ export default function EventDetailScreen() {
                 <View style={S.avatarStack}>
                   {attendees.slice(0, 4).map((att: any, i: number) => (
                     <View key={i} style={[S.avatarWrap, { marginLeft: i === 0 ? 0 : -15 }]}>
-                      <Image source={{ uri: att.userAvatar || `https://i.pravatar.cc/100?u=${i}` }} style={S.avatar} contentFit="cover" transition={200} />
+                      <Image source={{ uri: att.imageUrl || `https://i.pravatar.cc/100?u=${att.clerkId || i}` }} style={S.avatar} contentFit="cover" transition={200} />
                     </View>
                   ))}
                   {attendees.length > 4 && (
@@ -528,7 +557,9 @@ export default function EventDetailScreen() {
                 </View>
                 <Text style={S.goingCountText}>
                   {attendees.length > 0 
-                    ? `${attendees.length} ${isService ? "people have booked this" : "people have already joined"}` 
+                    ? attendees.length === 1
+                      ? `${attendees[0].name || "1 person"} has already joined`
+                      : `${attendees[0].name || "1 person"} and ${attendees.length - 1} others joined`
                     : isService ? "Be the first one to book!" : "Be the first one to join!"}
                 </Text>
               </>
@@ -669,7 +700,8 @@ export default function EventDetailScreen() {
                    style={[
                      S.reserveBtn, 
                      (isJoined || isPending) && { backgroundColor: C.red },
-                     (isFull && !isJoined && !isPending) && { backgroundColor: "#9CA3AF" }
+                     (isFull && !isJoined && !isPending) && { backgroundColor: "#9CA3AF" },
+                     (isLive && !isJoined && !isPending) && { backgroundColor: "#ef4444" }
                    ]} 
                    onPress={(isJoined || isPending) ? handleLeave : onPress}
                    disabled={isButtonDisabled}
@@ -679,10 +711,10 @@ export default function EventDetailScreen() {
                    ) : (
                      <>
                        <Text style={S.reserveText}>
-                         {isJoined ? "Cancel Booking" : (isPending ? "Cancel Request" : (isFull ? "Event Full" : (isService ? "Book Now" : "Join Now")))}
+                         {isJoined ? "Cancel Booking" : (isPending ? "Cancel Request" : (isLive ? "Event Live" : (isFull ? "Event Full" : (isService ? "Book Now" : "Join Now"))))}
                        </Text>
-                       {!isJoined && !isPending && !isFull && <Ionicons name="arrow-forward" size={18} color="#fff" />}
-                       {!isJoined && isFull && !isPending && <Ionicons name="lock-closed" size={18} color="#fff" />}
+                       {!isJoined && !isPending && !isFull && !isLive && <Ionicons name="arrow-forward" size={18} color="#fff" />}
+                       {!isJoined && (isFull || isLive) && !isPending && <Ionicons name="lock-closed" size={18} color="#fff" />}
                        {(isJoined || isPending) && <Ionicons name="close-circle" size={18} color="#fff" />}
                      </>
                    )}

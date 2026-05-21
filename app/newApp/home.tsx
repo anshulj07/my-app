@@ -249,7 +249,7 @@ export default function Home() {
       fetch(`${API_BASE.replace(/\/$/, "")}/api/events/get-events${baseQuery}&source=tm`, {
         headers: { ...(EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {}), "ngrok-skip-browser-warning": "1" },
       })
-      .then(r => r.json())
+      .then(r => r.json().catch(() => ({})))
       .then(tmJson => {
         const tmEvents = (Array.isArray(tmJson?.events) ? tmJson.events : []).map(normalizeEvent).filter(Boolean) as EventPin[];
         if (tmEvents.length > 0) {
@@ -384,7 +384,8 @@ export default function Home() {
         creatorClerkId: pin.creatorClerkId || "",
         kind: (pin as any).kind || "event",
         priceCents: String((pin as any).priceCents ?? 0),
-        joinPolicy: (pin as any).joinPolicy || "anyone_can_join"
+        joinPolicy: (pin as any).joinPolicy || "anyone_can_join",
+        eventStr: JSON.stringify(pin)
       }
     });
   }, [router]);

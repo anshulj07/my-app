@@ -107,8 +107,20 @@ export default function MyBookingsScreen() {
       ]);
       console.log("[MyBookingsScreen] Fetch responses received. my-bookings status:", cRes.status, "going status:", gRes.status);
       
-      const cJson = await cRes.json();
-      const gJson = await gRes.json();
+      let cJson = { createdEvents: [] };
+      let gJson = { events: [] };
+
+      if (cRes.ok) {
+        cJson = await cRes.json();
+      } else {
+        console.error("[MyBookingsScreen] my-bookings failed:", await cRes.text().catch(() => ""));
+      }
+
+      if (gRes.ok) {
+        gJson = await gRes.json();
+      } else {
+        console.error("[MyBookingsScreen] going failed:", await gRes.text().catch(() => ""));
+      }
       
       setAllCreated(cJson.createdEvents || []);
       setGoingEvents(gJson.events || []);

@@ -27,6 +27,7 @@ type ProfileData = {
   languages?: string[] | null;
   photos?: string[];
   avatar?: string | null;
+  verificationStatus?: "unverified" | "pending" | "verified" | "rejected";
 };
 
 const STORAGE_KEY = "@profile";
@@ -112,6 +113,7 @@ export default function ProfileHome() {
         languages: Array.isArray(src?.languages) && src.languages.length > 0 ? src.languages : null,
         photos: Array.isArray(src?.photos) ? src.photos : [],
         avatar: typeof src?.avatar === "string" ? src.avatar : null,
+        verificationStatus: src?.verificationStatus ?? "unverified",
       };
 
       setProfile(next);
@@ -354,13 +356,27 @@ export default function ProfileHome() {
       </View>
 
       {/* Verify card */}
-      <TouchableOpacity style={styles.cardRow} activeOpacity={0.92}>
+      <TouchableOpacity 
+        style={styles.cardRow} 
+        activeOpacity={0.92}
+        onPress={() => router.push("/profile/verify" as any)}
+      >
         <View style={styles.verifyIcon}>
-          <Ionicons name="checkmark-circle" size={20} color={COLORS.brand} />
+          <Ionicons 
+            name={profile.verificationStatus === "verified" ? "shield-checkmark" : (profile.verificationStatus === "pending" ? "time-outline" : "checkmark-circle")} 
+            size={20} 
+            color={profile.verificationStatus === "verified" ? "#22c55e" : COLORS.brand} 
+          />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.cardTitle}>Get Verified</Text>
-          <Text style={styles.cardSub}>Verify your profile to build trust with other travelers</Text>
+          <Text style={styles.cardTitle}>
+            {profile.verificationStatus === "verified" ? "Verified" : (profile.verificationStatus === "pending" ? "Verification Pending" : "Get Verified")}
+          </Text>
+          <Text style={styles.cardSub}>
+            {profile.verificationStatus === "verified" 
+              ? "You are a verified user." 
+              : (profile.verificationStatus === "pending" ? "Your verification is under review." : "Verify your profile to build trust with other travelers")}
+          </Text>
         </View>
         <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
       </TouchableOpacity>

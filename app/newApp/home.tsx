@@ -233,8 +233,8 @@ export default function Home() {
     }
 
     try {
-      // 1. Fetch DB events fast
-      const res = await fetch(`${API_BASE.replace(/\/$/, "")}/api/events/get-events${baseQuery}&source=db`, {
+      // Fetch DB events
+      const res = await fetch(`${API_BASE.replace(/\/$/, "")}/api/events/get-events${baseQuery}`, {
         headers: { ...(EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {}), "ngrok-skip-browser-warning": "1" },
       });
       
@@ -244,23 +244,6 @@ export default function Home() {
         dbEvents = (Array.isArray(json?.events) ? json.events : []).map(normalizeEvent).filter(Boolean) as EventPin[];
         setEvents(dbEvents);
       }
-
-      // 2. Fetch Ticketmaster events in background
-      fetch(`${API_BASE.replace(/\/$/, "")}/api/events/get-events${baseQuery}&source=tm`, {
-        headers: { ...(EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {}), "ngrok-skip-browser-warning": "1" },
-      })
-      .then(r => r.json().catch(() => ({})))
-      .then(tmJson => {
-        const tmEvents = (Array.isArray(tmJson?.events) ? tmJson.events : []).map(normalizeEvent).filter(Boolean) as EventPin[];
-        if (tmEvents.length > 0) {
-          setEvents(prev => {
-            const existingIds = new Set(prev.map(p => p._id));
-            const newEvents = tmEvents.filter(t => !existingIds.has(t._id));
-            return [...prev, ...newEvents];
-          });
-        }
-      })
-      .catch(console.error);
 
       return dbEvents;
     } catch {

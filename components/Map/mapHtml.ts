@@ -529,7 +529,7 @@ export function buildMapHtml(args: {
   const safeUserId = userId ? JSON.stringify(userId) : 'null';
 
   const html =
-`<!doctype html>
+    `<!doctype html>
 <html>
 <head>
   <meta charset="utf-8"/>
@@ -1072,7 +1072,8 @@ export function buildMapHtml(args: {
 
       map=new google.maps.Map(document.getElementById('map'),{
         center:CENTER,zoom:ZOOM,
-        disableDefaultUI:true,clickableIcons:false,gestureHandling:'greedy'
+        disableDefaultUI:true,clickableIcons:false,gestureHandling:'greedy',
+        minZoom: 3
       });
 
       // Use MapCanvasProjection via a dummy OverlayView
@@ -1092,7 +1093,7 @@ export function buildMapHtml(args: {
       google.maps.event.addListener(map,'zoom_changed',function(){closeStack();scheduleLayout();});
       google.maps.event.addListener(map,'click',function(){closeStack();selectedId=null;scheduleLayout();});
 
-      showToast('✦ '+DATA.length+' events worldwide');
+      showToast('✦ '+DATA.length+' events nearby');
     }
     window.initMap=initMap;
 

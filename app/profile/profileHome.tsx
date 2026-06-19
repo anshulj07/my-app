@@ -77,6 +77,7 @@ type ProfileData = {
   overallEarning?: number;
   services?: string[] | null;
   reviewsCount?: number;
+  verificationStatus?: "unverified" | "pending" | "verified" | "rejected";
 };
 function sanitizePhotos(p?: unknown): string[] {
   if (!Array.isArray(p)) return [];
@@ -197,6 +198,7 @@ export default function ProfileHome() {
         email: s?.email ?? "",
         city: s?.city ?? "",
         country: s?.country ?? "",
+        verificationStatus: s?.verificationStatus ?? "unverified",
       };
       setProfile(next);
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
@@ -515,14 +517,26 @@ export default function ProfileHome() {
         >
           {/* Stats + Verify card */}
           <View style={S.statsCard}>
-            <TouchableOpacity style={S.verifyCardInner} activeOpacity={0.92}>
+            <TouchableOpacity 
+              style={S.verifyCardInner} 
+              activeOpacity={0.92}
+              onPress={() => router.push("/profile/verify" as any)}
+            >
               <View style={S.verifyIcon}>
-                <Ionicons name="shield-checkmark" size={20} color="#6C63FF" />
+                <Ionicons 
+                  name={profile.verificationStatus === "verified" ? "shield-checkmark" : (profile.verificationStatus === "pending" ? "time-outline" : "shield-half-outline")} 
+                  size={20} 
+                  color={profile.verificationStatus === "verified" ? "#22c55e" : "#6C63FF"} 
+                />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={S.verifyTitle}>Get verified</Text>
+                <Text style={S.verifyTitle}>
+                  {profile.verificationStatus === "verified" ? "Verified" : (profile.verificationStatus === "pending" ? "Verification Pending" : "Get verified")}
+                </Text>
                 <Text style={S.verifySub}>
-                  Lorem ipsum is simply dummy text of the industry.
+                  {profile.verificationStatus === "verified" 
+                    ? "You are a verified user." 
+                    : (profile.verificationStatus === "pending" ? "Your verification is under review." : "Build trust with attendees by verifying your identity.")}
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color="#6C63FF" />

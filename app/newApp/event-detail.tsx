@@ -59,6 +59,9 @@ export default function EventDetailScreen() {
     lat?: string;
     lng?: string;
     maxCapacity?: string;
+    eventStr?: string;
+    creatorClerkId?: string;
+    isVerified?: string;
   }>();
 
   const [event, setEvent] = useState<any>(() => {
@@ -486,7 +489,12 @@ export default function EventDetailScreen() {
               {finalCreatorName === "Local Host" && !isHost ? (
                 <Text style={S.hostName}>Host</Text>
               ) : (
-                <Text style={S.hostName}>{finalCreatorName}</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <Text style={S.hostName}>{finalCreatorName}</Text>
+                  {(ev?.isVerified || params.isVerified === "true") && (
+                    <Ionicons name="checkmark-circle" size={16} color="#0A84FF" />
+                  )}
+                </View>
               )}
               <Text style={S.hostSub}>HOST & ORGANIZER</Text>
             </View>
@@ -598,7 +606,7 @@ export default function EventDetailScreen() {
               </>
             ) : (
               <View style={[S.reviewCard, { width: SW - 80, alignItems: 'center', justifyContent: 'center' }]}>
-                <Text style={S.muted}>No reviews yet. Be the first!</Text>
+                <Text style={{ color: C.muted }}>No reviews yet. Be the first!</Text>
               </View>
             )}
           </ScrollView>

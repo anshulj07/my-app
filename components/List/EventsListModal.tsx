@@ -38,12 +38,13 @@ const COLORS = {
 };
 
 type EventPin = {
-  _id?: string;
+  _id: string;
   title: string;
   lat: number;
   lng: number;
   emoji: string;
   kind?: string;
+  isFree?: boolean;
   priceCents?: number | string | null;
   date?: string;
   time?: string;

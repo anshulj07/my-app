@@ -974,6 +974,9 @@ const C = {
   card:        "#FFFFFF",
   border:      "rgba(240,235,227,0.95)",
   borderDark:  "rgba(28,26,23,0.10)",
+  ink:         "#1C1A17",
+  muted:       "#8E8B85",
+  hint:        "#C2BDB5",
   teal:        "#6ccf3e",
   tealBg:      "#E8FAF7",
   tealText:    "#1A7A6A",
@@ -993,7 +996,7 @@ const C = {
 
 // ─── Filters ─────────────────────────────────────────────────────────────────
 type Filter     = { key: string; label: string; icon: any };
-type KindFilter = { key: string; label: string; dotColor: string; activeBg: string; activeText: string };
+type KindFilter = { key: string; label: string; dotColor: string; activeBg: string; activeText: string; icon?: any; };
 
 const ACTIVITY_FILTERS: Filter[] = [
   { key: "coffee",  label: "Coffee",  icon: "cafe-outline" },

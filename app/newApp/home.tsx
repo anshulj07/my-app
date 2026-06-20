@@ -23,36 +23,36 @@ import CreateServiceFlow from "../../components/CreateServiceFlow/CreateServiceF
 
 // ─── Design tokens ───────────────────────────────────────────────────────────
 const C = {
-  bg:          "#0F0F0F",
-  card:        "#1A1A1A",
-  cardBorder:  "#2A2A2A",
-  glass:       "rgba(255,255,255,0.06)",
+  bg: "#0F0F0F",
+  card: "#1A1A1A",
+  cardBorder: "#2A2A2A",
+  glass: "rgba(255,255,255,0.06)",
   glassBorder: "rgba(255,255,255,0.10)",
-  inputBg:     "#141414",
+  inputBg: "#141414",
   inputBorder: "#2C2C2C",
-  ink:         "#F5F5F5",
-  muted:       "#888888",
-  hint:        "#444444",
+  ink: "#F5F5F5",
+  muted: "#888888",
+  hint: "#444444",
 
   // Green accent
-  green:       "#00E676",
-  greenDim:    "rgba(0,230,118,0.12)",
-  greenGlow:   "rgba(0,230,118,0.25)",
-  greenText:   "#00E676",
+  green: "#00E676",
+  greenDim: "rgba(0,230,118,0.12)",
+  greenGlow: "rgba(0,230,118,0.25)",
+  greenText: "#00E676",
 
   // Purple accent (Standardized to Indigo)
-  purple:      "#6366F1",
-  purpleDim:   "#EEF2FF",
-  purpleGlow:  "rgba(99,102,241,0.15)",
-  purpleText:  "#4F46E5",
+  purple: "#6366F1",
+  purpleDim: "#EEF2FF",
+  purpleGlow: "rgba(99,102,241,0.15)",
+  purpleText: "#4F46E5",
 
 
   // Amber for chat
-  amber:       "#FFB300",
-  amberDim:    "rgba(255,179,0,0.12)",
+  amber: "#FFB300",
+  amberDim: "rgba(255,179,0,0.12)",
 
-  white:       "#FFFFFF",
-  overlay:     "rgba(0,0,0,0.75)",
+  white: "#FFFFFF",
+  overlay: "rgba(0,0,0,0.75)",
 };
 
 // ─── Helpers (unchanged) ──────────────────────────────────────────────────────
@@ -68,29 +68,29 @@ function normalizeEvent(e: any): EventPin | null {
   const rawId = e?._id ?? e?.id ?? e?.eventId ?? "";
   const _id =
     typeof rawId === "string" && rawId.trim() ? rawId.trim()
-    : rawId && typeof rawId === "object" && (rawId.$oid || rawId.oid)
-      ? String(rawId.$oid || rawId.oid)
-      : `${lat}:${lng}:${String(e?.title ?? "")}`;
+      : rawId && typeof rawId === "object" && (rawId.$oid || rawId.oid)
+        ? String(rawId.$oid || rawId.oid)
+        : `${lat}:${lng}:${String(e?.title ?? "")}`;
 
   return {
     ...(e || {}),
     _id,
-    title:       e?.title ?? "",
+    title: e?.title ?? "",
     description: e?.description ?? "",
     lat, lng,
-    emoji:       e?.emoji ?? "📍",
+    emoji: e?.emoji ?? "📍",
     bannerImage: e?.bannerImage ?? null,
-    bannerUri:   e?.bannerUri   ?? null,
-    when:        [e?.date, e?.time].filter(Boolean).join(" · "),
-    address:     e?.location?.formattedAddress ?? e?.location?.address ?? e?.address ?? "",
-    status:      e?.status ?? "active",
+    bannerUri: e?.bannerUri ?? null,
+    when: [e?.date, e?.time].filter(Boolean).join(" · "),
+    address: e?.location?.formattedAddress ?? e?.location?.address ?? e?.address ?? "",
+    status: e?.status ?? "active",
     // ✅ Needed for live pin detection in map
-    startsAt:    e?.startsAt ?? null,
-    date:        e?.date ?? null,
-    time:        e?.time ?? null,
-    endsAt:      e?.endsAt ?? null,
-    endDate:     e?.endDate ?? null,
-    endTime:     e?.endTime ?? null,
+    startsAt: e?.startsAt ?? null,
+    date: e?.date ?? null,
+    time: e?.time ?? null,
+    endsAt: e?.endsAt ?? null,
+    endDate: e?.endDate ?? null,
+    endTime: e?.endTime ?? null,
   };
 }
 
@@ -104,13 +104,13 @@ function toEditableEvent(pin: EventPin): NonNullable<EditEventValue> {
       ...loc,
       lat: loc?.lat ?? pin.lat, lng: loc?.lng ?? pin.lng,
       formattedAddress: loc?.formattedAddress ?? loc?.address ?? (pin as any)?.address ?? "",
-      address:          loc?.address ?? (pin as any)?.address ?? "",
-      placeId:          loc?.placeId ?? "",
-      city:             loc?.city ?? (pin as any)?.city ?? "",
-      admin1Code:       loc?.admin1Code ?? loc?.stateCode ?? loc?.state ?? "",
-      admin1:           loc?.admin1 ?? loc?.region ?? loc?.state ?? "",
-      countryCode:      loc?.countryCode ?? loc?.country ?? "",
-      country:          loc?.country ?? "",
+      address: loc?.address ?? (pin as any)?.address ?? "",
+      placeId: loc?.placeId ?? "",
+      city: loc?.city ?? (pin as any)?.city ?? "",
+      admin1Code: loc?.admin1Code ?? loc?.stateCode ?? loc?.state ?? "",
+      admin1: loc?.admin1 ?? loc?.region ?? loc?.state ?? "",
+      countryCode: loc?.countryCode ?? loc?.country ?? "",
+      country: loc?.country ?? "",
     },
   } as NonNullable<EditEventValue>;
 }
@@ -180,32 +180,32 @@ export default function Home() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
-  const [open,        setOpen]        = useState(false);
-  const [showList,    setShowList]    = useState(false);
-  const [showPicker,  setShowPicker]  = useState(false);
+  const [open, setOpen] = useState(false);
+  const [showList, setShowList] = useState(false);
+  const [showPicker, setShowPicker] = useState(false);
   const [showServiceFlow, setShowServiceFlow] = useState(false);
   const [defaultKind, setDefaultKind] = useState<"event_free" | "service">("event_free");
 
-  const [events,    setEvents]    = useState<EventPin[]>([]);
-  const [myLoc,     setMyLoc]     = useState<{ lat: number; lng: number } | null>(null);
-  const [myCity,    setMyCity]    = useState("");
+  const [events, setEvents] = useState<EventPin[]>([]);
+  const [myLoc, setMyLoc] = useState<{ lat: number; lng: number } | null>(null);
+  const [myCity, setMyCity] = useState("");
   const [locStatus, setLocStatus] = useState<"unknown" | "granted" | "denied">("unknown");
   // ✅ Don't render map until we have a real location OR permission is denied
-  const [locReady,  setLocReady]  = useState(false);
+  const [locReady, setLocReady] = useState(false);
 
-  const [editOpen,        setEditOpen]        = useState(false);
-  const [editEvent,       setEditEvent]       = useState<EditEventValue>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editEvent, setEditEvent] = useState<EditEventValue>(null);
 
   // Edit Service Flow
   const [showEditService, setShowEditService] = useState(false);
   const [serviceToEdit, setServiceToEdit] = useState<any>(null);
 
-  const [activeFilter,    setActiveFilter]    = useState<string | null>(null);
-  const [mapStackOpen,    setMapStackOpen]    = useState(false);
+  const [activeFilter, setActiveFilter] = useState<string | null>(null);
+  const [mapStackOpen, setMapStackOpen] = useState(false);
 
   const fabSize = useMemo(() => (Platform.OS === "ios" ? 58 : 62), []);
 
-  const API_BASE      = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
+  const API_BASE = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
   const EVENT_API_KEY = (Constants.expoConfig?.extra as any)?.eventApiKey as string | undefined;
 
   // FAB pulse animation
@@ -223,21 +223,19 @@ export default function Home() {
 
   const loadEvents = useCallback(async (customLat?: number, customLng?: number) => {
     if (!API_BASE) return [];
-    
+
     const lat = customLat ?? myLoc?.lat;
     const lng = customLng ?? myLoc?.lng;
-    
-    let baseQuery = `?limit=200`;
-    if (lat && lng) {
-      baseQuery += `&nearLat=${lat}&nearLng=${lng}&radiusM=50000`;
-    }
+
+    // Fetch all events globally (limit 500)
+    let baseQuery = `?limit=500`;
 
     try {
       // Fetch DB events
       const res = await fetch(`${API_BASE.replace(/\/$/, "")}/api/events/get-events${baseQuery}`, {
         headers: { ...(EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {}), "ngrok-skip-browser-warning": "1" },
       });
-      
+
       let dbEvents: EventPin[] = [];
       if (res.ok) {
         const json = await res.json().catch(() => ({}));
@@ -278,7 +276,7 @@ export default function Home() {
             const c = (rev?.[0]?.city || rev?.[0]?.district || rev?.[0]?.subregion || rev?.[0]?.name || "").trim();
             if (c) setMyCity(c);
           })
-          .catch(() => {});
+          .catch(() => { });
       }
 
       // 2. Get fresh GPS fix with a timeout and High accuracy
@@ -299,7 +297,7 @@ export default function Home() {
           setLocReady(true); // ✅ Fresh GPS fix — map will update
           loadEvents(flat, flng);
         }
-        
+
         const rev = await Location.reverseGeocodeAsync({ latitude: flat, longitude: flng }).catch(() => null);
         if (rev?.[0]) {
           const c = (rev[0].city || rev[0].district || rev[0].subregion || rev[0].name || "").trim();
@@ -317,10 +315,18 @@ export default function Home() {
     }
   }, [loadEvents]);
 
-  useEffect(() => { 
-    loadMyLocation(); 
+  useEffect(() => {
+    loadMyLocation();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ✅ Continuous polling: Fetch new events every 15 seconds to keep map live
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadEvents();
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [loadEvents]);
 
   const filteredEvents = useMemo(() => {
     // ✅ Show active events + live events (started but status still "active")
@@ -341,8 +347,8 @@ export default function Home() {
     if (!activeFilter) return active;
     return active.filter(e => {
       const kind = String((e as any).kind ?? "").toLowerCase(), f = activeFilter.toLowerCase();
-      if (f === "free"  || f === "event_free") return kind === "free"  || kind === "event_free";
-      if (f === "paid"  || f === "event_paid") return kind === "paid"  || kind === "event_paid";
+      if (f === "free" || f === "event_free") return kind === "free" || kind === "event_free";
+      if (f === "paid" || f === "event_paid") return kind === "paid" || kind === "event_paid";
       if (f === "service") return kind === "service";
       return true;
     });
@@ -354,9 +360,9 @@ export default function Home() {
   const onPinPress = useCallback((pin: EventPin) => {
     router.push({
       pathname: "/newApp/event-detail",
-      params: { 
-        eventId: pin._id, 
-        title: pin.title, 
+      params: {
+        eventId: pin._id,
+        title: pin.title,
         emoji: pin.emoji,
         bannerUri: pin.bannerUri || (pin as any).bannerImage || "",
         date: pin.date || "",
@@ -446,7 +452,7 @@ export default function Home() {
       {/* ── FAB Picker Modal ─────────────────────────── */}
       <Modal visible={showPicker} transparent animationType="none" onRequestClose={() => setShowPicker(false)}>
         <Pressable style={P.backdrop} onPress={() => setShowPicker(false)}>
-          <Pressable style={P.sheet} onPress={() => {}}>
+          <Pressable style={P.sheet} onPress={() => { }}>
 
             {/* Handle */}
             <View style={P.grabber} />
@@ -508,8 +514,8 @@ export default function Home() {
         visible={showEditService}
         service={serviceToEdit}
         onClose={() => { setShowEditService(false); setServiceToEdit(null); }}
-        onUpdated={() => { 
-          setShowEditService(false); 
+        onUpdated={() => {
+          setShowEditService(false);
           setServiceToEdit(null);
           loadEvents();
         }}
@@ -608,7 +614,7 @@ const P = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 18,
   },
-  heading:    { fontSize: 24, fontWeight: "900", color: "#111111", letterSpacing: -0.6 },
+  heading: { fontSize: 24, fontWeight: "900", color: "#111111", letterSpacing: -0.6 },
   subheading: { fontSize: 14, fontWeight: "500", color: "#666666", marginTop: 4 },
   closeBtn: {
     width: 36, height: 36, borderRadius: 18,
@@ -644,7 +650,7 @@ const P = StyleSheet.create({
   },
   optionBody: { flex: 1 },
   optionTitle: { fontSize: 17, fontWeight: "800", color: "#111111", letterSpacing: -0.2 },
-  optionSub:   { fontSize: 12, fontWeight: "500", color: "#888888", marginTop: 3 },
+  optionSub: { fontSize: 12, fontWeight: "500", color: "#888888", marginTop: 3 },
 
   badge: {
     paddingHorizontal: 10, paddingVertical: 5,

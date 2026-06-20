@@ -83,7 +83,7 @@ export default function ChatListScreen() {
   const openChat = (conv: Conversation) => {
     router.push({
       pathname: "/newApp/chat/[userId]" as any,
-      params: { userId: conv.otherUserId, name: conv.otherName, avatarUrl: conv.otherAvatar },
+      params: { userId: conv.otherUserId, name: conv.otherName, avatarUrl: conv.otherAvatar, isVerified: String((conv as any).isVerified) },
     });
   };
 
@@ -174,7 +174,10 @@ export default function ChatListScreen() {
 
                 <View style={S.convDetails}>
                   <View style={S.convRow}>
-                    <Text style={S.convName} numberOfLines={1}>{item.otherName}</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4, flex: 1, marginRight: 10 }}>
+                      <Text style={S.convName} numberOfLines={1}>{item.otherName}</Text>
+                      {(item as any).isVerified && <Ionicons name="checkmark-circle" size={14} color="#0A84FF" />}
+                    </View>
                     <Text style={S.convTime}>{fmtTime(item.lastMessageAt)}</Text>
                   </View>
                   <View style={S.convRow}>

@@ -11,14 +11,14 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { buildMapHtml } from "./mapHtml";
 
 export type EventPin = {
-  
+
   _id: string;
   title: string;
   lat: number;
   lng: number;
   emoji: string;
   bannerImage?: string | null;
-bannerUri?: string | null;
+  bannerUri?: string | null;
   creatorClerkId?: string;
   kind?: "free" | "paid" | "service" | "event_free" | "event_paid";
   priceCents?: number | string | null;
@@ -37,7 +37,12 @@ bannerUri?: string | null;
   attendees?: any[];
   pendingRequests?: any[];
   startsAt?: string | null;
+  endsAt?: string | null;
+  endDate?: string | null;
+  endTime?: string | null;
   description?: string;
+  creatorName?: string | null;
+  creatorAvatar?: string | null;
   location?: {
     city?: string;
     state?: string;
@@ -48,7 +53,7 @@ bannerUri?: string | null;
     placeId?: string;
     lat?: number | string;
     lng?: number | string;
-   
+
   };
 };
 
@@ -173,18 +178,20 @@ export default function MapView({
   // This prevents the WebView from reloading when they change.
   const initialHtmlCenter = useRef(center);
   const initialEventsJson = useRef(safeEventsJson);
-  
+
   const html = useMemo(
     () => buildMapHtml({ googleKey: GOOGLE_KEY, eventsJson: initialEventsJson.current, center: initialHtmlCenter.current, zoom, userId }),
     [GOOGLE_KEY, zoom, userId]
   );
 
   // ✅ Silently update events in the WebView without reloading the HTML
+  const [webViewReady, setWebViewReady] = useState(false);
+
   React.useEffect(() => {
-    if (webViewRef.current) {
+    if (webViewReady && webViewRef.current) {
       webViewRef.current.postMessage(JSON.stringify({ type: "updateEvents", events: safeEvents }));
     }
-  }, [safeEventsJson]);
+  }, [safeEventsJson, webViewReady]);
 
   const goToCurrentLocation = async () => {
     if (locLoading) return;
@@ -254,6 +261,10 @@ export default function MapView({
             const msg = JSON.parse(e.nativeEvent.data);
             if (msg?.type === "log" || msg?.type === "error") {
               console.log("[MapView]", msg.msg || msg.message, msg.extra ?? "");
+              return;
+            }
+            if (msg?.type === "ready") {
+              setWebViewReady(true);
               return;
             }
             // ✅ Stack popup open — hide RN overlay UI

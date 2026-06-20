@@ -884,15 +884,11 @@ export function buildMapHtml(args: {
           ctx.lineWidth=isSel?3.5:3;
           ctx.stroke();
 
-          // Emoji (large, crisp)
-          ctx.font=(r*1.15)+'px Apple Color Emoji,Segoe UI Emoji,serif';
+          // Emoji
+          ctx.font=(r*1.15)+'px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
           ctx.textAlign='center';
           ctx.textBaseline='middle';
-          ctx.fillStyle='rgba(0,0,0,0)';
-          ctx.fillText(ev.emoji||'📍',x,y+1);
-          // Draw emoji on top of clip
-          ctx.fillStyle='black';
-          ctx.globalCompositeOperation='source-over';
+          ctx.fillStyle='#000000';
           ctx.fillText(ev.emoji||'📍',x,y+1);
 
           // Pointer tail
@@ -1098,6 +1094,7 @@ export function buildMapHtml(args: {
       google.maps.event.addListener(map,'click',function(){closeStack();selectedId=null;scheduleLayout();});
 
       showToast('✦ '+DATA.length+' events nearby');
+      post('ready', {});
     }
     window.initMap=initMap;
 

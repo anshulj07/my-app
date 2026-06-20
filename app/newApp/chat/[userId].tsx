@@ -632,7 +632,10 @@ export default function ChatDMScreen() {
               <Image source={{ uri: otherAvatar || fallbackUri }} style={S.headerAvatar} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={S.headerName} numberOfLines={1}>{otherName}</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                <Text style={S.headerName} numberOfLines={1}>{otherName}</Text>
+                {params.isVerified === "true" && <Ionicons name="checkmark-circle" size={14} color="#0A84FF" />}
+              </View>
               <Text style={S.headerSub}>Tap to view profile</Text>
             </View>
           </Pressable>

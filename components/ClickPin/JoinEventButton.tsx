@@ -294,10 +294,10 @@ export default function JoinEventButton({
         const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
         const dist = getDistance(loc.coords.latitude, loc.coords.longitude, eventLat, eventLng);
         
-        if (dist > 100) {
+        if (dist > 50) {
           Alert.alert(
             "You are too far! 📍",
-            `This event is ${dist.toFixed(0)}km away. Free events are restricted to users within 100km to ensure local community engagement.`,
+            `This event is ${dist.toFixed(0)}km away. Free events are restricted to users within 50km to ensure local community engagement.`,
             [{ text: "Understood" }]
           );
           setLoading(false);

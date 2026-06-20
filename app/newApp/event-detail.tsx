@@ -339,7 +339,6 @@ export default function EventDetailScreen() {
           </TouchableOpacity>
           <Text style={S.stickyTitle} numberOfLines={1}>{title}</Text>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            {loading && <ActivityIndicator size="small" color={C.accent} />}
             <TouchableOpacity onPress={handleShare} style={S.navIconBtn}>
               <Ionicons name="share-social-outline" size={22} color={C.ink} />
             </TouchableOpacity>
@@ -360,7 +359,7 @@ export default function EventDetailScreen() {
         {/* HERO BANNER */}
         <View style={S.bannerContainer}>
           {banner ? (
-            <Image source={{ uri: banner }} style={S.banner} contentFit="cover" transition={300} />
+            <Image source={{ uri: banner }} style={S.banner} contentFit="cover" transition={300} placeholder={{ blurhash: "L6PZfSi_.AyE_3t7t7R**0o#DgR4" }} />
           ) : (
             <View style={[S.banner, { backgroundColor: "#E5E7EB", justifyContent: "center", alignItems: "center" }]}>
               <Text style={{ fontSize: 80 }}>{ev?.emoji || "📍"}</Text>
@@ -481,10 +480,11 @@ export default function EventDetailScreen() {
               style={S.hostImg} 
               contentFit="cover" 
               transition={200} 
+              placeholder={{ blurhash: "L6PZfSi_.AyE_3t7t7R**0o#DgR4" }}
             />
             <View style={{ flex: 1, justifyContent: "center" }}>
-              {loading && finalCreatorName === "Local Host" && !isHost ? (
-                <ActivityIndicator size="small" color={C.accent} style={{ alignSelf: "flex-start", marginBottom: 2 }} />
+              {finalCreatorName === "Local Host" && !isHost ? (
+                <Text style={S.hostName}>Host</Text>
               ) : (
                 <Text style={S.hostName}>{finalCreatorName}</Text>
               )}
@@ -502,7 +502,7 @@ export default function EventDetailScreen() {
         <View style={S.section}>
           <Text style={S.sectionTitle}>About the {isService ? "Service" : "Event"}</Text>
           <Text style={S.aboutText}>
-            {ev?.description || (loading ? "Loading details from network..." : `Experience an unforgettable ${isService ? "service" : "evening"}. Join us for a perfect blend of networking, music, and great vibes.`)}
+            {ev?.description || `Experience an unforgettable ${isService ? "service" : "evening"}. Join us for a perfect blend of networking, music, and great vibes.`}
           </Text>
         </View>
 
@@ -536,12 +536,7 @@ export default function EventDetailScreen() {
             </TouchableOpacity>
           </View>
           <View style={S.attendeeRow}>
-            {loading && attendees.length === 0 ? (
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 10 }}>
-                <ActivityIndicator size="small" color={C.accent} />
-                <Text style={[S.goingCountText, { color: C.muted }]}>Refreshing guest list...</Text>
-              </View>
-            ) : (
+            {false ? null : (
               <>
                 <View style={S.avatarStack}>
                   {attendees.slice(0, 4).map((att: any, i: number) => (
@@ -581,12 +576,7 @@ export default function EventDetailScreen() {
           </View>
           
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 15, paddingRight: 20, paddingTop: 15 }}>
-            {loading ? (
-              <View style={[S.reviewCard, { width: SW - 80, alignItems: 'center', justifyContent: 'center', minHeight: 100 }]}>
-                <ActivityIndicator size="small" color={C.accent} />
-                <Text style={[S.muted, { marginTop: 8 }]}>Loading reviews...</Text>
-              </View>
-            ) : reviews.length > 0 ? (
+            {loading && reviews.length === 0 ? null : reviews.length > 0 ? (
               <>
                 {reviews.slice(0, 10).map((r, i) => (
                   <View key={i} style={S.reviewCard}>

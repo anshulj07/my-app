@@ -1073,7 +1073,11 @@ export function buildMapHtml(args: {
       map=new google.maps.Map(document.getElementById('map'),{
         center:CENTER,zoom:ZOOM,
         disableDefaultUI:true,clickableIcons:false,gestureHandling:'greedy',
-        minZoom: 3
+        minZoom: 4,
+        restriction: {
+          latLngBounds: { north: 85, south: -85, west: -180, east: 180 },
+          strictBounds: true
+        }
       });
 
       // Use MapCanvasProjection via a dummy OverlayView
@@ -1103,8 +1107,12 @@ export function buildMapHtml(args: {
         var msg=JSON.parse(data);
         if(!msg)return;
         if(msg.type==='updateEvents'){
+          var oldLen = DATA.length;
           DATA=msg.events||[];
           scheduleLayout();
+          if (DATA.length !== oldLen || DATA.length > 0) {
+            showToast('✦ '+DATA.length+' events nearby');
+          }
           return;
         }
         if(msg.type==='goToLocation'){

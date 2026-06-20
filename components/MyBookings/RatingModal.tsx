@@ -7,6 +7,7 @@ import * as ImagePicker from "expo-image-picker";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import Constants from "expo-constants";
 import { useAuth } from "@clerk/clerk-expo";
+import { generateReactNativeHelpers } from "@uploadthing/expo";
 
 // ─────────────────────────────────────────────
 //  DESIGN TOKENS (Local to Modal)
@@ -39,6 +40,11 @@ export default function RatingModal({ visible, onClose, event }: RatingModalProp
   const { userId } = useAuth();
   const API_BASE      = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
   const EVENT_API_KEY = (Constants.expoConfig?.extra as any)?.eventApiKey as string | undefined;
+  const UT_ENDPOINT   = API_BASE ? `${API_BASE.replace(/\/$/, "")}/api/uploadthing` : undefined;
+
+  const { uploadFiles } = generateReactNativeHelpers({
+    url: UT_ENDPOINT || "http://localhost:3000/api/uploadthing",
+  });
 
   const [stars,     setStars]     = useState(0);
   const [comment,   setComment]   = useState("");
@@ -93,32 +99,30 @@ export default function RatingModal({ visible, onClose, event }: RatingModalProp
     setUploading(true);
     const uploadedUrls: string[] = [];
 
-    for (const uri of images) {
-      try {
-        const formData = new FormData();
-        // @ts-ignore
-        formData.append("files", {
-          uri,
-          name: `review_${Date.now()}.jpg`,
-          type: "image/jpeg",
-        });
+    try {
+      const filesToUpload = images.map((uri, idx) => ({
+        uri,
+        name: `review_${Date.now()}_${idx}.jpg`,
+        type: "image/jpeg"
+      }));
 
-        const res = await fetch(`${API_BASE}/api/uploadthing?slug=imageUploader`, {
-          method: "POST",
-          headers: {
-            "x-api-key": EVENT_API_KEY || "",
-            "x-clerk-user-id": userId || "",
-          },
-          body: formData,
-        });
-        const json = await res.json();
-        if (json?.[0]?.url) {
-          uploadedUrls.push(json[0].url);
+      const res = await uploadFiles("imageUploader", {
+        files: filesToUpload as any,
+        headers: {
+          "x-api-key": EVENT_API_KEY || "",
+          "x-clerk-user-id": userId || "",
         }
-      } catch (err) {
-        console.error("Upload failed for", uri, err);
+      });
+      
+      if (res && Array.isArray(res)) {
+        res.forEach((r: any) => {
+          if (r.url) uploadedUrls.push(r.url);
+        });
       }
+    } catch (err) {
+      console.error("Upload failed", err);
     }
+    
     setUploading(false);
     return uploadedUrls;
   };

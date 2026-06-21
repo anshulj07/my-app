@@ -376,7 +376,7 @@ export default function ProfileHome() {
           <View style={S.stickyActions}>
             <TouchableOpacity
               style={S.stickyBtn}
-              onPress={() => router.push("/profile/settings/PersonalInfo" as any)}
+              onPress={() => setPhotosOpen(true)}
             >
               <Ionicons name="pencil" size={16} color="#fff" />
             </TouchableOpacity>
@@ -469,7 +469,7 @@ export default function ProfileHome() {
             <View style={S.coverTopRight}>
               <TouchableOpacity
                 style={S.coverBtn}
-                onPress={() => router.push("/profile/settings/PersonalInfo" as any)}
+                onPress={() => setPhotosOpen(true)}
               >
                 <Ionicons name="pencil" size={18} color="#fff" />
               </TouchableOpacity>

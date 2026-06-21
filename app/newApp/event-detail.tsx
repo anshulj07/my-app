@@ -15,6 +15,7 @@ import { apiFetch } from "../../lib/apiFetch";
 import JoinEventButton from "../../components/ClickPin/JoinEventButton";
 import AttendanceSheet from "../../components/MyBookings/AttendanceSheet";
 import OtpVerifyModal from "../../components/modals/OtpVerifyModal";
+import BroadcastModal from "../../components/modals/BroadcastModal";
 
 
 const { width: SW } = Dimensions.get("window");
@@ -74,6 +75,7 @@ export default function EventDetailScreen() {
   const [newRating, setNewRating] = useState(5);
   const [newComment, setNewComment] = useState("");
   const [showOtpModal, setShowOtpModal] = useState(false);
+  const [showBroadcastModal, setShowBroadcastModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -731,6 +733,9 @@ export default function EventDetailScreen() {
               <Ionicons name="scan-outline" size={20} color="#fff" />
               <Text style={S.verifyBtnText}>Verify OTP</Text>
             </TouchableOpacity>
+            <TouchableOpacity style={S.broadcastBtn} onPress={() => setShowBroadcastModal(true)}>
+              <Ionicons name="megaphone-outline" size={20} color="#fff" />
+            </TouchableOpacity>
           </View>
         )}
       </View>
@@ -741,6 +746,14 @@ export default function EventDetailScreen() {
         eventId={params.eventId}
         eventTitle={event?.title}
         onSuccess={loadAll}
+      />
+
+      {/* BROADCAST MODAL */}
+      <BroadcastModal
+        visible={showBroadcastModal}
+        onClose={() => setShowBroadcastModal(false)}
+        eventId={params.eventId}
+        hostClerkUserId={ev?.creatorClerkId || ev?.clerkUserId || userId || ""}
       />
 
       {/* REVIEW MODAL */}
@@ -1004,6 +1017,12 @@ const S = StyleSheet.create({
     shadowColor: C.accent, shadowOpacity: 0.25, shadowRadius: 10, elevation: 6,
   },
   verifyBtnText: { color: "#fff", fontSize: 15, fontFamily: "Outfit_700Bold" },
+  broadcastBtn: {
+    backgroundColor: C.gold,
+    width: 50, height: 50, borderRadius: 18,
+    alignItems: "center", justifyContent: "center",
+    shadowColor: C.gold, shadowOpacity: 0.25, shadowRadius: 10, elevation: 6,
+  },
 
   otpInput: { 
     backgroundColor: "#F8FAFC", borderRadius: 16, padding: 20, 

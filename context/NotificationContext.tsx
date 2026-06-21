@@ -76,8 +76,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     if (userId) {
       refresh();
-      // Optional: Polling every 60 seconds
-      const timer = setInterval(refresh, 60000);
+      // Polling every 10 seconds for near real-time updates
+      const timer = setInterval(refresh, 10000);
       return () => clearInterval(timer);
     }
   }, [userId, refresh]);

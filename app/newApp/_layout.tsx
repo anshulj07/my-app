@@ -261,6 +261,7 @@ import { Platform, View, StyleSheet } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNotifications } from "../../context/NotificationContext";
+import NewRequestPopup from "../../components/modals/NewRequestPopup";
 
 // ─────────────────────────────────────────────
 //  DESIGN TOKENS
@@ -278,6 +279,7 @@ export default function NewAppLayout() {
   const { unreadCount } = useNotifications();
 
   return (
+    <>
     <Tabs
       screenOptions={{
         headerShown: false,
@@ -303,8 +305,7 @@ export default function NewAppLayout() {
           letterSpacing: 0.1,
         },
         tabBarHideOnKeyboard: true,
-        tabBarPressOpacity: 0.7,
-        tabBarPressColor: "transparent",
+
       }}
     >
 
@@ -379,6 +380,8 @@ export default function NewAppLayout() {
       
 
     </Tabs>
+    <NewRequestPopup />
+    </>
   );
 }
 

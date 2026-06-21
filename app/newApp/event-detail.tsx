@@ -183,7 +183,7 @@ export default function EventDetailScreen() {
   // ✅ INSTANT FIX: Use parsed event immediately. Fallback to params if not present.
   const ev = (event?._id === params.eventId || event?.eventId === params.eventId) ? event : null;
   const kind = ev?.kind || params.kind || "event";
-  const isService = kind === "service";
+  const isService = kind.includes("service");
 
   const title = ev?.title || params.title || "Event";
   const banner = ev?.bannerUri || (ev as any)?.bannerImage || params.bannerUri || "";
@@ -243,11 +243,11 @@ export default function EventDetailScreen() {
     return now >= startMs && now <= endTs;
   }, [ev?.status, ev?.endsAt, startMs]);
 
-  const joinPolicy = ev?.joinPolicy || params.joinPolicy || "anyone_can_join";
+  const joinPolicy = isService ? "approval" : (ev?.joinPolicy || params.joinPolicy || "anyone_can_join");
   const maxCapacity = ev?.maxCapacity || (params.maxCapacity ? Number(params.maxCapacity) : undefined);
   
   const isFull   = ev?.maxCapacity && attendees.length >= ev.maxCapacity;
-  const isButtonDisabled = submitting || (isFull && !isJoined && !isPending) || (isLive && !isJoined && !isPending);
+  const isButtonDisabled = submitting || (isFull && !isJoined && !isPending) || (!isService && isLive && !isJoined && !isPending);
 
   const showOtp = useMemo(() => {
     if (!isJoined) return false;

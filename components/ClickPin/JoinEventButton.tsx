@@ -227,7 +227,7 @@ export default function JoinEventButton({
     if (!API_BASE || !eventId) return;
     try {
       const r = await apiFetch(`${API_BASE}/api/bookings/service-bookings?eventId=${eventId}&date=${date}`, {
-        headers: headers,
+        headers: EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : undefined,
       });
       const j = await r.json().catch(() => null);
       if (r.ok) setBookedSlots(Array.isArray(j?.bookings) ? j.bookings : []);
@@ -628,11 +628,18 @@ export default function JoinEventButton({
                         // In a real app we'd use the host's actual schedule.
                         const slots = ["09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "12:00", "12:30", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00"];
                         return slots.map(s => {
-                          const hour = parseInt(s.split(":")[0]);
+                          const [sh, sm] = s.split(":").map(Number);
+                          const slotStart = sh + (sm / 60);
+                          // The selected duration for THIS booking might overlap with others
+                          // But we just want to know if THIS starting slot falls inside any booked time
+                          // OR if the duration we want to book overlaps with them.
+                          // Simplest is to disable if the slot start time is within a booked slot.
                           const isBooked = bookedSlots.some(b => {
-                            const bStart = parseInt((b.startTime || "00:00").split(":")[0]);
+                            const [bh, bm] = (b.startTime || "00:00").split(":").map(Number);
+                            const bStart = bh + (bm / 60);
                             const bDur = b.duration || 1;
-                            return hour >= bStart && hour < bStart + bDur;
+                            const bEnd = bStart + bDur;
+                            return slotStart >= bStart && slotStart < bEnd;
                           });
                           const active = selectedSlot === s;
                           return (

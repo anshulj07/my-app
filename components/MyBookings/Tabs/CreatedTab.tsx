@@ -1,7 +1,7 @@
 // components/MyBookings/Tabs/CreatedTab.tsx
 import React, { useState } from "react";
 import {
-  View, Text, Image, RefreshControl, 
+  View, Text, Image, RefreshControl,
   SectionList, StyleSheet, TouchableOpacity, Modal, TextInput, ActivityIndicator
 } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -10,19 +10,19 @@ import Constants from "expo-constants";
 import OtpVerifyModal from "../../../components/modals/OtpVerifyModal";
 
 const C = {
-  bg:          "#F8FAFC",
-  white:       "#FFFFFF",
-  border:      "#F1F5F9",
-  ink:         "#111827",
-  muted:       "#6B7280",
-  accent:      "#6C63FF",
+  bg: "#F8FAFC",
+  white: "#FFFFFF",
+  border: "#F1F5F9",
+  ink: "#111827",
+  muted: "#6B7280",
+  accent: "#6C63FF",
   accentLight: "#EEF2FF",
-  green:       "#ECFDF5",
-  greenText:   "#10B981",
-  red:         "#FEF2F2",
-  redText:     "#EF4444",
-  blue:        "#EFF6FF",
-  blueText:    "#2563EB",
+  green: "#ECFDF5",
+  greenText: "#10B981",
+  red: "#FEF2F2",
+  redText: "#EF4444",
+  blue: "#EFF6FF",
+  blueText: "#2563EB",
 };
 
 export type EventDoc = {
@@ -77,41 +77,41 @@ export default function CreatedTab({
 
   return (
     <>
-    <SectionList
-      sections={sections}
-      keyExtractor={(item) => item._id}
-      contentContainerStyle={T.list}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.accent} />}
-      ListEmptyComponent={
-        <View style={T.empty}>
-          <View style={T.emptyImgBox}>
-             <Ionicons name="create-outline" size={60} color={C.accent} />
+      <SectionList
+        sections={sections}
+        keyExtractor={(item) => item._id}
+        contentContainerStyle={T.list}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.accent} />}
+        ListEmptyComponent={
+          <View style={T.empty}>
+            <View style={T.emptyImgBox}>
+              <Ionicons name="create-outline" size={60} color={C.accent} />
+            </View>
+            <Text style={T.emptyTitle}>No Events Created</Text>
+            <Text style={T.emptySub}>You haven't hosted any experiences yet.</Text>
           </View>
-          <Text style={T.emptyTitle}>No Events Created</Text>
-          <Text style={T.emptySub}>You haven't hosted any experiences yet.</Text>
-        </View>
-      }
-      renderSectionHeader={({ section }) => (
-        <Text style={T.sectionTitle}>{section.title}</Text>
-      )}
-      renderItem={({ item }) => (
-        <EventCard 
-          e={item} 
-          onPress={() => onPressEvent(item)} 
-          onManage={() => onManageEvent?.(item)} 
-          onVerify={() => setVerifyModal({ visible: true, eventId: item._id, title: item.title })}
-        />
-      )}
-      showsVerticalScrollIndicator={false}
-    />
+        }
+        renderSectionHeader={({ section }) => (
+          <Text style={T.sectionTitle}>{section.title}</Text>
+        )}
+        renderItem={({ item }) => (
+          <EventCard
+            e={item}
+            onPress={() => onPressEvent(item)}
+            onManage={() => onManageEvent?.(item)}
+            onVerify={() => setVerifyModal({ visible: true, eventId: item._id, title: item.title })}
+          />
+        )}
+        showsVerticalScrollIndicator={false}
+      />
 
-    <OtpVerifyModal
-      visible={verifyModal.visible}
-      onClose={() => setVerifyModal(prev => ({ ...prev, visible: false }))}
-      eventId={verifyModal.eventId}
-      eventTitle={verifyModal.title}
-      onSuccess={onRefresh}
-    />
+      <OtpVerifyModal
+        visible={verifyModal.visible}
+        onClose={() => setVerifyModal(prev => ({ ...prev, visible: false }))}
+        eventId={verifyModal.eventId}
+        eventTitle={verifyModal.title}
+        onSuccess={onRefresh}
+      />
     </>
   );
 }
@@ -121,7 +121,7 @@ function EventCard({ e, onPress, onManage, onVerify }: any) {
   const attendees = Array.isArray(e.attendees) ? e.attendees : [];
   const state = getDisplayState(e);
   const isLive = state.key === "live" || state.key === "active";
-  
+
   return (
     <TouchableOpacity activeOpacity={0.9} onPress={onPress} style={T.card}>
       <View style={T.imgContainer}>
@@ -129,13 +129,15 @@ function EventCard({ e, onPress, onManage, onVerify }: any) {
           <Image source={{ uri: banner }} style={T.img} />
         ) : (
           <View style={[T.img, { backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center" }]}>
-             <Text style={{ fontSize: 40 }}>{e.emoji || "📍"}</Text>
+            <Text style={{ fontSize: 40 }}>{e.emoji || "📍"}</Text>
           </View>
         )}
         <View style={T.badgeLeft}>
           <View style={[T.statusBadge, { backgroundColor: state.color }]}>
             <View style={[T.dot, { backgroundColor: state.key === "live" ? "#FFFFFF" : state.text }]} />
-            <Text style={[T.statusText, { color: state.text }]}>{state.label}</Text>
+            <Text style={[T.statusText, { color: state.text }]}>
+              {state.label} {e.kind === "service" ? "Service" : "Event"}
+            </Text>
           </View>
         </View>
       </View>
@@ -145,15 +147,15 @@ function EventCard({ e, onPress, onManage, onVerify }: any) {
           <Text style={T.title}>{e.title}</Text>
           <Ionicons name="ellipsis-horizontal" size={20} color={C.muted} />
         </View>
-        
+
         <View style={T.grid}>
           <View style={T.gridCell}>
-             <Text style={T.gridLabel}>WHEN</Text>
-             <Text style={T.gridValue}>{e.date || "Not set"}</Text>
+            <Text style={T.gridLabel}>WHEN</Text>
+            <Text style={T.gridValue}>{e.date || "Not set"}</Text>
           </View>
           <View style={T.gridCell}>
-             <Text style={T.gridLabel}>WHERE</Text>
-             <Text style={T.gridValue} numberOfLines={1}>{e.location?.city || "Not set"}</Text>
+            <Text style={T.gridLabel}>WHERE</Text>
+            <Text style={T.gridValue} numberOfLines={1}>{e.location?.city || "Not set"}</Text>
           </View>
         </View>
 
@@ -167,8 +169,8 @@ function EventCard({ e, onPress, onManage, onVerify }: any) {
 
         <View style={T.footer}>
           <View style={T.socialRow}>
-             <Ionicons name="people" size={14} color={C.accent} />
-             <Text style={T.goingText}>{attendees.length} joined</Text>
+            <Ionicons name="people" size={14} color={C.accent} />
+            <Text style={T.goingText}>{attendees.length} joined</Text>
           </View>
 
           <TouchableOpacity style={T.manageBtn} onPress={(ev) => { ev.stopPropagation(); onManage(); }}>
@@ -197,10 +199,10 @@ const T = StyleSheet.create({
   gridCell: { flex: 1, backgroundColor: "#F8FAFC", padding: 12, borderRadius: 12, borderWidth: 1, borderColor: "#F1F5F9" },
   gridLabel: { fontSize: 8, fontWeight: "900", color: C.muted, marginBottom: 4, letterSpacing: 0.5 },
   gridValue: { fontSize: 11, fontWeight: "700", color: C.ink },
-  
-  verifyBtn: { 
-    flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: C.accentLight, 
-    padding: 12, borderRadius: 14, marginBottom: 15, borderWidth: 1, borderColor: C.accent + "22" 
+
+  verifyBtn: {
+    flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: C.accentLight,
+    padding: 12, borderRadius: 14, marginBottom: 15, borderWidth: 1, borderColor: C.accent + "22"
   },
   verifyBtnText: { color: C.accent, fontSize: 13, fontWeight: "800" },
 
@@ -221,9 +223,9 @@ const T = StyleSheet.create({
   modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 },
   modalTitle: { fontSize: 20, fontWeight: "900", color: C.ink },
   modalSub: { fontSize: 14, color: C.muted, fontWeight: "600", marginBottom: 20 },
-  otpInput: { 
-    backgroundColor: "#F1F5F9", borderRadius: 14, padding: 16, fontSize: 18, 
-    fontWeight: "700", textAlign: "center", letterSpacing: 4, color: C.ink, marginBottom: 15 
+  otpInput: {
+    backgroundColor: "#F1F5F9", borderRadius: 14, padding: 16, fontSize: 18,
+    fontWeight: "700", textAlign: "center", letterSpacing: 4, color: C.ink, marginBottom: 15
   },
   msgText: { textAlign: "center", fontSize: 13, fontWeight: "700", marginBottom: 15 },
   submitBtn: { backgroundColor: C.accent, borderRadius: 14, padding: 16, alignItems: "center" },

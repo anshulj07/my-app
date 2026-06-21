@@ -132,6 +132,15 @@ export default function RootLayout() {
   useEffect(() => {
     if (fontsLoaded || fontError) {
       SplashScreen.hideAsync();
+
+      // ✅ Wake up Render server immediately on app start (prevents cold start delay)
+      const API_BASE = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
+      if (API_BASE) {
+        fetch(`${API_BASE.replace(/\/$/, "")}/api/ping`, {
+          method: "GET",
+          headers: { "ngrok-skip-browser-warning": "1" },
+        }).catch(() => {}); // fire-and-forget, ignore errors
+      }
     }
   }, [fontsLoaded, fontError]);
 

@@ -132,6 +132,10 @@ export default function ProfileHome() {
   const hasAvatar = !!mainPhoto;
   const avatarUri = mainPhoto;
 
+  // ✅ Instant name/username from Clerk while DB loads
+  const displayName = profile.name || user?.fullName || user?.firstName || "";
+  const displayUsername = profile.username || user?.username || "";
+
   const scrollY = useRef(new Animated.Value(0)).current;
 
   // ── Scroll-driven animations ──────────────────────────────────────────────
@@ -487,9 +491,9 @@ export default function ProfileHome() {
 
           {/* Cover info */}
           <Animated.View style={[S.coverInfo, { opacity: coverInfoOpacity }]}>
-            <Text style={S.coverName}>{profile.name || "User Name"}</Text>
+            <Text style={S.coverName}>{displayName || "Your Name"}</Text>
             <Text style={S.coverUsername}>
-              {profile.username ? `@${profile.username}` : "Name"}
+              {displayUsername ? `@${displayUsername}` : "Set your username"}
             </Text>
             <View style={S.coverMetaRow}>
               <Ionicons name="mail-outline" size={11} color="rgba(255,255,255,0.75)" />

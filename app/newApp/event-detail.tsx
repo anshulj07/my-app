@@ -701,7 +701,7 @@ export default function EventDetailScreen() {
                      (isFull && !isJoined && !isPending) && { backgroundColor: "#9CA3AF" },
                      (isLive && !isJoined && !isPending) && { backgroundColor: "#ef4444" }
                    ]} 
-                   onPress={(isJoined || isPending) ? handleLeave : onPress}
+                   onPress={(isJoined || isPending) ? () => { handleLeave(); } : () => { onPress(); }}
                    disabled={isButtonDisabled}
                  >
                    {submitting || (loading && !ev) ? (

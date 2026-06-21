@@ -32,6 +32,7 @@ const C = {
   purpleSoft:  "rgba(99,102,241,0.08)",
   purpleBorder: "rgba(99,102,241,0.15)",
   purpleDark:  "#4F46E5",
+  green:       "#10B981",
   amber:       "#F59E0B",
   amberSoft:   "rgba(245,158,11,0.10)",
   red:         "#EF4444",
@@ -58,7 +59,7 @@ type Props = {
   startDate?: string;
   endDate?: string;
   durationHrs?: number;
-  customTrigger?: (onPress: () => React.ReactNode) => React.ReactNode;
+  customTrigger?: (onPress: () => void) => React.ReactNode;
   autoOpen?: boolean;
   eventLat?: number;
   eventLng?: number;
@@ -201,33 +202,6 @@ export default function JoinEventButton({
     }
   }, [showModal, user]);
 
-  /* ── auto-open ── */
-  useEffect(() => {
-    if (autoOpen && !showModal && !joined && !pendingRequest && !loading) {
-      onPress();
-    }
-  }, [autoOpen, joined, pendingRequest, loading]);
-
-  /* ── check already joined ── */
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        if (!API_BASE || !userId || !eventId) return;
-        const url = `${API_BASE}/api/events/is-joined?eventId=${encodeURIComponent(eventId)}&clerkUserId=${encodeURIComponent(userId)}`;
-        const res = await apiFetch(url, {
-          headers: EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : undefined,
-        });
-        const json = await res.json().catch(() => null);
-        if (!cancelled && res.ok) {
-          setJoined(!!json?.joined);
-          setPendingRequest(!!json?.pending);
-        }
-      } catch {}
-    })();
-    return () => { cancelled = true; };
-  }, [API_BASE, EVENT_API_KEY, userId, eventId]);
-
   /* ── open sheet ── */
   const onPress = async () => {
     if (disabled || loading || joined || pendingRequest) return;
@@ -260,11 +234,40 @@ export default function JoinEventButton({
     } catch {}
   };
 
+  /* ── auto-open ── */
+  useEffect(() => {
+    if (autoOpen && !showModal && !joined && !pendingRequest && !loading) {
+      onPress();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoOpen, joined, pendingRequest, loading]);
+
+  /* ── check already joined ── */
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        if (!API_BASE || !userId || !eventId) return;
+        const url = `${API_BASE}/api/events/is-joined?eventId=${encodeURIComponent(eventId)}&clerkUserId=${encodeURIComponent(userId)}`;
+        const res = await apiFetch(url, {
+          headers: EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : undefined,
+        });
+        const json = await res.json().catch(() => null);
+        if (!cancelled && res.ok) {
+          setJoined(!!json?.joined);
+          setPendingRequest(!!json?.pending);
+        }
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [API_BASE, EVENT_API_KEY, userId, eventId]);
+
   useEffect(() => {
     if (showModal && kind === "service" && selectedDate) {
       fetchBookedSlots(selectedDate);
     }
   }, [selectedDate]);
+
 
   /* ── Confirm Booking → go to payment or free join ── */
   const handleConfirmBooking = async () => {
@@ -375,8 +378,26 @@ export default function JoinEventButton({
       });
 
       const json = await res.json().catch(() => null);
-      if (!res.ok || !json?.payment?.orderId) {
-        Alert.alert("Booking Error", json?.error || "Could not initiate booking.");
+      
+      // ✅ Check for specific errors with better messages
+      if (!res.ok) {
+        const errMsg = json?.error || "Could not initiate booking.";
+        if (res.status === 500 && (errMsg.includes("not configured") || errMsg.includes("Payment gateway"))) {
+          Alert.alert(
+            "Payment Not Available", 
+            "Payment gateway is not configured on the server. Please contact support.",
+            [{ text: "OK" }]
+          );
+        } else if (res.status === 409) {
+          Alert.alert("Already Booked", errMsg);
+        } else {
+          Alert.alert("Booking Error", errMsg);
+        }
+        return;
+      }
+
+      if (!json?.payment?.orderId) {
+        Alert.alert("Payment Error", json?.error || "Payment order could not be created. Please try again.");
         return;
       }
 
@@ -390,8 +411,8 @@ export default function JoinEventButton({
         description: `Join ${eventTitle}`,
       });
       setRazorpayVisible(true);
-    } catch {
-      Alert.alert("Network Error", "Please check your connection.");
+    } catch (e: any) {
+      Alert.alert("Network Error", "Please check your connection and try again.");
     } finally { setLoading(false); }
   };
 
@@ -486,7 +507,7 @@ export default function JoinEventButton({
     <>
       {/* ── MAIN CTA BUTTON ── */}
       {customTrigger ? (
-        customTrigger(onPress)
+        customTrigger(() => { onPress(); })
       ) : (
         <Pressable
           onPress={onPress}

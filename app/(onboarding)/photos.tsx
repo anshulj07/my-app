@@ -107,6 +107,28 @@ export default function PhotosScreen() {
     setErr(null);
     try {
       if (uploaded.length < MIN_PHOTOS) throw new Error(`Please add at least ${MIN_PHOTOS} photos.`);
+
+      // ✅ Step 1: Save photos to backend DB (so profile screen can show them)
+      if (API_BASE_RAW) {
+        try {
+          await fetch(`${API_BASE_RAW.replace(/\/$/, "")}/api/onboarding/photos`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {}),
+            },
+            body: JSON.stringify({
+              clerkUserId: user.id,
+              photos: uploaded.map((p) => p.url),
+            }),
+          });
+        } catch (dbErr) {
+          console.warn("[onboarding/photos] DB save failed (non-fatal):", dbErr);
+          // Non-fatal — still continue with Clerk metadata update
+        }
+      }
+
+      // ✅ Step 2: Update Clerk metadata (for onboarding completion flag)
       await user.update({
         unsafeMetadata: {
           ...user.unsafeMetadata,

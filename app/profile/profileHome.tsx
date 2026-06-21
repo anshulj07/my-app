@@ -4,7 +4,7 @@ import React, {
 import {
   View, Text, TouchableOpacity, Animated, ActivityIndicator,
   Image, RefreshControl, Modal, Dimensions,
-  StyleSheet, StatusBar, Platform, Linking,
+  StyleSheet, StatusBar, Platform, Linking, Alert,
 } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useRouter, useFocusEffect } from "expo-router";
@@ -128,7 +128,7 @@ export default function ProfileHome() {
 
   const photos = useMemo(() => sanitizePhotos(profile.photos), [profile.photos]);
   const previewPhotos = photos.slice(0, 4);
-  const mainPhoto = photos[0] ?? profile.avatar ?? user?.imageUrl ?? null;
+  const mainPhoto = profile.avatar ?? user?.imageUrl ?? null;
   const hasAvatar = !!mainPhoto;
   const avatarUri = mainPhoto;
 
@@ -376,7 +376,7 @@ export default function ProfileHome() {
           <View style={S.stickyActions}>
             <TouchableOpacity
               style={S.stickyBtn}
-              onPress={() => setPhotosOpen(true)}
+              onPress={() => { uploadPhoto(null, true).catch(e => Alert.alert("Upload Error", e.message)); }}
             >
               <Ionicons name="pencil" size={16} color="#fff" />
             </TouchableOpacity>
@@ -469,7 +469,7 @@ export default function ProfileHome() {
             <View style={S.coverTopRight}>
               <TouchableOpacity
                 style={S.coverBtn}
-                onPress={() => setPhotosOpen(true)}
+                onPress={() => { uploadPhoto(null, true).catch(e => Alert.alert("Upload Error", e.message)); }}
               >
                 <Ionicons name="pencil" size={18} color="#fff" />
               </TouchableOpacity>
@@ -483,7 +483,7 @@ export default function ProfileHome() {
           </Animated.View>
 
           {!hasAvatar && (
-            <TouchableOpacity style={S.addPhotoBtn} onPress={() => setMenuOpen(true)}>
+            <TouchableOpacity style={S.addPhotoBtn} onPress={() => { uploadPhoto(null, true).catch(e => Alert.alert("Upload Error", e.message)); }}>
               <Ionicons name="camera-outline" size={14} color="rgba(255,255,255,0.9)" />
               <Text style={S.addPhotoTxt}>Add Photo</Text>
             </TouchableOpacity>

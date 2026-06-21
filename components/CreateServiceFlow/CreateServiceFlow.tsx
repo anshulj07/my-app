@@ -27,6 +27,7 @@ import { buildLocationFromAddressComponents } from "../AddEventModal/location/bu
 import { makeGoogleMapHtml } from "../AddEventModal/map/googleMapHtml";
 import * as ImagePicker from "expo-image-picker";
 import { CropModal } from "../AddEventModal/CropModal";
+import { textToEmoji } from "../AddEventModal/utils/emoji";
 import { styles, C } from "./CreateServiceFlow.styles";
 
 const API_BASE_RAW = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
@@ -419,7 +420,7 @@ export default function CreateServiceFlow({
       const payload = {
         title: headline.trim(),
         description: about.trim(),
-        emoji: COMPANION_TYPES.find(t => selectedTypes.includes(t.id))?.icon || "✨",
+        emoji: (textToEmoji(headline) !== "📍" ? textToEmoji(headline) : null) || COMPANION_TYPES.find(t => selectedTypes.includes(t.id))?.icon || "✨",
         creatorClerkId: userId,
         creatorName: `${user?.firstName || ""} ${user?.lastName || ""}`.trim() || user?.username || "Companion",
         kind: "service",

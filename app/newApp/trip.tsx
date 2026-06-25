@@ -5,6 +5,7 @@ import {
   TextInput, Image, Animated, Dimensions, Platform,
   StatusBar, RefreshControl, ActivityIndicator,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -30,7 +31,7 @@ const { width: SW } = Dimensions.get("window");
 const PAD = 20;
 
 const C = {
-  bg: "#F7F8F4",
+  bg: "#FFFFFF",
   white: "#FFFFFF",
   card: "#FFFFFF",
   border: "#EEEEEE",
@@ -86,7 +87,7 @@ import { BlurView } from "expo-blur";
 
 // ── Hero Card: image fills bg, content overlays at bottom ─────────────────────
 function HeroCard({ ev, onPress }: { ev: TripEvent; onPress?: () => void }) {
-  const isPaid = ev.kind === "paid" || ev.kind === "service";
+  const isPaid = ev.kind === "paid";
   const price = isPaid ? `₹${((ev.priceCents ?? 0) / 100).toFixed(0)}` : "Free";
   const loc = ev.location?.city || ev.location?.address || ev.location?.formattedAddress || "";
   const imgUri = ev.bannerUri || (ev as any).bannerImage || (ev as any).banner;
@@ -133,7 +134,7 @@ function HeroCard({ ev, onPress }: { ev: TripEvent; onPress?: () => void }) {
 
 // ── Small Card ─────────────────────────────────────────────────
 function SmallCard({ ev, onPress, width }: { ev: TripEvent; onPress?: () => void; width: number }) {
-  const isPaid = ev.kind === "paid" || ev.kind === "service";
+  const isPaid = ev.kind === "paid";
   const price = isPaid ? `₹${((ev.priceCents ?? 0) / 100).toFixed(0)}` : "Free";
   const loc = ev.location?.city || ev.location?.address || "";
   const imgUri = ev.bannerUri || (ev as any).bannerImage || (ev as any).banner;
@@ -183,11 +184,18 @@ export default function TripScreen() {
   const LOAD_MORE_SIZE = 50;
 
   const fade = useRef(new Animated.Value(0)).current;
+  const gradAnim = useRef(new Animated.Value(0)).current;
   const API_BASE = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string;
   const EVENT_API_KEY = (Constants.expoConfig?.extra as any)?.eventApiKey as string;
 
   useEffect(() => {
     Animated.timing(fade, { toValue: 1, duration: 380, useNativeDriver: true }).start();
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(gradAnim, { toValue: 1, duration: 4000, useNativeDriver: false }),
+        Animated.timing(gradAnim, { toValue: 0, duration: 4000, useNativeDriver: false })
+      ])
+    ).start();
     (async () => {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
@@ -244,8 +252,6 @@ export default function TripScreen() {
         const countryMatch = (e.location?.countryName ?? "").toLowerCase().includes(q) || 
                              (e.location?.countryCode ?? "").toLowerCase().includes(q);
         const creatorMatch = (e.creatorName ?? "").toLowerCase().includes(q);
-        const kindMatch = (e.kind ?? "").toLowerCase().includes(q) ||
-                          (e.kind === "service" && "service".includes(q)) ||
                           (e.kind === "paid" && "paid".includes(q)) ||
                           (e.kind === "free" && "free".includes(q));
 
@@ -286,7 +292,6 @@ export default function TripScreen() {
           const ek = (e.kind || "free").toLowerCase();
           if (fk === "free") return ek === "free" || ek === "event_free";
           if (fk === "paid") return ek === "paid" || ek === "event_paid";
-          if (fk === "service") return ek === "service";
           return true;
         });
       }
@@ -365,23 +370,19 @@ export default function TripScreen() {
     return m.length > 0 ? m : filtered.slice(0, 8);
   }, [filtered, city]);
 
-  const localServices = useMemo(() => {
-    return filtered.filter(e => e.kind === "service" || e.title.toLowerCase().includes("service"));
-  }, [filtered]);
+
 
   const allEvents = useMemo(() => filtered.slice(0, displayCount), [filtered, displayCount]);
   const hasMore = filtered.length > displayCount;
   const TOP = Math.max(insets.top, Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0) + 8;
 
   const openSheet = (ev: TripEvent) => {
-    const isService = ev.kind === "service" || ev.title?.toLowerCase().includes("service");
     router.push({
       pathname: "/newApp/event-detail",
       params: { 
         eventId: ev._id, 
         title: ev.title, 
         emoji: ev.emoji,
-        booking: isService ? "true" : "false",
         bannerUri: ev.bannerUri || (ev as any).bannerImage || (ev as any).banner || "",
         date: ev.date || "",
         time: ev.time || "",
@@ -398,13 +399,19 @@ export default function TripScreen() {
 
   return (
     <Animated.View style={[S.screen, { opacity: fade }]}>
-      <StatusBar barStyle="dark-content" backgroundColor={C.bg} />
+      <View style={StyleSheet.absoluteFill}>
+        <LinearGradient colors={["#E0E7FF", "#FCE7F3", "#EDE9FE"]} style={StyleSheet.absoluteFill} start={{x:0, y:0}} end={{x:1, y:1}} />
+        <Animated.View style={[StyleSheet.absoluteFill, { opacity: gradAnim }]}>
+          <LinearGradient colors={["#EDE9FE", "#FFE4E6", "#DBEAFE"]} style={StyleSheet.absoluteFill} start={{x:1, y:0}} end={{x:0, y:1}} />
+        </Animated.View>
+      </View>
+      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
 
       {/* HEADER */}
       <View style={[S.header, { paddingTop: TOP }]}>
         <View style={S.headerRow}>
           <View>
-            <Text style={S.headerTitle}>Explore</Text>
+            <Text style={[S.headerTitle, { color: C.ink }]}>Explore</Text>
           </View>
           <TouchableOpacity style={S.filterBtn} onPress={() => setShowFilters(true)}>
             <Ionicons name="options-outline" size={20} color={C.accent} />
@@ -448,17 +455,20 @@ export default function TripScreen() {
         {/* BROWSE BY CATEGORY */}
         <View style={[S.section, { marginTop: 10, marginBottom: 20 }]}>
           <View style={S.sectionHead}>
-            <Text style={S.sectionTitle}>Browse by Category</Text>
+            <Text style={[S.sectionTitle, { color: C.ink }]}>Browse by Category</Text>
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={S.catScroll}>
             {CATS.map(cat => {
               const active = catFilter === cat.key;
               return (
-                <TouchableOpacity key={cat.key} style={S.catItem} onPress={() => { setCatFilter(cat.key); setDisplayCount(50); }} activeOpacity={0.78}>
-                  <View style={[S.catCircle, { backgroundColor: active ? cat.color : "#F0F0F0" }]}>
-                    <Ionicons name={cat.icon as any} size={22} color={active ? "#fff" : cat.color} />
-                  </View>
-                  <Text style={[S.catLabel, { color: active ? cat.color : C.muted }]}>{cat.label}</Text>
+                <TouchableOpacity 
+                  key={cat.key} 
+                  style={[S.catItem, active && S.catItemActive]} 
+                  onPress={() => { setCatFilter(cat.key); setDisplayCount(50); }} 
+                  activeOpacity={0.78}
+                >
+                  <Ionicons name={cat.icon as any} size={16} color={active ? "#fff" : C.ink2} />
+                  <Text style={[S.catLabel, { color: active ? "#fff" : C.ink2, fontWeight: active ? "800" : "600" }]}>{cat.label}</Text>
                 </TouchableOpacity>
               );
             })}
@@ -498,7 +508,7 @@ export default function TripScreen() {
             {/* HERO CAROUSEL */}
             {heroEvents.length > 0 && (
               <ScrollView
-                horizontal pagingEnabled
+                horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={{ paddingHorizontal: PAD, gap: 16 }}
                 style={{ marginBottom: 32 }}
@@ -515,8 +525,8 @@ export default function TripScreen() {
             <View style={S.section}>
               <View style={S.sectionHead}>
                 <View>
-                  <Text style={S.sectionTitle}>Upcoming Near You</Text>
-                  <Text style={S.sectionSub}>Events in {city}</Text>
+                  <Text style={[S.sectionTitle, { color: C.ink }]}>Upcoming Near You</Text>
+                  <Text style={[S.sectionSub, { color: C.muted }]}>Events in {city}</Text>
                 </View>
                 <TouchableOpacity><Text style={S.seeAll}>See all</Text></TouchableOpacity>
               </View>
@@ -529,56 +539,13 @@ export default function TripScreen() {
               )}
             </View>
 
-            {/* LOCAL SERVICES (2-row Horizontal) */}
-            {localServices.length > 0 && (
-              <View style={S.section}>
-                <View style={S.sectionHead}>
-                  <View>
-                    <Text style={S.sectionTitle}>Local Services</Text>
-                    <Text style={S.sectionSub}>Top rated professionals in {city}</Text>
-                  </View>
-                  <TouchableOpacity><Text style={S.seeAll}>See all</Text></TouchableOpacity>
-                </View>
-                <ScrollView 
-                  horizontal 
-                  showsHorizontalScrollIndicator={false} 
-                  contentContainerStyle={S.hGridScroll}
-                >
-                  {Array.from({ length: Math.ceil(localServices.length / 2) }).map((_, colIdx) => (
-                    <View key={colIdx} style={S.vCol}>
-                      {localServices.slice(colIdx * 2, colIdx * 2 + 2).map(ev => (
-                        <TouchableOpacity 
-                          key={ev._id} 
-                          style={S.compactServiceCard} 
-                          onPress={() => openSheet(ev)}
-                        >
-                          <Image 
-                            source={{ uri: ev.bannerUri || "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&q=80&w=200" }} 
-                            style={S.compactServiceImg} 
-                          />
-                          <View style={S.compactServiceBody}>
-                            <Text style={S.compactServiceTitle} numberOfLines={1}>{ev.title}</Text>
-                            <View style={S.compactServiceMeta}>
-                              <Ionicons name="star" size={10} color={C.gold} />
-                              <Text style={S.compactServiceMetaTxt}>
-                                4.9 {ev.distanceKm !== undefined ? `• ${ev.distanceKm < 1 ? "< 1" : ev.distanceKm.toFixed(1)}km` : ""}
-                              </Text>
-                            </View>
-                          </View>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  ))}
-                </ScrollView>
-              </View>
-            )}
 
             {/* ALL EVENTS */}
             <View style={S.section}>
               <View style={S.sectionHead}>
                 <View>
-                  <Text style={S.sectionTitle}>All Events</Text>
-                  <Text style={S.sectionSub}>{filtered.length} events available</Text>
+                  <Text style={[S.sectionTitle, { color: C.ink }]}>All Events</Text>
+                  <Text style={[S.sectionSub, { color: C.muted }]}>{filtered.length} events available</Text>
                 </View>
               </View>
               <View style={S.allGrid}>
@@ -604,7 +571,7 @@ export default function TripScreen() {
 }
 
 const S = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: C.bg },
+  screen: { flex: 1 },
 
   header: { paddingHorizontal: PAD, paddingBottom: 10 },
   headerRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },
@@ -678,10 +645,18 @@ const S = StyleSheet.create({
   seeAll: { fontSize: 13, color: C.accent, fontWeight: "700" },
 
   // Category
-  catScroll: { paddingHorizontal: PAD, gap: 18 },
-  catItem: { alignItems: "center", gap: 8 },
-  catCircle: { width: 60, height: 60, borderRadius: 30, alignItems: "center", justifyContent: "center" },
-  catLabel: { fontSize: 11, fontWeight: "700", textAlign: "center" },
+  catScroll: { paddingHorizontal: PAD, gap: 10 },
+  catItem: { 
+    flexDirection: "row", alignItems: "center", gap: 6, 
+    paddingHorizontal: 18, paddingVertical: 12, 
+    borderRadius: 99, 
+    backgroundColor: "rgba(255,255,255,0.6)",
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.9)"
+  },
+  catItemActive: {
+    backgroundColor: C.ink,
+  },
+  catLabel: { fontSize: 13, textAlign: "center", letterSpacing: 0.2 },
 
   // Horizontal list
   hList: { paddingHorizontal: PAD, gap: 12 },

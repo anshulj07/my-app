@@ -79,7 +79,7 @@ function EventCard({ e, onPress, onSummary }: { e: EventDoc; onPress: () => void
         <View style={T.badgeLeft}>
           <View style={T.endedBadge}>
             <Ionicons name="checkmark-circle" size={12} color="#fff" />
-            <Text style={T.badgeText}>Ended {e.kind === "service" ? "Service" : "Event"}</Text>
+            <Text style={T.badgeText}>Ended Event</Text>
           </View>
         </View>
         <View style={T.badgeRight}>

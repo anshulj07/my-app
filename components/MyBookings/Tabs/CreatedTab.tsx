@@ -55,7 +55,7 @@ function getDisplayState(ev: EventDoc) {
   const status = String(ev.status || "active").toLowerCase();
   if (status === "paused") return { label: "Paused", color: C.red, text: C.redText, key: "paused" };
   if (status === "ended") return { label: "Ended", color: "#F1F5F9", text: C.muted, key: "ended" };
-  if (ev.kind === "service") return { label: "Active", color: C.green, text: C.greenText, key: "active" };
+
   const start = eventStartMs(ev);
   if (!Number.isFinite(start) || start === Number.POSITIVE_INFINITY) return { label: "Upcoming", color: C.blue, text: C.blueText, key: "upcoming" };
   const now = Date.now();
@@ -136,7 +136,7 @@ function EventCard({ e, onPress, onManage, onVerify }: any) {
           <View style={[T.statusBadge, { backgroundColor: state.color }]}>
             <View style={[T.dot, { backgroundColor: state.key === "live" ? "#FFFFFF" : state.text }]} />
             <Text style={[T.statusText, { color: state.text }]}>
-              {state.label} {e.kind === "service" ? "Service" : "Event"}
+              {state.label} Event
             </Text>
           </View>
         </View>

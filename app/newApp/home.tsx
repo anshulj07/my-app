@@ -2,7 +2,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   TouchableOpacity, Text, StyleSheet, Platform,
-  Modal, View, Pressable, Animated,
+  Modal, View, Pressable, Animated, Dimensions
 } from "react-native";
 import * as Location from "expo-location";
 import Constants from "expo-constants";
@@ -17,9 +17,7 @@ import type { EventPin } from "../../components/Map/MapView";
 import MapSearchHeader from "../../components/SearchHeaderHomeScreen/MapSearchHeader";
 import ModalizeEventSheet from "../../components/AddEventModal/AddEvent";
 import EventsListModal from "../../components/List/EventsListModal";
-import EditServiceFlow from "../../components/EditServiceFlow/EditServiceFlow";
 import EditEventModal from "../../components/EditEventModal/EditEvent";
-import CreateServiceFlow from "../../components/CreateServiceFlow/CreateServiceFlow";
 
 // ─── Design tokens ───────────────────────────────────────────────────────────
 const C = {
@@ -115,64 +113,24 @@ function toEditableEvent(pin: EventPin): NonNullable<EditEventValue> {
   } as NonNullable<EditEventValue>;
 }
 
-// ─── FAB Picker Option Component ─────────────────────────────────────────────
-interface PickerOptionProps {
-  onPress: () => void;
-  iconName: keyof typeof Ionicons.glyphMap;
-  iconColor: string;
-  iconBg: string;
-  borderColor: string;
-  title: string;
-  subtitle: string;
-  badgeText: string;
-  badgeColor: string;
-  badgeBg: string;
-  glowColor: string;
-}
-
-function PickerOption({
-  onPress, iconName, iconColor, iconBg, borderColor,
-  title, subtitle, badgeText, badgeColor, badgeBg, glowColor,
-}: PickerOptionProps) {
-  const scale = useMemo(() => new Animated.Value(1), []);
-
-  const onPressIn = () => Animated.spring(scale, { toValue: 0.97, useNativeDriver: true, speed: 40 }).start();
-  const onPressOut = () => Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 30 }).start();
-
+function PickerOption({ onPress, iconName, iconColor, iconBg, borderColor, glowColor, title, subtitle, badgeText, badgeColor, badgeBg }: any) {
   return (
-    <Animated.View style={{ transform: [{ scale }] }}>
-      <TouchableOpacity
-        style={[P.option, { borderColor }]}
-        activeOpacity={1}
-        onPress={onPress}
-        onPressIn={onPressIn}
-        onPressOut={onPressOut}
-      >
-        {/* Glow layer */}
-        <View style={[P.optionGlow, { backgroundColor: glowColor }]} />
-
-        {/* Icon */}
-        <View style={[P.iconWrap, { backgroundColor: iconBg, borderColor }]}>
-          <Ionicons name={iconName} size={24} color={iconColor} />
-        </View>
-
-        {/* Text */}
-        <View style={P.optionBody}>
-          <Text style={P.optionTitle}>{title}</Text>
-          <Text style={P.optionSub}>{subtitle}</Text>
-        </View>
-
-        {/* Badge */}
-        <View style={[P.badge, { backgroundColor: badgeBg, borderColor: badgeColor + "55" }]}>
-          <Text style={[P.badgeText, { color: badgeColor }]}>{badgeText}</Text>
-        </View>
-
-        {/* Arrow */}
-        <Ionicons name="chevron-forward" size={16} color={C.hint} style={{ marginLeft: 4 }} />
-      </TouchableOpacity>
-    </Animated.View>
+    <TouchableOpacity style={[P.option, { borderColor }]} activeOpacity={0.8} onPress={onPress}>
+      <BlurView intensity={20} style={[P.optionGlow, { backgroundColor: glowColor }]} />
+      <View style={[P.iconWrap, { backgroundColor: iconBg, borderColor }]}>
+        <Ionicons name={iconName as any} size={24} color={iconColor} />
+      </View>
+      <View style={P.optionBody}>
+        <Text style={P.optionTitle}>{title}</Text>
+        <Text style={P.optionSub}>{subtitle}</Text>
+      </View>
+      <View style={[P.badge, { backgroundColor: badgeBg, borderColor }]}>
+        <Text style={[P.badgeText, { color: badgeColor }]}>{badgeText}</Text>
+      </View>
+    </TouchableOpacity>
   );
 }
+
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function Home() {
@@ -182,13 +140,13 @@ export default function Home() {
 
   const [open, setOpen] = useState(false);
   const [showList, setShowList] = useState(false);
+  const [defaultKind, setDefaultKind] = useState<"event_free">("event_free");
   const [showPicker, setShowPicker] = useState(false);
-  const [showServiceFlow, setShowServiceFlow] = useState(false);
-  const [defaultKind, setDefaultKind] = useState<"event_free" | "service">("event_free");
 
   const [events, setEvents] = useState<EventPin[]>([]);
   const [myLoc, setMyLoc] = useState<{ lat: number; lng: number } | null>(null);
   const [myCity, setMyCity] = useState("");
+  const [searchLabel, setSearchLabel] = useState<string | null>(null);
   const [locStatus, setLocStatus] = useState<"unknown" | "granted" | "denied">("unknown");
   // ✅ Don't render map until we have a real location OR permission is denied
   const [locReady, setLocReady] = useState(false);
@@ -196,9 +154,7 @@ export default function Home() {
   const [editOpen, setEditOpen] = useState(false);
   const [editEvent, setEditEvent] = useState<EditEventValue>(null);
 
-  // Edit Service Flow
-  const [showEditService, setShowEditService] = useState(false);
-  const [serviceToEdit, setServiceToEdit] = useState<any>(null);
+
 
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
   const [mapStackOpen, setMapStackOpen] = useState(false);
@@ -349,7 +305,6 @@ export default function Home() {
       const kind = String((e as any).kind ?? "").toLowerCase(), f = activeFilter.toLowerCase();
       if (f === "free" || f === "event_free") return kind === "free" || kind === "event_free";
       if (f === "paid" || f === "event_paid") return kind === "paid" || kind === "event_paid";
-      if (f === "service") return kind === "service";
       return true;
     });
   }, [events, activeFilter, userId]);
@@ -387,6 +342,7 @@ export default function Home() {
           key={mapKey}
           events={filteredEvents}
           initialCenter={myLoc}
+          searchLabel={searchLabel}
           locationStatus={locStatus}
           onPinPress={onPinPress}
           userId={userId}
@@ -398,7 +354,10 @@ export default function Home() {
 
       <MapSearchHeader
         top={insets.top + 10}
-        onPick={(lat, lng) => setMyLoc({ lat, lng })}
+        onPick={(lat, lng, label) => {
+          setMyLoc({ lat, lng });
+          setSearchLabel(label ?? null);
+        }}
         activeFilter={activeFilter}
         onFilterChange={setActiveFilter}
       />
@@ -486,21 +445,6 @@ export default function Home() {
               badgeBg={C.purpleDim}
             />
 
-            {/* Option — Service */}
-            <PickerOption
-              onPress={() => { setShowPicker(false); setTimeout(() => setShowServiceFlow(true), 120); }}
-              iconName="briefcase"
-              iconColor={C.purpleText}
-              iconBg={C.purpleDim}
-              borderColor={C.purple + "30"}
-              glowColor={C.purpleGlow}
-              title="Service"
-              subtitle="Bookable slots · Clients book you"
-              badgeText="Bookable"
-              badgeColor={C.purpleText}
-              badgeBg={C.purpleDim}
-            />
-
             {/* Cancel */}
             <TouchableOpacity style={P.cancelBtn} activeOpacity={0.8} onPress={() => setShowPicker(false)}>
               <Text style={P.cancelText}>Cancel</Text>
@@ -509,17 +453,6 @@ export default function Home() {
           </Pressable>
         </Pressable>
       </Modal>
-
-      <EditServiceFlow
-        visible={showEditService}
-        service={serviceToEdit}
-        onClose={() => { setShowEditService(false); setServiceToEdit(null); }}
-        onUpdated={() => {
-          setShowEditService(false);
-          setServiceToEdit(null);
-          loadEvents();
-        }}
-      />
 
       <ModalizeEventSheet
         visible={open} onClose={() => setOpen(false)} defaultKind={defaultKind}
@@ -530,21 +463,6 @@ export default function Home() {
           loadEvents();
         }}
       />
-
-      <CreateServiceFlow
-        visible={showServiceFlow}
-        cityName={myCity}
-        onClose={() => setShowServiceFlow(false)}
-        onCreate={(e) => {
-          const n = normalizeEvent(e) ?? (e as EventPin);
-          setEvents(prev => [n, ...prev]);
-          loadEvents();
-        }}
-        onBackToPicker={() => {
-          setShowServiceFlow(false);
-          setTimeout(() => setShowPicker(true), 300);
-        }}
-      />
     </>
   );
 }
@@ -553,36 +471,36 @@ export default function Home() {
 const OL = StyleSheet.create({
   chatBtn: {
     position: "absolute", left: 16,
-    width: 42, height: 42, borderRadius: 14,
-    backgroundColor: C.amberDim,
-    borderWidth: 1, borderColor: C.amber + "40",
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: "rgba(255,255,255,0.9)",
+    borderWidth: 1, borderColor: "rgba(0,0,0,0.05)",
     alignItems: "center", justifyContent: "center",
-    shadowColor: C.amber, shadowOpacity: 0.2, shadowRadius: 10, shadowOffset: { width: 0, height: 4 },
-    elevation: 5, zIndex: 10,
+    shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 15, shadowOffset: { width: 0, height: 6 },
+    elevation: 8, zIndex: 10,
   },
   fabGlow: {
-    position: "absolute", bottom: 28, right: 12,
+    position: "absolute", bottom: Platform.OS === "ios" ? 40 : 30, right: 12,
     width: 84, height: 84, borderRadius: 42,
     backgroundColor: C.greenGlow,
     zIndex: 9,
   },
   fab: {
-    position: "absolute", bottom: 38, right: 22,
+    position: "absolute", bottom: Platform.OS === "ios" ? 50 : 40, right: 22,
     backgroundColor: C.green,
     alignItems: "center", justifyContent: "center",
-    shadowColor: C.green, shadowOpacity: 0.5, shadowRadius: 16, shadowOffset: { width: 0, height: 8 },
-    elevation: 10, zIndex: 10,
+    shadowColor: "#000", shadowOpacity: 0.25, shadowRadius: 20, shadowOffset: { width: 0, height: 10 },
+    elevation: 15, zIndex: 10,
   },
   nearbyPill: {
-    position: "absolute", bottom: 42, left: "50%",
+    position: "absolute", bottom: Platform.OS === "ios" ? 60 : 50, left: "50%",
     transform: [{ translateX: -58 }],
-    width: 116, height: 42,
+    width: 116, height: 44,
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
     borderRadius: 999,
-    backgroundColor: "rgba(76, 80, 78, 0.7)",
-    borderWidth: 1, borderColor: C.green + "40",
-    shadowColor: C.green, shadowOpacity: 0.2, shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
-    elevation: 6, zIndex: 10,
+    backgroundColor: "rgba(255, 255, 255, 0.95)",
+    borderWidth: 1, borderColor: "rgba(0,0,0,0.05)",
+    shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 15, shadowOffset: { width: 0, height: 8 },
+    elevation: 10, zIndex: 10,
   },
   nearbyText: { color: C.greenText, fontWeight: "700", fontSize: 13, letterSpacing: 0.3 },
 });
@@ -667,3 +585,4 @@ const P = StyleSheet.create({
   },
   cancelText: { fontSize: 15, fontWeight: "800", color: "#6366F1" },
 });
+

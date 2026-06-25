@@ -87,13 +87,13 @@ function EventCard({ e, onPress }: { e: EventDoc; onPress: () => void }) {
           <View style={{ flexDirection: "row", alignItems: "center" }}>
             <View style={[T.priceBadge, { backgroundColor: isPaid ? C.gold : C.green }]}>
               <Text style={T.priceBadgeText}>
-                {isPaid ? "PAID" : "FREE"} {e.kind === "service" ? "SERVICE" : "EVENT"}
+                {isPaid ? "PAID" : "FREE"} EVENT
               </Text>
             </View>
             {isLive && (
               <View style={[T.liveBadge, { marginLeft: 8 }]}>
                 <View style={T.liveDot} />
-                <Text style={T.liveBadgeText}>LIVE {e.kind === "service" ? "SERVICE" : "EVENT"}</Text>
+                <Text style={T.liveBadgeText}>LIVE EVENT</Text>
               </View>
             )}
           </View>

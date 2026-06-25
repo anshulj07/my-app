@@ -3,8 +3,9 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   View, Text, FlatList, TouchableOpacity, Image, TextInput,
   StyleSheet, ActivityIndicator, RefreshControl, Platform, StatusBar,
-  Animated, Pressable, ScrollView, Dimensions
+  Animated, Pressable, ScrollView, Dimensions, Alert
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import Constants from "expo-constants";
@@ -14,7 +15,7 @@ import { apiFetch } from "../../../lib/apiFetch";
 const { width: SW } = Dimensions.get("window");
 
 const C = {
-  bg:          "#F8FAFF",
+  bg:          "#FFFFFF",
   white:       "#FFFFFF",
   ink:         "#1A1C2E",
   muted:       "#7E8494",
@@ -57,6 +58,17 @@ export default function ChatListScreen() {
   const [search,     setSearch]     = useState("");
   const [activeChip, setActiveChip] = useState("All");
 
+  const gradAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(gradAnim, { toValue: 1, duration: 4000, useNativeDriver: false }),
+        Animated.timing(gradAnim, { toValue: 0, duration: 4000, useNativeDriver: false })
+      ])
+    ).start();
+  }, []);
+
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchConversations = useCallback(async () => {
@@ -87,6 +99,35 @@ export default function ChatListScreen() {
     });
   };
 
+  const promptDelete = (otherId: string, otherName: string) => {
+    Alert.alert(
+      "Delete Chat",
+      `Are you sure you want to delete your chat with ${otherName}? This will only remove it from your device.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Delete", 
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await apiFetch(`${API_BASE}/api/messages`, {
+                method: "DELETE",
+                headers: { 
+                  "Content-Type": "application/json", 
+                  ...(EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {}) 
+                },
+                body: JSON.stringify({ fromClerkUserId: userId, toClerkUserId: otherId })
+              });
+              fetchConversations();
+            } catch (err) {
+              console.error(err);
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const filtered = conversations.filter(c => {
     const matchesSearch = c.otherName.toLowerCase().includes(search.toLowerCase());
     const matchesChip = activeChip === "All" || (activeChip === "Unread" && c.unreadCount > 0);
@@ -98,13 +139,19 @@ export default function ChatListScreen() {
     `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=6366F1&color=fff&size=100`;
 
   return (
-    <View style={[S.screen, { paddingTop: TOP }]}>
-      <StatusBar barStyle="dark-content" backgroundColor={C.bg} />
+    <View style={S.screen}>
+      <View style={StyleSheet.absoluteFill}>
+        <LinearGradient colors={["#E0E7FF", "#FCE7F3", "#EDE9FE"]} style={StyleSheet.absoluteFill} start={{x:0, y:0}} end={{x:1, y:1}} />
+        <Animated.View style={[StyleSheet.absoluteFill, { opacity: gradAnim }]}>
+          <LinearGradient colors={["#EDE9FE", "#FFE4E6", "#DBEAFE"]} style={StyleSheet.absoluteFill} start={{x:1, y:0}} end={{x:0, y:1}} />
+        </Animated.View>
+      </View>
+      <View style={{ flex: 1, paddingTop: TOP }}>
+        <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
 
       {/* Header */}
       <View style={S.header}>
-        <TouchableOpacity style={S.iconBtn}><Ionicons name="menu-outline" size={24} color={C.ink} /></TouchableOpacity>
-        <Text style={S.headerTitle}>Messages</Text>
+        <Text style={[S.headerTitle, { color: C.ink }]}>Messages</Text>
         <View style={S.headerActions}>
           {/* Global search/create removed per request */}
         </View>
@@ -165,6 +212,7 @@ export default function ChatListScreen() {
               <TouchableOpacity 
                 style={[S.convItem, isFirst && S.convItemCard]} 
                 onPress={() => openChat(item)}
+                onLongPress={() => promptDelete(item.otherUserId, item.otherName)}
                 activeOpacity={0.8}
               >
                 <View style={S.avatarBox}>
@@ -194,12 +242,13 @@ export default function ChatListScreen() {
           }}
         />
       )}
+      </View>
     </View>
   );
 }
 
 const S = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: C.bg },
+  screen: { flex: 1 },
   
   header: { 
     flexDirection: "row", alignItems: "center", justifyContent: "space-between", 
@@ -207,12 +256,13 @@ const S = StyleSheet.create({
   },
   headerTitle: { fontSize: 24, fontFamily: "Outfit_900Black", color: "#2E3A59" },
   headerActions: { flexDirection: "row", gap: 15 },
-  iconBtn: { padding: 5 },
+  iconBtn: { padding: 5, backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 12 },
 
   searchRow: { paddingHorizontal: 20, marginTop: 15 },
   searchShell: { 
     flexDirection: "row", alignItems: "center", gap: 10,
-    backgroundColor: "#F0F3F9", borderRadius: 15, paddingHorizontal: 15, height: 50
+    backgroundColor: "rgba(255,255,255,0.95)", borderRadius: 15, paddingHorizontal: 15, height: 50,
+    borderWidth: 1, borderColor: "rgba(0,0,0,0.05)"
   },
   searchInput: { flex: 1, fontSize: 15, fontFamily: "Outfit_500Medium", color: C.ink },
 

@@ -1104,21 +1104,43 @@ export function buildMapHtml(args: {
         var msg=JSON.parse(data);
         if(!msg)return;
         if(msg.type==='updateEvents'){
-          var oldLen = DATA.length;
           DATA=msg.events||[];
           scheduleLayout();
-          if (DATA.length !== oldLen || DATA.length > 0) {
-            showToast('✦ '+DATA.length+' events nearby');
-          }
           return;
         }
         if(msg.type==='goToLocation'){
           var lat=Number(msg.lat),lng=Number(msg.lng);
           if(!isFinite(lat)||!isFinite(lng))return;
-          if(!map){setTimeout(function(){handleMsg(data);},500);return;}
-          map.panTo({lat:lat,lng:lng});
-          map.setZoom(Math.max(map.getZoom()||0,15));
-          showToast('📍 Current location');
+          if(!map){setTimeout(function(){handleMsg(data);},400);return;}
+
+          var target = new google.maps.LatLng(lat, lng);
+          var start  = map.getCenter();
+          var END_ZOOM = 13;
+
+          // Haversine distance (km)
+          var R    = 6371;
+          var dLat = (lat - start.lat()) * Math.PI / 180;
+          var dLon = (lng - start.lng()) * Math.PI / 180;
+          var a    = Math.sin(dLat/2)*Math.sin(dLat/2) +
+                     Math.cos(start.lat()*Math.PI/180)*Math.cos(lat*Math.PI/180)*
+                     Math.sin(dLon/2)*Math.sin(dLon/2);
+          var distKm = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+          if (distKm < 5) {
+            // Very close — just pan
+            map.panTo(target);
+            return;
+          }
+
+          // Far — zoom out to overview, pan, then zoom in
+          var MID_ZOOM = distKm > 5000 ? 3 : distKm > 2000 ? 4 : distKm > 800 ? 5 : distKm > 300 ? 6 : distKm > 100 ? 8 : 10;
+          map.setZoom(MID_ZOOM);
+          setTimeout(function() {
+            map.setCenter(target);
+            setTimeout(function() {
+              map.setZoom(END_ZOOM);
+            }, 400);
+          }, 400);
         }
       }catch(ex){}
     }

@@ -16,9 +16,10 @@ import HistorySummaryModal from "../profile/HistorySummaryModal";
 import { useNotifications } from "../../context/NotificationContext";
 import NotificationSheet from "./NotificationSheet";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import { LinearGradient } from "expo-linear-gradient";
 
 const C = {
-  bg:          "#F8FAFC",
+  bg:          "#FFFFFF",
   white:       "#FFFFFF",
   card:        "#FFFFFF",
   border:      "#E2E8F0",
@@ -71,10 +72,20 @@ export default function MyBookingsScreen() {
   const [goingEvents, setGoingEvents] = useState<EventDoc[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [filterType, setFilterType] = useState<"all" | "event" | "service">("all");
   const [showNotifs, setShowNotifs] = useState(false);
   const [admitBusy, setAdmitBusy] = useState<Record<string, boolean>>({});
   
+  const gradAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(gradAnim, { toValue: 1, duration: 4000, useNativeDriver: false }),
+        Animated.timing(gradAnim, { toValue: 0, duration: 4000, useNativeDriver: false })
+      ])
+    ).start();
+  }, []);
+
   const { notifications, unreadCount, refresh: refreshNotifs, markAsRead, loading: notifsLoading } = useNotifications();
 
   const [tabsW, setTabsW] = useState(0);
@@ -251,30 +262,30 @@ export default function MyBookingsScreen() {
 
   const filteredCreated = useMemo(() => {
     let list = allCreated.filter(e => getEventState(e) !== "past");
-    if (filterType === "event") list = list.filter(e => e.kind !== "service");
-    if (filterType === "service") list = list.filter(e => e.kind === "service");
     return sortActiveEvents(list);
-  }, [allCreated, filterType]);
+  }, [allCreated]);
 
   const filteredGoing = useMemo(() => {
     let list = goingEvents.filter(e => getEventState(e) !== "past");
-    if (filterType === "event") list = list.filter(e => e.kind !== "service");
-    if (filterType === "service") list = list.filter(e => e.kind === "service");
     return sortActiveEvents(list);
-  }, [goingEvents, filterType]);
+  }, [goingEvents]);
 
   const filteredPast = useMemo(() => {
     let list = [...allCreated, ...goingEvents].filter(e => getEventState(e) === "past");
-    if (filterType === "event") list = list.filter(e => e.kind !== "service");
-    if (filterType === "service") list = list.filter(e => e.kind === "service");
     return list;
-  }, [allCreated, goingEvents, filterType]);
+  }, [allCreated, goingEvents]);
 
   const TOP = insets.top + 20;
 
   return (
     <View style={S.screen}>
-      <StatusBar barStyle="dark-content" />
+      <View style={StyleSheet.absoluteFill}>
+        <LinearGradient colors={["#E0E7FF", "#FCE7F3", "#EDE9FE"]} style={StyleSheet.absoluteFill} start={{x:0, y:0}} end={{x:1, y:1}} />
+        <Animated.View style={[StyleSheet.absoluteFill, { opacity: gradAnim }]}>
+          <LinearGradient colors={["#EDE9FE", "#FFE4E6", "#DBEAFE"]} style={StyleSheet.absoluteFill} start={{x:1, y:0}} end={{x:0, y:1}} />
+        </Animated.View>
+      </View>
+      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
       
       {/* ── HEADER ── */}
       <View style={[S.header, { paddingTop: TOP }]}>
@@ -283,10 +294,10 @@ export default function MyBookingsScreen() {
             <Ionicons name="calendar" size={24} color={C.accent} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={S.headerTitle}>My Bookings</Text>
-            <Text style={S.headerSub}>Manage your nomad journey</Text>
+            <Text style={[S.headerTitle, { color: C.ink }]}>My Bookings</Text>
+            <Text style={[S.headerSub, { color: C.muted }]}>Manage your nomad journey</Text>
           </View>
-          <TouchableOpacity style={S.iconBtn} onPress={() => setShowNotifs(true)}>
+          <TouchableOpacity style={[S.iconBtn, { backgroundColor: "rgba(0,0,0,0.05)", borderColor: "rgba(0,0,0,0.1)" }]} onPress={() => setShowNotifs(true)}>
             <Ionicons name="notifications-outline" size={22} color={C.ink} />
             {unreadCount > 0 && <View style={S.notifBadge} />}
           </TouchableOpacity>
@@ -303,15 +314,10 @@ export default function MyBookingsScreen() {
         <TabBtn label="Past" active={tab === "past"} onPress={() => setTab("past")} count={filteredPast.length} />
       </View>
 
-      {/* ── FILTERS ── */}
-      <View style={S.filterRow}>
-        <FilterPill label="All" icon="grid" active={filterType === "all"} onPress={() => setFilterType("all")} />
-        <FilterPill label="Events" icon="calendar-outline" active={filterType === "event"} onPress={() => setFilterType("event")} />
-        <FilterPill label="Services" icon="construct-outline" active={filterType === "service"} onPress={() => setFilterType("service")} />
-      </View>
+
 
       {/* ── CONTENT ── */}
-      <View style={{ flex: 1, marginTop: 10 }}>
+      <View style={{ flex: 1, marginTop: 10, backgroundColor: "transparent", borderTopLeftRadius: 20, borderTopRightRadius: 20 }}>
         {loading ? (
           <ActivityIndicator size="large" color={C.accent} style={{ marginTop: 50 }} />
         ) : tab === "created" ? (
@@ -370,22 +376,14 @@ function TabBtn({ label, active, onPress, count }: any) {
   );
 }
 
-function FilterPill({ label, icon, active, onPress }: any) {
-  return (
-    <TouchableOpacity style={[S.filterPill, active && S.filterPillActive]} onPress={onPress}>
-      <Ionicons name={icon} size={14} color={active ? "#fff" : C.muted} />
-      <Text style={[S.filterPillText, active && S.filterPillTextActive]}>{label}</Text>
-    </TouchableOpacity>
-  );
-}
 
 const S = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: C.bg },
-  header: { backgroundColor: C.white, paddingBottom: 15 },
+  screen: { flex: 1, backgroundColor: "transparent" },
+  header: { paddingBottom: 15 },
   headerInner: { flexDirection: "row", alignItems: "center", gap: 15, paddingHorizontal: 20 },
-  headerIconBox: { width: 44, height: 44, borderRadius: 12, backgroundColor: C.accentLight, alignItems: "center", justifyContent: "center" },
-  headerTitle: { fontSize: 22, fontWeight: "900", color: C.ink },
-  headerSub: { fontSize: 13, color: C.muted, fontWeight: "500", marginTop: 2 },
+  headerIconBox: { width: 44, height: 44, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.3)", alignItems: "center", justifyContent: "center" },
+  headerTitle: { fontSize: 22, fontWeight: "900", color: "#fff" },
+  headerSub: { fontSize: 13, color: "rgba(255,255,255,0.8)", fontWeight: "500", marginTop: 2 },
 
   iconBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: C.bg, alignItems: "center", justifyContent: "center" },
   notifBadge: { position: "absolute", top: 10, right: 10, width: 8, height: 8, borderRadius: 4, backgroundColor: C.red, borderWidth: 1.5, borderColor: C.white },
@@ -406,14 +404,4 @@ const S = StyleSheet.create({
   countBadgeActive: { backgroundColor: C.accentLight },
   countText: { fontSize: 10, fontWeight: "800", color: C.muted },
   countTextActive: { color: C.accent },
-
-  filterRow: { flexDirection: "row", paddingHorizontal: 20, marginTop: 20, gap: 10 },
-  filterPill: {
-    flexDirection: "row", alignItems: "center", gap: 6,
-    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12,
-    backgroundColor: C.white, borderWidth: 1, borderColor: C.border,
-  },
-  filterPillActive: { backgroundColor: C.accent, borderColor: C.accent },
-  filterPillText: { fontSize: 12, fontWeight: "700", color: C.muted },
-  filterPillTextActive: { color: C.white },
 });

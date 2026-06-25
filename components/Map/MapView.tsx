@@ -109,6 +109,7 @@ function normalizeEvent(e: any, i: number): EventPin | null {
 export default function MapView({
   events,
   initialCenter,
+  searchLabel,
   locationStatus = "unknown",
   onPinPress,
   onLocationUpdate,
@@ -118,6 +119,7 @@ export default function MapView({
 }: {
   events: any[];
   initialCenter?: { lat: number; lng: number } | null;
+  searchLabel?: string | null;
   locationStatus?: "unknown" | "granted" | "denied";
   onPinPress?: (pin: EventPin) => void;
   /** Called with fresh lat/lng whenever the map pans to user's location */
@@ -192,6 +194,17 @@ export default function MapView({
       webViewRef.current.postMessage(JSON.stringify({ type: "updateEvents", events: safeEvents }));
     }
   }, [safeEventsJson, webViewReady]);
+
+  React.useEffect(() => {
+    if (webViewReady && webViewRef.current && initialCenter) {
+      webViewRef.current.postMessage(JSON.stringify({
+        type: "goToLocation",
+        lat: initialCenter.lat,
+        lng: initialCenter.lng,
+        label: searchLabel ?? undefined,
+      }));
+    }
+  }, [initialCenter?.lat, initialCenter?.lng, webViewReady]);
 
   const goToCurrentLocation = async () => {
     if (locLoading) return;

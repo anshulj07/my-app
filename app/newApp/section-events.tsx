@@ -111,7 +111,7 @@ function EventCard({ ev, idx, wished, onWish, onPress }: {
     : ev.location?.formattedAddress ?? "";
 
   // Category badge: derive from kind or use creator name
-  const badge = ev.kind === "paid" ? "Paid" : ev.kind === "service" ? "Service" : "Free";
+  const badge = ev.kind === "paid" ? "Paid" : "Free";
 
   // Mock rating for display (real data would have this)
   const rating = ((4.5 + (idx % 5) * 0.1)).toFixed(1);
@@ -317,7 +317,7 @@ export default function SectionEventsScreen() {
     allEvents.forEach(e => {
       if (e.kind === "free")    kinds.add("Free");
       if (e.kind === "paid")    kinds.add("Paid");
-      if (e.kind === "service") kinds.add("Service");
+
       // You can add more logic if events have tags
     });
     // Also add static category options to give richer UI like Image 1

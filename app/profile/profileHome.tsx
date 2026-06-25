@@ -75,7 +75,7 @@ type ProfileData = {
   newAttendees?: number;
   thisMonthEarning?: number;
   overallEarning?: number;
-  services?: string[] | null;
+
   reviewsCount?: number;
   verificationStatus?: "unverified" | "pending" | "verified" | "rejected";
 };
@@ -197,7 +197,7 @@ export default function ProfileHome() {
         newAttendees: s?.newAttendees ?? 0,
         thisMonthEarning: s?.thisMonthEarning ?? 0,
         overallEarning: s?.overallEarning ?? 0,
-        services: Array.isArray(s?.services) && s.services.length > 0 ? s.services : null,
+
         reviewsCount: s?.reviewsCount ?? 0,
         email: s?.email ?? "",
         city: s?.city ?? "",
@@ -694,42 +694,7 @@ export default function ProfileHome() {
             </View>
           </View>
 
-          {/* Services Provided */}
-          <View style={S.secDiv} />
-          <View style={S.sec}>
-            <View style={S.secHead}>
-              <Text style={S.secTitle}>Services Provided</Text>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-                {profile.services?.length ? (
-                  <TouchableOpacity
-                    activeOpacity={0.8}
-                    onPress={() => router.push("/newApp/home" as any)}
-                  >
-                    <Text style={S.viewAllText}>View All</Text>
-                  </TouchableOpacity>
-                ) : null}
-                <TouchableOpacity
-                  style={S.secEdit}
-                  onPress={() => router.push("/profile/settings/Services" as any)}
-                >
-                  <Ionicons name="pencil" size={13} color="#6C63FF" />
-                </TouchableOpacity>
-              </View>
-            </View>
-            <View style={S.chipsWrap}>
-              {profile.services?.length ? (
-                profile.services.map(s => (
-                  <View key={s} style={S.chip}>
-                    <Text style={S.chipTxt}>{s}</Text>
-                  </View>
-                ))
-              ) : (
-                <TouchableOpacity onPress={() => router.push("/profile/settings/Services" as any)}>
-                  <Text style={{ color: "#9CA3AF", fontSize: 14 }}>No services provided. Tap to add.</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          </View>
+
 
           {/* Earning */}
           <View style={S.secDiv} />
@@ -1136,7 +1101,7 @@ const EC = {
 
 type MyEventDoc = {
   _id: string; title: string; emoji?: string;
-  kind: "free" | "paid" | "service";
+  kind: "free" | "paid";
   priceCents?: number | null;
   startsAt?: string | null;
   endsAt?: string | null;
@@ -1457,7 +1422,6 @@ function MyEventCard({
 
   const isPast = tab === "past";
   const kindCfg =
-    ev.kind === "service" ? { accent: EC.purple, accentBg: EC.purpleBg, accentText: EC.purpleText, label: "Service" } :
     ev.kind === "paid"    ? { accent: EC.amber,  accentBg: EC.amberBg,  accentText: EC.amberText,  label: "Paid"    } :
                             { accent: EC.teal,   accentBg: EC.tealBg,   accentText: EC.tealText,   label: "Free"    };
 
@@ -1481,7 +1445,7 @@ function MyEventCard({
           <View style={ME.cardTop}>
             <View style={[ME.cardIconBox, { backgroundColor: kindCfg.accentBg }]}>
               <Text style={{ fontSize: 20 }}>
-                {ev.emoji || (ev.kind === "service" ? "🛠️" : ev.kind === "paid" ? "🎟" : "🎉")}
+                {ev.emoji || (ev.kind === "paid" ? "🎟" : "🎉")}
               </Text>
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>

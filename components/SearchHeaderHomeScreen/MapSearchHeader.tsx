@@ -1014,7 +1014,6 @@ const ACTIVITY_FILTERS: Filter[] = [
 const KIND_FILTERS: KindFilter[] = [
   { key: "free",    label: "Free",    dotColor: "#22C55E", activeBg: "#DCFCE7", activeText: "#166534", icon: "gift-outline" },
   { key: "paid",    label: "Paid",    dotColor: "#F59E0B", activeBg: "#FEF3C7", activeText: "#92400E", icon: "cash-outline" },
-  { key: "service", label: "Service", dotColor: "#8B5CF6", activeBg: "#F3E8FF", activeText: "#5B21B6", icon: "briefcase-outline" },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────

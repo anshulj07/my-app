@@ -259,6 +259,7 @@
 import { Tabs } from "expo-router";
 import { Platform, View, StyleSheet } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNotifications } from "../../context/NotificationContext";
 import NewRequestPopup from "../../components/modals/NewRequestPopup";
@@ -305,7 +306,6 @@ export default function NewAppLayout() {
           letterSpacing: 0.1,
         },
         tabBarHideOnKeyboard: true,
-
       }}
     >
 

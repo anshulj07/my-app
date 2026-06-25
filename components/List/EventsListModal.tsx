@@ -75,8 +75,9 @@ function EventCard({ item, onPress }: { item: EventPin; onPress: () => void }) {
   const imgUri = item.bannerUri || "https://images.unsplash.com/photo-1517457373958-b7bdd4587205?auto=format&fit=crop&q=80&w=800";
 
   return (
-    <TouchableOpacity style={S.eventCard} activeOpacity={0.9} onPress={onPress}>
-      <Image source={{ uri: imgUri }} style={S.eventImg} />
+    <View style={S.eventCardWrapper}>
+      <TouchableOpacity style={S.eventCard} activeOpacity={0.9} onPress={onPress}>
+        <Image source={{ uri: imgUri }} style={S.eventImg} />
       <View style={S.freeBadge}>
         <Text style={S.freeText}>{price}</Text>
       </View>
@@ -96,7 +97,8 @@ function EventCard({ item, onPress }: { item: EventPin; onPress: () => void }) {
           <Text style={S.joinBtnText}>Join Event</Text>
         </TouchableOpacity>
       </BlurView>
-    </TouchableOpacity>
+      </TouchableOpacity>
+    </View>
   );
 }
 
@@ -106,8 +108,9 @@ function ServiceCard({ item, onPress }: { item: EventPin; onPress: () => void })
   const isBusy = Math.random() > 0.7; // Mock logic for 1-on-1 session
 
   return (
-    <TouchableOpacity style={S.serviceCard} activeOpacity={0.9} onPress={onPress}>
-      <Image source={{ uri: imgUri }} style={S.eventImg} />
+    <View style={S.serviceCardWrapper}>
+      <TouchableOpacity style={S.serviceCard} activeOpacity={0.9} onPress={onPress}>
+        <Image source={{ uri: imgUri }} style={S.eventImg} />
       
       <View style={S.serviceHeaderRow}>
         <View style={[S.statusBadge, isBusy ? S.statusBadgeFull : S.statusBadgeOpen]}>
@@ -148,8 +151,9 @@ function ServiceCard({ item, onPress }: { item: EventPin; onPress: () => void })
         <TouchableOpacity style={S.serviceBookBtn} onPress={onPress}>
           <Text style={S.serviceBookText}>Book Slot</Text>
         </TouchableOpacity>
-      </View>
-    </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+    </View>
   );
 }
 
@@ -160,8 +164,9 @@ function CompactCard({ item, onPress }: { item: EventPin; onPress: () => void })
     : "https://images.unsplash.com/photo-1517457373958-b7bdd4587205?auto=format&fit=crop&q=80&w=400");
   
   return (
-    <TouchableOpacity style={S.compactCard} activeOpacity={0.7} onPress={onPress}>
-      <Image source={{ uri: imgUri }} style={S.compactImg} />
+    <View style={S.compactCardWrapper}>
+      <TouchableOpacity style={S.compactCard} activeOpacity={0.7} onPress={onPress}>
+        <Image source={{ uri: imgUri }} style={S.compactImg} />
       <View style={S.compactContent}>
         <View style={S.compactTop}>
           <Text style={S.compactName} numberOfLines={1}>{item.title}</Text>
@@ -176,8 +181,9 @@ function CompactCard({ item, onPress }: { item: EventPin; onPress: () => void })
           <Text style={S.compactMetaText}>{item.distance?.toFixed(1) || "0.0"} km away</Text>
         </View>
         <Text style={S.compactStatus}>{item.kind === "service" ? "Open Now" : "Starting Soon"}</Text>
-      </View>
-    </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+    </View>
   );
 }
 
@@ -663,10 +669,17 @@ const S = StyleSheet.create({
   dividerLine: { height: 1, backgroundColor: COLORS.border, marginHorizontal: 20, marginBottom: 24, marginTop: 8 },
   sectionSubtitle: { fontSize: 11, fontFamily: COLORS.fontBold, color: COLORS.muted, marginTop: 2 },
   seeAll: { fontSize: 13, fontFamily: COLORS.fontBold, color: COLORS.purple },
-  eventScroll: { gap: 16, paddingBottom: 8, paddingHorizontal: 20 },
-  servicesGridScroll: { gap: 16, paddingHorizontal: 20, paddingBottom: 8 },
+  eventScroll: { gap: 16, paddingBottom: 24, paddingHorizontal: 20 },
+  servicesGridScroll: { gap: 16, paddingHorizontal: 20, paddingBottom: 24 },
   serviceColumn: { gap: 12, width: W * 0.85 },
-  eventCard: { width: W * 0.8, height: 380, borderRadius: 32, overflow: "hidden", position: "relative" },
+  eventCardWrapper: {
+    width: W * 0.8, height: 380,
+    borderRadius: 32,
+    backgroundColor: "#fff",
+    shadowColor: "#000", shadowOpacity: 0.12, shadowRadius: 24, shadowOffset: { width: 0, height: 12 },
+    elevation: 8,
+  },
+  eventCard: { width: "100%", height: "100%", borderRadius: 32, overflow: "hidden", position: "relative" },
   eventImg: { width: "100%", height: "100%" },
   freeBadge: { position: "absolute", top: 16, right: 16, backgroundColor: "rgba(0,0,0,0.5)", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, zIndex: 10 },
   freeText: { color: "#fff", fontSize: 11, fontFamily: COLORS.fontExtraBold },
@@ -677,7 +690,14 @@ const S = StyleSheet.create({
   joinBtn: { backgroundColor: "#fff", borderRadius: 12, paddingVertical: 10, alignItems: "center", marginTop: 10 },
   joinBtnText: { color: COLORS.purple, fontSize: 13, fontFamily: COLORS.fontExtraBold },
   servicesList: { gap: 12 },
-  serviceCard: { width: W * 0.8, height: 440, backgroundColor: "#fff", borderRadius: 32, overflow: "hidden", position: "relative", borderWidth: 1, borderColor: COLORS.border },
+  serviceCardWrapper: {
+    width: W * 0.8, height: 440,
+    borderRadius: 32,
+    backgroundColor: "#fff",
+    shadowColor: "#000", shadowOpacity: 0.12, shadowRadius: 24, shadowOffset: { width: 0, height: 12 },
+    elevation: 8,
+  },
+  serviceCard: { width: "100%", height: "100%", backgroundColor: "#fff", borderRadius: 32, overflow: "hidden", position: "relative", borderWidth: 1, borderColor: "rgba(0,0,0,0.02)" },
   serviceHeaderRow: { position: "absolute", top: 16, left: 16, right: 16, flexDirection: "row", justifyContent: "space-between", zIndex: 10 },
   statusBadge: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
   statusBadgeOpen: { backgroundColor: "#DCFCE7" },
@@ -703,7 +723,14 @@ const S = StyleSheet.create({
   disabledBtn: { backgroundColor: COLORS.lightMuted },
   serviceBookText: { color: "#fff", fontSize: 14, fontFamily: COLORS.fontExtraBold },
   compactList: { gap: 12 },
-  compactCard: { flexDirection: "row", backgroundColor: "#fff", borderRadius: 20, padding: 12, borderWidth: 1, borderColor: COLORS.border, gap: 12 },
+  compactCardWrapper: {
+    borderRadius: 20,
+    backgroundColor: "#fff",
+    shadowColor: "#000", shadowOpacity: 0.08, shadowRadius: 16, shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
+    marginBottom: 4,
+  },
+  compactCard: { flexDirection: "row", backgroundColor: "#fff", borderRadius: 20, padding: 12, borderWidth: 1, borderColor: "rgba(0,0,0,0.03)", gap: 12 },
   compactImg: { width: 80, height: 80, borderRadius: 16 },
   compactContent: { flex: 1, justifyContent: "center" },
   compactTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },

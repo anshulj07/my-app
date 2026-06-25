@@ -636,7 +636,6 @@ export default function ChatDMScreen() {
                 <Text style={S.headerName} numberOfLines={1}>{otherName}</Text>
                 {params.isVerified === "true" && <Ionicons name="checkmark-circle" size={14} color="#0A84FF" />}
               </View>
-              <Text style={S.headerSub}>Tap to view profile</Text>
             </View>
           </Pressable>
           <View style={{ width: 40 }} />

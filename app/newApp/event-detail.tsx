@@ -183,7 +183,7 @@ export default function EventDetailScreen() {
   // ✅ INSTANT FIX: Use parsed event immediately. Fallback to params if not present.
   const ev = (event?._id === params.eventId || event?.eventId === params.eventId) ? event : null;
   const kind = ev?.kind || params.kind || "event";
-  const isService = kind.includes("service");
+
 
   const title = ev?.title || params.title || "Event";
   const banner = ev?.bannerUri || (ev as any)?.bannerImage || params.bannerUri || "";
@@ -243,11 +243,11 @@ export default function EventDetailScreen() {
     return now >= startMs && now <= endTs;
   }, [ev?.status, ev?.endsAt, startMs]);
 
-  const joinPolicy = isService ? "approval" : (ev?.joinPolicy || params.joinPolicy || "anyone_can_join");
+  const joinPolicy = ev?.joinPolicy || params.joinPolicy || "anyone_can_join";
   const maxCapacity = ev?.maxCapacity || (params.maxCapacity ? Number(params.maxCapacity) : undefined);
   
   const isFull   = ev?.maxCapacity && attendees.length >= ev.maxCapacity;
-  const isButtonDisabled = submitting || (isFull && !isJoined && !isPending) || (!isService && isLive && !isJoined && !isPending);
+  const isButtonDisabled = submitting || (isFull && !isJoined && !isPending) || (isLive && !isJoined && !isPending);
 
   const showOtp = useMemo(() => {
     if (!isJoined) return false;
@@ -423,12 +423,12 @@ export default function EventDetailScreen() {
           
           <View style={[S.row, { gap: 20, marginTop: 12 }]}>
             <View style={S.row}>
-              <Ionicons name={isService ? "calendar-clear-outline" : "calendar-outline"} size={16} color={C.accent} />
-              <Text style={S.statText}>{ev?.date || params.date || (isService ? "Flexible Schedule" : "TBD")}</Text>
+              <Ionicons name="calendar-outline" size={16} color={C.accent} />
+              <Text style={S.statText}>{ev?.date || params.date || "TBD"}</Text>
             </View>
             <View style={S.row}>
-              <Ionicons name={isService ? "timer-outline" : "time-outline"} size={16} color={C.accent} />
-              <Text style={S.statText}>{isService ? (ev?.duration || "1 Hour Session") : (ev?.time || params.time || "TBD")}</Text>
+              <Ionicons name="time-outline" size={16} color={C.accent} />
+              <Text style={S.statText}>{ev?.time || params.time || "TBD"}</Text>
             </View>
           </View>
 
@@ -510,9 +510,9 @@ export default function EventDetailScreen() {
 
         {/* ABOUT THE EVENT */}
         <View style={S.section}>
-          <Text style={S.sectionTitle}>About the {isService ? "Service" : "Event"}</Text>
+          <Text style={S.sectionTitle}>About the Event</Text>
           <Text style={S.aboutText}>
-            {ev?.description || `Experience an unforgettable ${isService ? "service" : "evening"}. Join us for a perfect blend of networking, music, and great vibes.`}
+            {ev?.description || `Experience an unforgettable evening. Join us for a perfect blend of networking, music, and great vibes.`}
           </Text>
         </View>
 
@@ -521,10 +521,10 @@ export default function EventDetailScreen() {
           <Text style={S.sectionTitle}>What to Expect</Text>
           <View style={S.grid}>
             {[
-              { label: isService ? "Expertise" : "Fiber WiFi", sub: isService ? "CERTIFIED" : "100 MBPS", icon: isService ? "ribbon" : "wifi" },
+              { label: "Fiber WiFi", sub: "100 MBPS", icon: "wifi" },
               { label: "Networking", sub: "ALL NOMADS", icon: "people" },
               { label: "High Quality", sub: "TOP RATED", icon: "star" },
-              { label: isService ? "Duration" : "Co-working", sub: isService ? "1 HOUR" : "FAST ACCESS", icon: isService ? "time" : "laptop" },
+              { label: "Co-working", sub: "FAST ACCESS", icon: "laptop" },
             ].map((item, i) => (
               <View key={i} style={S.gridItem}>
                 <View style={S.gridIconBox}>
@@ -536,11 +536,10 @@ export default function EventDetailScreen() {
             ))}
           </View>
         </View>
-
         {/* WHO'S GOING / ATTENDEES */}
         <View style={S.section}>
           <View style={S.rowBetween}>
-            <Text style={S.sectionTitle}>{isService ? "Recent Clients" : "Who's Going"}</Text>
+            <Text style={S.sectionTitle}>Who's Going</Text>
             <TouchableOpacity onPress={() => setShowAttendeesModal(true)}>
               <Text style={S.seeAll}>See All ({attendees.length})</Text>
             </TouchableOpacity>
@@ -565,7 +564,7 @@ export default function EventDetailScreen() {
                     ? attendees.length === 1
                       ? `${attendees[0].name || "1 person"} has already joined`
                       : `${attendees[0].name || "1 person"} and ${attendees.length - 1} others joined`
-                    : isService ? "Be the first one to book!" : "Be the first one to join!"}
+                    : "Be the first one to join!"}
                 </Text>
               </>
             )}
@@ -655,7 +654,7 @@ export default function EventDetailScreen() {
             <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 10 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                 <Ionicons name="checkmark-done-circle" size={24} color={C.muted} />
-                <Text style={{ fontSize: 16, fontFamily: "Outfit_700Bold", color: C.muted }}>This {isService ? "service" : "event"} has ended</Text>
+                <Text style={{ fontSize: 16, fontFamily: "Outfit_700Bold", color: C.muted }}>This event has ended</Text>
               </View>
             </View>
           )
@@ -711,7 +710,7 @@ export default function EventDetailScreen() {
                    ) : (
                      <>
                        <Text style={S.reserveText}>
-                         {isJoined ? "Cancel Booking" : (isPending ? "Cancel Request" : (isLive ? "Event Live" : (isFull ? "Event Full" : (isService ? "Book Now" : "Join Now"))))}
+                         {isJoined ? "Cancel Booking" : (isPending ? "Cancel Request" : (isLive ? "Event Live" : (isFull ? "Event Full" : "Join Now")))}
                        </Text>
                        {!isJoined && !isPending && !isFull && !isLive && <Ionicons name="arrow-forward" size={18} color="#fff" />}
                        {!isJoined && (isFull || isLive) && !isPending && <Ionicons name="lock-closed" size={18} color="#fff" />}
@@ -727,7 +726,7 @@ export default function EventDetailScreen() {
           <View style={S.hostActionsRow}>
             <TouchableOpacity style={S.editBtn} onPress={handleEdit}>
               <Ionicons name="create-outline" size={20} color={C.ink} />
-              <Text style={S.editBtnText}>Edit {isService ? "Service" : "Event"}</Text>
+              <Text style={S.editBtnText}>Edit Event</Text>
             </TouchableOpacity>
             <TouchableOpacity style={S.verifyBtn} onPress={() => setShowOtpModal(true)}>
               <Ionicons name="scan-outline" size={20} color="#fff" />

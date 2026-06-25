@@ -958,57 +958,47 @@ export default function AddEventFields(props: Props) {
           accentColor={accent} accentBg={accentBg} accentText={accentText}
         />
         <ScrollView style={{ backgroundColor: C.bg }} contentContainerStyle={{ padding: 18, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
-          {!isServiceMode ? (
-            <View style={{ gap: 2 }}>
-              {/* Free Card */}
-              <TouchableOpacity
-                activeOpacity={0.9}
-                onPress={() => setKind("event_free")}
-                style={[S.step1Card, kind === "event_free" && S.step1CardActivePurple]}
-              >
-                <View style={[S.step1IconBox, kind === "event_free" && { backgroundColor: "#fff" }]}>
-                  <Ionicons name="people" size={28} color={kind === "event_free" ? C.purple : C.muted} />
+          <View style={{ gap: 2 }}>
+            {/* Free Card */}
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={() => setKind("event_free")}
+              style={[S.step1Card, kind === "event_free" && S.step1CardActivePurple]}
+            >
+              <View style={[S.step1IconBox, kind === "event_free" && { backgroundColor: "#fff" }]}>
+                <Ionicons name="people" size={28} color={kind === "event_free" ? C.purple : C.muted} />
+              </View>
+              <View style={S.step1TextContent}>
+                <Text style={S.step1Name}>Free Event</Text>
+                <Text style={S.step1Sub}>Open to everyone. Best for meetups, hangouts, and community vibes.</Text>
+              </View>
+              {kind === "event_free" && (
+                <View style={[S.step1Check, { backgroundColor: C.purple }]}>
+                  <Ionicons name="checkmark" size={14} color="#fff" />
                 </View>
-                <View style={S.step1TextContent}>
-                  <Text style={S.step1Name}>Free Event</Text>
-                  <Text style={S.step1Sub}>Open to everyone. Best for meetups, hangouts, and community vibes.</Text>
-                </View>
-                {kind === "event_free" && (
-                  <View style={[S.step1Check, { backgroundColor: C.purple }]}>
-                    <Ionicons name="checkmark" size={14} color="#fff" />
-                  </View>
-                )}
-              </TouchableOpacity>
+              )}
+            </TouchableOpacity>
 
-              {/* Paid Card */}
-              <TouchableOpacity
-                activeOpacity={0.9}
-                onPress={() => setKind("event_paid")}
-                style={[S.step1Card, kind === "event_paid" && S.step1CardActivePurple]}
-              >
-                <View style={[S.step1IconBox, kind === "event_paid" && { backgroundColor: "#fff" }]}>
-                  <Ionicons name="ticket" size={28} color={kind === "event_paid" ? C.purple : C.muted} />
+            {/* Paid Card */}
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={() => setKind("event_paid")}
+              style={[S.step1Card, kind === "event_paid" && S.step1CardActivePurple]}
+            >
+              <View style={[S.step1IconBox, kind === "event_paid" && { backgroundColor: "#fff" }]}>
+                <Ionicons name="ticket" size={28} color={kind === "event_paid" ? C.purple : C.muted} />
+              </View>
+              <View style={S.step1TextContent}>
+                <Text style={S.step1Name}>Paid Event</Text>
+                <Text style={S.step1Sub}>Charge a ticket price. Earn from your passion and expertise.</Text>
+              </View>
+              {kind === "event_paid" && (
+                <View style={[S.step1Check, { backgroundColor: C.purple }]}>
+                  <Ionicons name="checkmark" size={14} color="#fff" />
                 </View>
-                <View style={S.step1TextContent}>
-                  <Text style={S.step1Name}>Paid Event</Text>
-                  <Text style={S.step1Sub}>Charge a ticket price. Earn from your passion and expertise.</Text>
-                </View>
-                {kind === "event_paid" && (
-                  <View style={[S.step1Check, { backgroundColor: C.purple }]}>
-                    <Ionicons name="checkmark" size={14} color="#fff" />
-                  </View>
-                )}
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View style={[S.card, { padding: 24, alignItems: "center", backgroundColor: C.purpleBg, borderColor: C.purple + "33" }]}>
-               <Ionicons name="briefcase" size={40} color={C.purple} />
-               <Text style={[S.headerTitle, { marginTop: 16, color: C.purpleText }]}>Professional Service</Text>
-               <Text style={[S.headerSub, { textAlign: "center", color: C.purpleText, opacity: 0.8 }]}>
-                 You are creating a bookable service with time slots and hourly pricing.
-               </Text>
-            </View>
-          )}
+              )}
+            </TouchableOpacity>
+          </View>
           <View style={{ marginTop: 10 }}>
              <ContinueBtn label="Continue" onPress={handleNext} color={accent} />
           </View>
@@ -1036,13 +1026,13 @@ export default function AddEventFields(props: Props) {
           {/* ── TITLE — primary / large ── */}
           <View style={ST2.titleSection}>
             <Text style={ST2.fieldLabel}>
-              {kind === "service" ? "Service name" : "Event title"}
+              Event title
             </Text>
             <View style={[ST2.titleShell, !!errors.title && ST2.titleShellError]}>
               <TextInput
                 value={title}
                 onChangeText={(t) => { setTitle(t); if (errors.title) setErrors(e => ({ ...e, title: "" })); }}
-                placeholder={kind === "service" ? "e.g., Yoga session, Photography" : "e.g., Saturday coffee meetup"}
+                placeholder="e.g., Saturday coffee meetup"
                 placeholderTextColor={C.hint}
                 style={ST2.titleInput}
                 returnKeyType="done"
@@ -1181,56 +1171,8 @@ export default function AddEventFields(props: Props) {
             )}
           </View>
 
-          {/* Service slots */}
-          {kind === "service" && (
-            <>
-              <Text style={S.sectionLabel}>Schedule</Text>
-              <View style={S.card}>
-                <View style={S.cardInner}>
-                  <View style={S.cardTitleRow}>
-                    <View style={[S.cardIconBox, { backgroundColor: C.purpleBg }]}>
-                      <Ionicons name="calendar-outline" size={18} color={C.purple} />
-                    </View>
-                    <Text style={S.cardTitle}>Available Slots</Text>
-                  </View>
-                  <Text style={S.cardSub}>Pick the time slots you offer.</Text>
-                  <Text style={S.smallLabel}>Duration per slot</Text>
-                  <View style={[S.segmented, { marginBottom: 16 }]}>
-                    {["30","45","60","90","120"].map(d => (
-                      <Pressable key={d} onPress={() => setSlotDuration(d)}
-                        style={[S.segmentBtn, slotDuration === d && S.segmentBtnActive]}>
-                        <Text style={[S.segmentLabel, slotDuration === d && S.segmentLabelActive]}>{d}</Text>
-                        <Text style={[S.segmentHint, slotDuration === d && S.segmentHintActive]}>min</Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                  <Text style={S.smallLabel}>Available times</Text>
-                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
-                    {COMMON_SLOTS.map(slot => {
-                      const on = slots.includes(slot);
-                      return (
-                        <TouchableOpacity key={slot} onPress={() => toggleSlot(slot)} activeOpacity={0.8}
-                          style={{
-                            paddingVertical: 8, paddingHorizontal: 12, borderRadius: R.pill,
-                            backgroundColor: on ? C.purpleBg : C.inputBg,
-                            borderWidth: 1.5, borderColor: on ? C.purple + "88" : C.inputBorder,
-                          }}>
-                          <Text style={{ fontSize: 12, fontWeight: "800", color: on ? C.purpleText : C.muted }}>
-                            {formatSlot(slot)}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                  {slots.length > 0 && (
-                    <View style={[S.goodPill, { alignSelf: "flex-start", marginTop: 12 }]}>
-                      <Text style={S.goodPillText}>{slots.length} slots selected</Text>
-                    </View>
-                  )}
-                </View>
-              </View>
-            </>
-          )}
+
+
 
           <ContinueBtn label="Continue" onPress={handleNext} color={accent} />
         </ScrollView>
@@ -1468,7 +1410,7 @@ export default function AddEventFields(props: Props) {
           showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
           {/* Price (paid events) */}
-          {(kind === "event_paid" || kind === "service") && (
+          {(kind === "event_paid") && (
             <>
               <Text style={S.sectionLabel}>Price {kind === "event_paid" ? "• ticket" : "• per slot"}</Text>
               <View style={S.card}>
@@ -1660,7 +1602,7 @@ export default function AddEventFields(props: Props) {
             )}
             <View style={[S.previewKindBadge, { backgroundColor: accent }]}>
               <Text style={S.previewKindBadgeText}>
-                {kind === "service" ? "Service" : kind === "event_paid" ? "Paid" : "Free"}
+                {kind === "event_paid" ? "Paid" : "Free"}
               </Text>
             </View>
           </View>
@@ -1710,7 +1652,7 @@ export default function AddEventFields(props: Props) {
             </View>
 
             {/* Price */}
-            {(kind === "event_paid" || kind === "service") && !!priceText && (
+            {(kind === "event_paid") && !!priceText && (
               <View style={S.previewDetailRow}>
                 <View style={[S.previewDetailIcon, { backgroundColor: C.amberBg }]}>
                   <Ionicons name="pricetag-outline" size={16} color={C.amber} />

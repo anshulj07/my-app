@@ -26,7 +26,7 @@ export default function AddEventModal({
   visible,
   onClose,
   onCreate,
-  defaultKind = "event_free",  // ✅ NEW prop — "event_free" | "event_paid" | "service"
+  defaultKind = "event_free",
 }: {
   visible: boolean;
   onClose: () => void;
@@ -60,9 +60,7 @@ export default function AddEventModal({
   const [limitEnabled, setLimitEnabled] = useState(false);
   const [capacityText, setCapacityText] = useState("");
 
-  // Service-specific: slots
-  const [slots, setSlots] = useState<string[]>([]); // e.g. ["09:00", "10:00"]
-  const [slotDuration, setSlotDuration] = useState("60"); // minutes
+
 
   const [showDetails, setShowDetails] = useState(false);
   const [showWhen, setShowWhen] = useState(false);
@@ -148,7 +146,7 @@ const [bannerUri, setBannerUri] = useState<string | null>(null);
   }, [kind, limitEnabled, capacityText]);
 
   const canCreate = useMemo(() => {
-    const needsPrice = kind === "event_paid" || kind === "service";
+    const needsPrice = kind === "event_paid";
     const priceOk = !needsPrice || priceCents !== null;
     return !!GOOGLE_KEY && !!API_BASE && !!userId && !!title.trim() && hasLocation && !submitting && !locLoading && priceOk && capacityOk;
   }, [GOOGLE_KEY, API_BASE, userId, title, hasLocation, submitting, locLoading, kind, priceCents, capacityOk]);
@@ -180,7 +178,7 @@ const [bannerUri, setBannerUri] = useState<string | null>(null);
   const hardReset = () => {
     setTitle(""); setKind(defaultKind); setPriceText(""); setDescription(""); setJoinPolicy("open");
     setDateISO(""); setTime24(""); setEndDateISO(""); setEndTime24(""); setLimitEnabled(false); setCapacityText("");
-    setSlots([]); setSlotDuration("60");
+    setDateISO(""); setTime24(""); setEndDateISO(""); setEndTime24(""); setLimitEnabled(false); setCapacityText("");
     setShowDetails(false); setShowWhen(false); setDateOpen(false); setTimeOpen(false);
     setEndDateOpen(false); setEndTimeOpen(false);
     setQuery(""); setSuggestions([]); setSelectedAddress(""); setCoord(null); setLocationPayload(null);
@@ -245,8 +243,8 @@ const [bannerUri, setBannerUri] = useState<string | null>(null);
     if (!coord) throw new Error("Pick a location.");
     if (!locationPayload?.countryCode || !locationPayload?.city) throw new Error("Please select a place so city/country are available.");
 
-    const backendKind = kind === "event_free" ? "free" : kind === "event_paid" ? "paid" : "service";
-    const needsPrice = backendKind === "paid" || backendKind === "service";
+    const backendKind = kind === "event_free" ? "free" : "paid";
+    const needsPrice = backendKind === "paid";
     if (needsPrice && priceCents === null) throw new Error("Enter a valid price.");
     if (backendKind === "free" && limitEnabled && !capacityOk) throw new Error("Enter a valid capacity.");
 
@@ -266,11 +264,7 @@ const [bannerUri, setBannerUri] = useState<string | null>(null);
       timezone, startsAt, endsAt,
       date: (dateISO || "").trim(), time: (time24 || "").trim(),
       endDate: (endDateISO || "").trim(), endTime: (endTime24 || "").trim(),
-      // Service slots
-      ...(backendKind === "service" ? {
-        slots,
-        slotDurationMinutes: parseInt(slotDuration, 10) || 60,
-      } : {}),
+
       joinPolicy, tags: [], visibility: "public", status: "active",
       location: {
         lat: coord.lat, lng: coord.lng,
@@ -361,8 +355,7 @@ setBannerUri={setBannerUri}
         capacityText={capacityText}
         setCapacityText={(t) => { setCapacityText(t.replace(/[^\d]/g, "")); setErr(null); }}
         capacityOk={capacityOk}
-        slots={slots} setSlots={setSlots}
-        slotDuration={slotDuration} setSlotDuration={setSlotDuration}
+
         showWhen={showWhen} setShowWhen={setShowWhen}
         dateISO={dateISO} setDateISO={setDateISO}
         time24={time24} setTime24={setTime24}
@@ -387,7 +380,7 @@ setBannerUri={setBannerUri}
         onCancel={() => { hardReset(); sheetRef.current?.close(); }}
         onCreate={handleCreate}
         joinPolicy={joinPolicy} setJoinPolicy={setJoinPolicy}
-        isServiceMode={defaultKind === "service"}
+
       />
     </Modalize>
   );

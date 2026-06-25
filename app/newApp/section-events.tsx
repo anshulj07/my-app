@@ -317,9 +317,10 @@ export default function SectionEventsScreen() {
     allEvents.forEach(e => {
       if (e.kind === "free")    kinds.add("Free");
       if (e.kind === "paid")    kinds.add("Paid");
-
-      // You can add more logic if events have tags
+      if (e.isRecurring) kinds.add("Recurring");
     });
+    kinds.add("All Events");
+    kinds.add("Recurring");
     // Also add static category options to give richer UI like Image 1
     ["Wellness", "Cafe", "Leisure", "Active", "Fitness"].forEach(k => kinds.add(k));
     return Array.from(kinds);
@@ -331,6 +332,7 @@ export default function SectionEventsScreen() {
       const q = catFilter.toLowerCase();
       evs = evs.filter(e =>
         e.kind?.toLowerCase() === q ||
+        (q === "all events" && (e.kind?.toLowerCase() === "free" || e.kind?.toLowerCase() === "paid")) ||
         e.title?.toLowerCase().includes(q) ||
         e.creatorName?.toLowerCase().includes(q),
       );

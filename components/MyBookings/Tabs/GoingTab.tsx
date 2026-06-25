@@ -90,10 +90,15 @@ function EventCard({ e, onPress }: { e: EventDoc; onPress: () => void }) {
                 {isPaid ? "PAID" : "FREE"} EVENT
               </Text>
             </View>
-            {isLive && (
+            {isLive && !e.isRecurring && (
               <View style={[T.liveBadge, { marginLeft: 8 }]}>
                 <View style={T.liveDot} />
                 <Text style={T.liveBadgeText}>LIVE EVENT</Text>
+              </View>
+            )}
+            {e.isRecurring && (
+              <View style={[T.liveBadge, { marginLeft: 8, backgroundColor: "#E0F2FE", flexDirection: "row" }]}>
+                <Text style={[T.liveBadgeText, { color: "#0284C7" }]}>RECURRING</Text>
               </View>
             )}
           </View>
@@ -111,9 +116,13 @@ function EventCard({ e, onPress }: { e: EventDoc; onPress: () => void }) {
             <Text style={T.infoLabel}>WHEN</Text>
             <View style={T.infoValueRow}>
               <Ionicons name="calendar-clear" size={14} color={C.accent} />
-              <Text style={T.infoValueText}>{e.date || "TBD"}</Text>
+              <Text style={T.infoValueText} numberOfLines={1}>
+                {e.isRecurring && Array.isArray(e.recurringSchedule) && e.recurringSchedule.length > 0
+                  ? `Every ${e.recurringSchedule.map((s: any) => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][s.day]).join(", ")}`
+                  : e.date || "TBD"}
+              </Text>
             </View>
-            <Text style={T.infoSub}>{e.time || "09:00 AM"}</Text>
+            <Text style={T.infoSub}>{e.isRecurring ? "Recurring Event" : (e.time || "09:00 AM")}</Text>
           </View>
 
           {/* WHERE */}

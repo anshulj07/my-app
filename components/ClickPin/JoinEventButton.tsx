@@ -43,7 +43,7 @@ const C = {
 };
 
 type EventKind = "free" | "paid" | "event_free" | "event_paid" | "service";
-type Screen = "booking" | "payment" | "confirmed";
+type Screen = "calendar" | "booking" | "payment" | "confirmed";
 
 type Props = {
   eventId:     string;
@@ -63,6 +63,9 @@ type Props = {
   autoOpen?: boolean;
   eventLat?: number;
   eventLng?: number;
+  isRecurring?: boolean;
+  recurringSchedule?: { day: number; startTime: string; endTime: string }[];
+  bookingWindowDays?: number;
 };
 
 export default function JoinEventButton({
@@ -83,6 +86,9 @@ export default function JoinEventButton({
   autoOpen = false,
   eventLat,
   eventLng,
+  isRecurring,
+  recurringSchedule,
+  bookingWindowDays,
 }: Props) {
   const router    = useRouter();
   const { userId } = useAuth();
@@ -140,7 +146,7 @@ export default function JoinEventButton({
   const [bookedSlots,   setBookedSlots]   = useState<any[]>([]);
 
   // Date selection
-  const [selectedDate, setSelectedDate] = useState(startDate || new Date().toISOString().split("T")[0]);
+  const [selectedDate, setSelectedDate] = useState<string>(startDate || new Date().toISOString().split("T")[0]);
 
   // Generate next 14 days
   const availableDates = useMemo(() => {
@@ -210,11 +216,11 @@ export default function JoinEventButton({
       router.push("/sign-in" as any);
       return;
     }
-    setScreen("booking");
+    setScreen(isRecurring ? "calendar" : "booking");
     setSpots(1);
     setDuration(durationHrs);
     setSelectedSlot(null);
-    setSelectedDate(startDate || new Date().toISOString().split("T")[0]);
+    setSelectedDate(isRecurring ? "" : (startDate || new Date().toISOString().split("T")[0]));
     setShowModal(true);
 
     // Fetch booked slots if service
@@ -570,12 +576,14 @@ export default function JoinEventButton({
             <View style={M.header}>
               <Pressable hitSlop={12} onPress={() => {
                 if (screen === "payment") { setScreen("booking"); }
+                else if (screen === "booking" && isRecurring) { setScreen("calendar"); }
                 else { setShowModal(false); }
               }} style={M.headerBack}>
                 <Ionicons name="chevron-back" size={18} color={C.ink} />
               </Pressable>
               <Text style={M.headerTitle}>
-                {screen === "booking"   ? "Book Event" :
+                {screen === "calendar"  ? "Select Date" :
+                 screen === "booking"   ? "Book Event" :
                  screen === "payment"   ? "Payment" :
                  "Booking Confirmed"}
               </Text>
@@ -583,6 +591,74 @@ export default function JoinEventButton({
                 <Ionicons name="close" size={18} color={C.muted} />
               </Pressable>
             </View>
+
+            {/* ═══ SCREEN: CALENDAR (Recurring Activities) ═══ */}
+            {screen === "calendar" && isRecurring && (
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={M.body}
+              >
+                <View style={M.section}>
+                  <Text style={M.sectionTitle}>Pick an upcoming date</Text>
+                  <Text style={[M.confirmSub, { marginBottom: 16, textAlign: "left" }]}>
+                    This activity occurs on specific days.
+                    {Number(bookingWindowDays) > 0 && (
+                      <Text style={{ color: C.red, fontWeight: "700" }}>
+                        {"\n"}You can book up to {Number(bookingWindowDays) === 1 ? "1 day" : `${bookingWindowDays} days`} in advance.
+                      </Text>
+                    )}
+                  </Text>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+                    {availableDates.map(dateStr => {
+                      const d = new Date(dateStr);
+                      const dayOfWeek = d.getDay();
+                      
+                      // Check if this day of week is allowed by the recurring schedule
+                      const isAllowedDay = !recurringSchedule || recurringSchedule.length === 0 || recurringSchedule.some(s => s.day === dayOfWeek);
+                      
+                      // Check booking advance window
+                      const today = new Date();
+                      today.setHours(0,0,0,0);
+                      const daysDiff = Math.round((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                      const isWithinWindow = Number(bookingWindowDays) > 0
+                        ? daysDiff <= Number(bookingWindowDays) 
+                        : true;
+
+                      const isValid = isAllowedDay && isWithinWindow;
+                      const active = selectedDate === dateStr;
+
+                      if (!isValid && !active) return null; // Or render grayed out
+
+                      return (
+                        <TouchableOpacity
+                          key={dateStr}
+                          style={[M.dateBtn, active && M.dateBtnActive, !isValid && { opacity: 0.3 }]}
+                          disabled={!isValid}
+                          onPress={() => {
+                            if (isValid) {
+                              setSelectedDate(dateStr);
+                            }
+                          }}
+                        >
+                          <Text style={[M.dateDay, active && M.dateTextActive]}>{d.toLocaleDateString('en-US', { weekday: 'short' })}</Text>
+                          <Text style={[M.dateNum, active && M.dateTextActive]}>{d.getDate()}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+                <View style={{ marginTop: 24 }}>
+                  <TouchableOpacity 
+                    style={[M.submitBtn, !selectedDate && { opacity: 0.5 }]} 
+                    disabled={!selectedDate}
+                    onPress={() => setScreen("booking")}
+                  >
+                    <Text style={M.submitBtnText}>Continue to Booking</Text>
+                    <Ionicons name="arrow-forward" size={16} color="#fff" />
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            )}
 
             {/* ═══ SCREEN: BOOKING ═══ */}
             {screen === "booking" && (
@@ -1243,4 +1319,10 @@ const M = StyleSheet.create({
   dateDay: { fontSize: 11, fontWeight: "600", color: C.muted, textTransform: "uppercase" },
   dateNum: { fontSize: 18, fontWeight: "800", color: C.ink },
   dateTextActive: { color: "#fff" },
+  submitBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+    height: 54, borderRadius: 16, backgroundColor: C.purple,
+    shadowColor: C.purple, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4,
+  },
+  submitBtnText: { color: "#fff", fontSize: 16, fontFamily: C.fontExtraBold },
 });

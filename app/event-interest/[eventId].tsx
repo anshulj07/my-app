@@ -119,11 +119,17 @@ export default function ManageEventScreen() {
   };
 
   const handleEditDetails = () => {
-    const kind = eventData?.kind === "service" ? "service" : "event";
-    router.push({
-      pathname: kind === "service" ? "/edit-service/[eventId]" : "/edit-event/[eventId]",
-      params: { eventId }
-    } as any);
+    if (eventData?.isRecurring) {
+      router.push({
+        pathname: "/edit-recurring/[eventId]",
+        params: { eventId }
+      } as any);
+    } else {
+      router.push({
+        pathname: "/edit-event/[eventId]",
+        params: { eventId }
+      } as any);
+    }
   };
 
   const [showAttendeeModal, setShowAttendeeModal] = useState(false);

@@ -3,7 +3,7 @@ import React, { useMemo, useState } from "react";
 import {
   View, Text, TextInput, TouchableOpacity, ActivityIndicator,
   Platform, ScrollView, Pressable, Modal, LayoutAnimation, StyleSheet,
-  Image, Alert,
+  Image, Alert, KeyboardAvoidingView, Keyboard,
 } from "react-native";
 import { WebView } from "react-native-webview";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -21,35 +21,37 @@ import type { Suggestion, ListingKind } from "./types";
 //  DESIGN TOKENS
 // ─────────────────────────────────────────────
 const C = {
-  bg:          "#FFFFFF",
-  card:        "#FFFFFF",
-  cardBorder:  "#F1F5F9",
-  inputBg:     "#F8FAFC",
+  bg: "#FFFFFF",
+  card: "#FFFFFF",
+  cardBorder: "#F1F5F9",
+  inputBg: "#F8FAFC",
   inputBorder: "#E2E8F0",
-  inputFocus:  "#6366F1",
-  ink:         "#0F172A",
-  ink2:        "#334155",
-  muted:       "#64748B",
-  hint:        "#94A3B8",
-  teal:        "#14B8A6",
-  tealBg:      "#F0FDFA",
-  tealText:    "#0D9488",
-  coral:       "#F43F5E",
-  coralBg:     "#FFF1F2",
-  coralText:   "#E11D48",
-  amber:       "#F59E0B",
-  amberBg:     "#FFFBEB",
-  amberText:   "#D97706",
-  purple:      "#6366F1",
-  purpleBg:    "#EEF2FF",
-  purpleText:  "#4F46E5",
+  inputFocus: "#6366F1",
+  ink: "#0F172A",
+  ink2: "#334155",
+  muted: "#64748B",
+  hint: "#94A3B8",
+  teal: "#14B8A6",
+  tealBg: "#F0FDFA",
+  tealText: "#0D9488",
+  coral: "#F43F5E",
+  coralBg: "#FFF1F2",
+  coralText: "#E11D48",
+  amber: "#F59E0B",
+  amberBg: "#FFFBEB",
+  amberText: "#D97706",
+  purple: "#6366F1",
+  purpleBg: "#EEF2FF",
+  purpleText: "#4F46E5",
   purpleBorder: "#C7D2FE",
-  green:       "#10B981",
-  greenBg:     "#ECFDF5",
-  greenText:   "#059669",
+  pink: "#EC4899",
+  pinkBg: "#FDF2F8",
+  green: "#10B981",
+  greenBg: "#ECFDF5",
+  greenText: "#059669",
   greenBorder: "#A7F3D0",
-  error:       "#EF4444",
-  stepIdle:    "#E2E8F0",
+  error: "#EF4444",
+  stepIdle: "#E2E8F0",
 };
 
 const R = { card: 20, input: 14, pill: 999, tile: 16 };
@@ -69,7 +71,7 @@ const S = StyleSheet.create({
     flexDirection: "row", gap: 4,
     paddingHorizontal: 18, paddingTop: 14, marginBottom: 14,
   },
-  progressSeg:       { flex: 1, height: 4, borderRadius: 4, backgroundColor: C.stepIdle },
+  progressSeg: { flex: 1, height: 4, borderRadius: 4, backgroundColor: C.stepIdle },
   progressSegActive: { backgroundColor: C.green },
   headerInner: {
     flexDirection: "row", alignItems: "flex-start",
@@ -88,7 +90,7 @@ const S = StyleSheet.create({
   },
   stepBadgeText: { fontSize: 11, fontWeight: "700", color: C.greenText, letterSpacing: 0.5 },
   headerTitle: { fontSize: 22, fontWeight: "900", color: C.ink, letterSpacing: -0.5 },
-  headerSub:   { fontSize: 13, color: C.muted, fontWeight: "500", marginTop: 3, lineHeight: 19 },
+  headerSub: { fontSize: 13, color: C.muted, fontWeight: "500", marginTop: 3, lineHeight: 19 },
   closeBtn: {
     width: 32, height: 32, borderRadius: 16,
     backgroundColor: C.inputBg, borderWidth: 1.5, borderColor: C.cardBorder,
@@ -120,11 +122,11 @@ const S = StyleSheet.create({
     shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05, shadowRadius: 8, elevation: 2,
   },
-  cardInner:    { padding: 18 },
+  cardInner: { padding: 18 },
   cardTitleRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 4 },
-  cardIconBox:  { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  cardTitle:    { fontSize: 15, fontWeight: "800", color: C.ink, letterSpacing: -0.2, flex: 1 },
-  cardSub:      { fontSize: 12, color: C.muted, fontWeight: "500", marginBottom: 14, marginLeft: 46 },
+  cardIconBox: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  cardTitle: { fontSize: 15, fontWeight: "800", color: C.ink, letterSpacing: -0.2, flex: 1 },
+  cardSub: { fontSize: 12, color: C.muted, fontWeight: "500", marginBottom: 14, marginLeft: 46 },
 
   // ── EVENT TYPE CARDS (Step 1) ──
   typeGrid: { flexDirection: "row", gap: 12, marginTop: 8 },
@@ -146,7 +148,7 @@ const S = StyleSheet.create({
     marginBottom: 14,
   },
   typeName: { fontSize: 14, fontWeight: "800", color: C.ink, marginBottom: 5 },
-  typeSub:  { fontSize: 12, color: C.muted, fontWeight: "500", lineHeight: 17 },
+  typeSub: { fontSize: 12, color: C.muted, fontWeight: "500", lineHeight: 17 },
 
   // ── BANNER IMAGE ──
   bannerZone: {
@@ -156,7 +158,7 @@ const S = StyleSheet.create({
     position: "relative",
   },
   bannerZoneHasImage: { borderStyle: "solid", borderColor: C.purple + "88", borderWidth: 2 },
-  bannerPlaceholder:  { alignItems: "center", justifyContent: "center", gap: 10 },
+  bannerPlaceholder: { alignItems: "center", justifyContent: "center", gap: 10 },
   bannerPlaceholderIcon: {
     width: 64, height: 64, borderRadius: 20,
     backgroundColor: C.purple + "18", borderWidth: 2, borderColor: C.purple + "33",
@@ -179,7 +181,7 @@ const S = StyleSheet.create({
     gap: 7, paddingVertical: 11, borderRadius: R.pill,
     backgroundColor: C.card, borderWidth: 1.5, borderColor: C.purple + "55",
   },
-  bannerActionBtnText:        { fontSize: 13, fontWeight: "800", color: "#fff" },
+  bannerActionBtnText: { fontSize: 13, fontWeight: "800", color: "#fff" },
   bannerActionBtnOutlineText: { fontSize: 13, fontWeight: "800", color: C.purpleText },
   bannerOverlay: {
     position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
@@ -192,7 +194,7 @@ const S = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.2)",
     borderWidth: 1.2, borderColor: "rgba(255,255,255,0.4)",
   },
-  bannerOverlayBtnText:   { fontSize: 12, fontWeight: "800", color: "#fff" },
+  bannerOverlayBtnText: { fontSize: 12, fontWeight: "800", color: "#fff" },
   bannerOverlayBtnDanger: {
     backgroundColor: "rgba(239,68,68,0.3)", borderColor: "rgba(239,68,68,0.5)",
   },
@@ -232,15 +234,15 @@ const S = StyleSheet.create({
     backgroundColor: C.inputBg, borderWidth: 1.5, borderColor: C.inputBorder,
     borderRadius: R.input, paddingHorizontal: 14, gap: 10,
   },
-  textInput:   { flex: 1, fontSize: 14, fontWeight: "600", color: C.ink, paddingVertical: 13 },
+  textInput: { flex: 1, fontSize: 14, fontWeight: "600", color: C.ink, paddingVertical: 13 },
   pricePrefix: { fontSize: 18, fontWeight: "900", color: C.amber },
-  priceInput:  { flex: 1, fontSize: 16, fontWeight: "800", color: C.ink, paddingVertical: 13 },
+  priceInput: { flex: 1, fontSize: 16, fontWeight: "800", color: C.ink, paddingVertical: 13 },
   goodPill: {
     paddingVertical: 4, paddingHorizontal: 10, borderRadius: R.pill,
     backgroundColor: C.tealBg, borderWidth: 1, borderColor: C.teal + "55",
   },
   goodPillText: { fontSize: 11, fontWeight: "800", color: C.tealText },
-  helper:       { fontSize: 12, fontWeight: "700", marginTop: 6, color: C.error },
+  helper: { fontSize: 12, fontWeight: "700", marginTop: 6, color: C.error },
   smallLabel: {
     fontSize: 11, fontWeight: "800", color: C.muted,
     textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8,
@@ -254,7 +256,7 @@ const S = StyleSheet.create({
     backgroundColor: C.card,
   },
   priceTagActive: { borderColor: C.amber, backgroundColor: C.amberBg },
-  priceTagText:       { fontSize: 12, fontWeight: "700", color: C.muted },
+  priceTagText: { fontSize: 12, fontWeight: "700", color: C.muted },
   priceTagTextActive: { color: C.amberText, fontWeight: "800" },
 
   // ── SEGMENT ──
@@ -268,22 +270,22 @@ const S = StyleSheet.create({
     shadowColor: C.purple, shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15, shadowRadius: 4, elevation: 2,
   },
-  segmentLabel:       { fontSize: 13, fontWeight: "800", color: C.muted },
+  segmentLabel: { fontSize: 13, fontWeight: "800", color: C.muted },
   segmentLabelActive: { color: C.purpleText },
-  segmentHint:        { fontSize: 10, fontWeight: "700", color: C.hint, marginTop: 1 },
-  segmentHintActive:  { color: C.pink },
+  segmentHint: { fontSize: 10, fontWeight: "700", color: C.hint, marginTop: 1 },
+  segmentHintActive: { color: C.pink },
 
   // ── TOGGLE ROW ──
-  toggleRow:    { flexDirection: "row", alignItems: "center", padding: 18 },
+  toggleRow: { flexDirection: "row", alignItems: "center", padding: 18 },
   toggleIconBox: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center", marginRight: 12 },
-  toggleTitle:  { fontSize: 15, fontWeight: "800", color: C.ink },
-  toggleSub:    { fontSize: 12, color: C.muted, fontWeight: "500", marginTop: 2 },
+  toggleTitle: { fontSize: 15, fontWeight: "800", color: C.ink },
+  toggleSub: { fontSize: 12, color: C.muted, fontWeight: "500", marginTop: 2 },
   chevPill: {
     width: 30, height: 30, borderRadius: 15,
     backgroundColor: C.inputBg, borderWidth: 1.5, borderColor: C.inputBorder,
     alignItems: "center", justifyContent: "center",
   },
-  chevPillOpen:   { backgroundColor: C.purple, borderColor: C.purple },
+  chevPillOpen: { backgroundColor: C.purple, borderColor: C.purple },
   toggleContent: {
     borderTopWidth: 1.5, borderTopColor: C.cardBorder,
     padding: 18, paddingTop: 14,
@@ -297,19 +299,19 @@ const S = StyleSheet.create({
   descInput: { fontSize: 14, fontWeight: "500", color: C.ink, minHeight: 90, lineHeight: 22 },
 
   // ── WHEN TILES ──
-  whenGrid:           { flexDirection: "row", gap: 10 },
+  whenGrid: { flexDirection: "row", gap: 10 },
   whenTile: {
     flex: 1, backgroundColor: C.inputBg,
     borderWidth: 1.5, borderColor: C.inputBorder, borderRadius: R.tile, padding: 14,
   },
-  whenTileTop:        { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 },
-  whenBadge:          { width: 30, height: 30, borderRadius: 9, alignItems: "center", justifyContent: "center" },
-  whenBadgeBlue:      { backgroundColor: "#EDE9FE" },
-  whenBadgePurple:    { backgroundColor: "#FCE7F3" },
-  whenTileLabel:      { fontSize: 10, fontWeight: "800", color: C.hint, textTransform: "uppercase", letterSpacing: 0.7 },
-  whenTileValue:      { fontSize: 13, fontWeight: "700", color: C.ink, marginBottom: 3 },
+  whenTileTop: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 },
+  whenBadge: { width: 30, height: 30, borderRadius: 9, alignItems: "center", justifyContent: "center" },
+  whenBadgeBlue: { backgroundColor: "#EDE9FE" },
+  whenBadgePurple: { backgroundColor: "#FCE7F3" },
+  whenTileLabel: { fontSize: 10, fontWeight: "800", color: C.hint, textTransform: "uppercase", letterSpacing: 0.7 },
+  whenTileValue: { fontSize: 13, fontWeight: "700", color: C.ink, marginBottom: 3 },
   whenTileValueMuted: { color: C.hint },
-  whenTileHint:       { fontSize: 10, color: C.hint, fontWeight: "600" },
+  whenTileHint: { fontSize: 10, color: C.hint, fontWeight: "600" },
   clearPill: {
     alignSelf: "center", marginTop: 12,
     paddingVertical: 6, paddingHorizontal: 16,
@@ -324,7 +326,7 @@ const S = StyleSheet.create({
     backgroundColor: C.card, borderTopLeftRadius: 28, borderTopRightRadius: 28,
     padding: 24, paddingBottom: 40,
   },
-  pickerTitle:    { fontSize: 17, fontWeight: "800", color: C.ink, textAlign: "center", marginBottom: 16 },
+  pickerTitle: { fontSize: 17, fontWeight: "800", color: C.ink, textAlign: "center", marginBottom: 16 },
   pickerDone: {
     marginTop: 16, paddingVertical: 14, borderRadius: R.pill,
     backgroundColor: C.purple, alignItems: "center",
@@ -347,10 +349,10 @@ const S = StyleSheet.create({
     paddingVertical: 13, paddingHorizontal: 14,
     borderBottomWidth: 1, borderBottomColor: C.cardBorder,
   },
-  locOptionDot:   { width: 10, height: 10, borderRadius: 5 },
-  locOptionIcon:  { width: 32, height: 32, borderRadius: 9, alignItems: "center", justifyContent: "center" },
+  locOptionDot: { width: 10, height: 10, borderRadius: 5 },
+  locOptionIcon: { width: 32, height: 32, borderRadius: 9, alignItems: "center", justifyContent: "center" },
   locOptionLabel: { fontSize: 13, fontWeight: "700", color: C.ink },
-  locOptionSub:   { fontSize: 11, color: C.muted, fontWeight: "500", marginTop: 1 },
+  locOptionSub: { fontSize: 11, color: C.muted, fontWeight: "500", marginTop: 1 },
 
   // ── DROPDOWN ──
   dropdown: {
@@ -359,14 +361,14 @@ const S = StyleSheet.create({
     shadowColor: "#000", shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08, shadowRadius: 12, elevation: 4,
   },
-  dropdownLoading:     { flexDirection: "row", alignItems: "center", gap: 10, padding: 14 },
+  dropdownLoading: { flexDirection: "row", alignItems: "center", gap: 10, padding: 14 },
   dropdownLoadingText: { fontSize: 13, color: C.muted, fontWeight: "600" },
   dropdownRow: {
     flexDirection: "row", alignItems: "center",
     paddingVertical: 12, paddingHorizontal: 14,
     borderBottomWidth: 1, borderBottomColor: C.cardBorder, gap: 10,
   },
-  dropdownMain:      { fontSize: 13, fontWeight: "700", color: C.ink },
+  dropdownMain: { fontSize: 13, fontWeight: "700", color: C.ink },
   dropdownSecondary: { fontSize: 11, color: C.muted, marginTop: 1 },
 
   // ── ADDRESS PILL ──
@@ -390,11 +392,11 @@ const S = StyleSheet.create({
     marginTop: 14, height: 170, borderRadius: R.tile, overflow: "hidden",
     backgroundColor: C.tealBg, borderWidth: 1.5, borderColor: C.inputBorder,
   },
-  map:              { flex: 1 },
-  mapFallback:      { flex: 1, alignItems: "center", justifyContent: "center", gap: 6, padding: 20 },
+  map: { flex: 1 },
+  mapFallback: { flex: 1, alignItems: "center", justifyContent: "center", gap: 6, padding: 20 },
   mapFallbackTitle: { fontSize: 14, fontWeight: "800", color: C.muted, textAlign: "center" },
-  mapFallbackBody:  { fontSize: 12, color: C.hint, textAlign: "center", lineHeight: 18 },
-  mapOverlay:       { position: "absolute", bottom: 10, left: 0, right: 0, alignItems: "center" },
+  mapFallbackBody: { fontSize: 12, color: C.hint, textAlign: "center", lineHeight: 18 },
+  mapOverlay: { position: "absolute", bottom: 10, left: 0, right: 0, alignItems: "center" },
   mapOverlayPill: {
     backgroundColor: "rgba(255,255,255,0.94)", borderRadius: R.pill,
     paddingVertical: 5, paddingHorizontal: 14,
@@ -415,10 +417,10 @@ const S = StyleSheet.create({
     borderColor: C.hint, alignItems: "center", justifyContent: "center",
   },
   radioOuterActive: { borderColor: C.green, backgroundColor: C.green },
-  radioDot:   { width: 8, height: 8, borderRadius: 4, backgroundColor: "#fff" },
+  radioDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#fff" },
   accessIconBox: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   accessTitle: { fontWeight: "800", color: C.ink, fontSize: 14 },
-  accessSub:   { color: C.muted, fontWeight: "500", fontSize: 12, marginTop: 2 },
+  accessSub: { color: C.muted, fontWeight: "500", fontSize: 12, marginTop: 2 },
   hostBadge: {
     paddingHorizontal: 8, paddingVertical: 4, borderRadius: R.pill,
     backgroundColor: C.purpleBg, borderWidth: 1, borderColor: C.purple + "44",
@@ -438,15 +440,15 @@ const S = StyleSheet.create({
     paddingHorizontal: 10, paddingVertical: 4, borderRadius: R.pill,
   },
   previewKindBadgeText: { fontSize: 11, fontWeight: "800", color: "#fff" },
-  previewBody:       { padding: 18 },
+  previewBody: { padding: 18 },
   previewEventTitle: { fontSize: 22, fontWeight: "900", color: C.ink, letterSpacing: -0.4, marginBottom: 4 },
-  previewEventSub:   { fontSize: 13, color: C.muted, fontWeight: "500", lineHeight: 19, marginBottom: 12 },
-  previewDivider:    { height: 1.5, backgroundColor: C.cardBorder, marginVertical: 12 },
-  previewDetailRow:  { flexDirection: "row", alignItems: "flex-start", gap: 12, marginBottom: 12 },
+  previewEventSub: { fontSize: 13, color: C.muted, fontWeight: "500", lineHeight: 19, marginBottom: 12 },
+  previewDivider: { height: 1.5, backgroundColor: C.cardBorder, marginVertical: 12 },
+  previewDetailRow: { flexDirection: "row", alignItems: "flex-start", gap: 12, marginBottom: 12 },
   previewDetailIcon: { width: 32, height: 32, borderRadius: 9, alignItems: "center", justifyContent: "center", marginTop: 1 },
   previewDetailLabel: { fontSize: 10, fontWeight: "700", color: C.hint, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 3 },
-  previewDetailVal:   { fontSize: 13, fontWeight: "700", color: C.ink, lineHeight: 18 },
-  previewDetailSub:   { fontSize: 12, color: C.muted, fontWeight: "500", marginTop: 2 },
+  previewDetailVal: { fontSize: 13, fontWeight: "700", color: C.ink, lineHeight: 18 },
+  previewDetailSub: { fontSize: 12, color: C.muted, fontWeight: "500", marginTop: 2 },
   pricePill: {
     alignSelf: "flex-start", marginTop: 4,
     paddingHorizontal: 10, paddingVertical: 5,
@@ -508,17 +510,17 @@ const S = StyleSheet.create({
 //  CONSTANTS + HELPERS  (unchanged)
 // ─────────────────────────────────────────────
 const COMMON_SLOTS = [
-  "08:00","09:00","10:00","11:00","12:00",
-  "13:00","14:00","15:00","16:00","17:00","18:00","19:00","20:00",
+  "08:00", "09:00", "10:00", "11:00", "12:00",
+  "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00",
 ];
-const QUICK_PRICES = ["99","199","299","499","999","1499"];
+const QUICK_PRICES = ["99", "199", "299", "499", "999", "1499"];
 const TOTAL_STEPS = 6;
 
 function formatSlot(t: string) {
   const [hh, mm] = t.split(":").map(Number);
   if (!Number.isFinite(hh)) return t;
   const ampm = hh >= 12 ? "PM" : "AM";
-  const h12  = ((hh + 11) % 12) + 1;
+  const h12 = ((hh + 11) % 12) + 1;
   return `${h12}:${String(mm || 0).padStart(2, "0")} ${ampm}`;
 }
 function isoToSafeDate(iso: string) {
@@ -536,8 +538,8 @@ function timeToDate(time24: string) {
 }
 function startOfToday() { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }
 function toLocalISODate(d: Date) {
-  const y   = d.getFullYear();
-  const m   = String(d.getMonth() + 1).padStart(2, "0");
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
@@ -545,20 +547,33 @@ function todayMidday() { const d = new Date(); d.setHours(12, 0, 0, 0); return d
 function fmtDate(iso: string) {
   if (!iso) return "Not set";
   const d = new Date(`${iso}T12:00:00`);
-  return d.toLocaleDateString("en-IN", { weekday:"short", day:"numeric", month:"long", year:"numeric" });
+  return d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "long", year: "numeric" });
 }
 function fmtTime(t: string) {
   if (!t) return "";
   const [hh, mm] = t.split(":").map(Number);
   const ampm = hh >= 12 ? "PM" : "AM";
   const h12 = ((hh + 11) % 12) + 1;
-  return `${h12}:${String(mm).padStart(2,"0")} ${ampm}`;
+  return `${h12}:${String(mm).padStart(2, "0")} ${ampm}`;
+}
+
+function getDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 // ─────────────────────────────────────────────
 //  TYPES  (unchanged)
 // ─────────────────────────────────────────────
 type Props = {
+  userLoc?: { lat: number; lng: number } | null;
+  isVerified?: boolean;
+  coord?: { lat: number; lng: number } | null;
   emoji: string; title: string; kind: ListingKind; onClose: () => void;
   setTitle: (v: string) => void; setKind: (k: ListingKind) => void;
   priceText: string; setPriceText: (v: string) => void; priceCents: number | null;
@@ -566,13 +581,15 @@ type Props = {
   description: string; setDescription: (v: string) => void;
   limitEnabled: boolean; setLimitEnabled: (v: boolean) => void;
   capacityText: string; setCapacityText: (v: string) => void; capacityOk: boolean;
-  slots: string[]; setSlots: (v: string[]) => void;
-  slotDuration: string; setSlotDuration: (v: string) => void;
+  slots?: string[]; setSlots?: (v: string[]) => void;
+  slotDuration?: string; setSlotDuration?: (v: string) => void;
   showWhen: boolean; setShowWhen: (v: boolean) => void;
   dateISO: string; setDateISO: (v: string) => void;
   time24: string; setTime24: (v: string) => void;
   endDateISO: string; setEndDateISO: (v: string) => void;
   endTime24: string; setEndTime24: (v: string) => void;
+  recurringSchedule?: {day: number; startTime: string; endTime: string}[];
+  setRecurringSchedule?: (v: {day: number; startTime: string; endTime: string}[]) => void;
   dateLabel: string; timeLabel: string;
   endDateLabel: string; endTimeLabel: string;
   dateOpen: boolean; setDateOpen: (v: boolean) => void;
@@ -592,6 +609,11 @@ type Props = {
   isServiceMode?: boolean;
   bannerUri: string | null;
   setBannerUri: React.Dispatch<React.SetStateAction<string | null>>;
+  // ✅ Recurring-specific
+  bookingWindowDays?: number;
+  setBookingWindowDays?: (v: number) => void;
+  dailyCapacityText?: string;
+  setDailyCapacityText?: (v: string) => void;
 };
 
 // ─────────────────────────────────────────────
@@ -774,10 +796,10 @@ const BS = StyleSheet.create({
   },
   zoneSet: { borderStyle: "solid", borderColor: "#6366F188" },
 
-  placeholder:      { alignItems: "center", gap: 12 },
-  placeholderRing:  { width: 72, height: 72, borderRadius: 22, borderWidth: 2, alignItems: "center", justifyContent: "center" },
+  placeholder: { alignItems: "center", gap: 12 },
+  placeholderRing: { width: 72, height: 72, borderRadius: 22, borderWidth: 2, alignItems: "center", justifyContent: "center" },
   placeholderTitle: { fontSize: 15, fontWeight: "800" },
-  placeholderSub:   { fontSize: 12, color: "#999", textAlign: "center" },
+  placeholderSub: { fontSize: 12, color: "#999", textAlign: "center" },
 
   uploadingTxt: { fontSize: 13, fontWeight: "600", marginTop: 10 },
 
@@ -864,30 +886,45 @@ function ContinueBtn({ label, onPress, color, disabled }: {
 // ─────────────────────────────────────────────
 //  MAIN COMPONENT
 // ─────────────────────────────────────────────
-export default function AddEventFields(props: Props) {
+export default function AddEventFields(props: Props & { isRecurringFlow?: boolean }) {
 
   const {
+    userLoc, isVerified, coord,
     emoji, title, kind, onClose, setTitle, setKind,
     priceText, setPriceText, priceCents,
     showDetails, setShowDetails, description, setDescription,
     limitEnabled, setLimitEnabled, capacityText, setCapacityText, capacityOk,
-    slots, setSlots, slotDuration, setSlotDuration,
+    slots = [], setSlots = () => {}, slotDuration = "60", setSlotDuration = () => {},
     showWhen, setShowWhen, dateISO, setDateISO, time24, setTime24,
     endDateISO, setEndDateISO, endTime24, setEndTime24,
     dateLabel, timeLabel, endDateLabel, endTimeLabel,
     dateOpen, setDateOpen, timeOpen, setTimeOpen,
+    recurringSchedule = [], setRecurringSchedule = () => {},
     endDateOpen, setEndDateOpen, endTimeOpen, setEndTimeOpen,
     query, setQuery, suggestions, loadingSug, onPickSuggestion, clearQuery,
     selectedAddress, locLoading, googleKey, mapRef, mapHtml, onMapMessage,
     err, submitting, canCreate, onCancel, onCreate,
     joinPolicy, setJoinPolicy, isServiceMode,
     bannerUri, setBannerUri,
+    isRecurringFlow,
+    bookingWindowDays = 1, setBookingWindowDays = () => {},
+    dailyCapacityText = "", setDailyCapacityText = () => {},
   } = props;
 
   // ── WIZARD STEP STATE ──
   const [step, setStep] = useState(1);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  
+  const [schedDayObj, setSchedDayObj] = useState<{ day: number; field: "start" | "end" } | null>(null);
+
+  const [kbHeight, setKbHeight] = useState(0);
+  React.useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const subShow = Keyboard.addListener(showEvent, (e) => setKbHeight(e.endCoordinates.height));
+    const subHide = Keyboard.addListener(hideEvent, () => setKbHeight(0));
+    return () => { subShow.remove(); subHide.remove(); };
+  }, []);
+
   const handleNext = () => {
     const nextErrors: Record<string, string> = {};
 
@@ -896,14 +933,27 @@ export default function AddEventFields(props: Props) {
       if (!bannerUri) nextErrors.banner = "Cover photo is required";
     }
     if (step === 3) {
-      if (!dateISO) nextErrors.date = "Date is required";
-      if (!time24) nextErrors.time = "Time is required";
+      if (!isRecurringFlow) {
+        if (!dateISO) nextErrors.date = "Date is required";
+        if (!time24) nextErrors.time = "Time is required";
+      } else {
+        if (recurringSchedule.length === 0) {
+          nextErrors.schedule = "Please select at least one day for the schedule.";
+        }
+      }
     }
-    if (step === 4 && !selectedAddress) {
-      nextErrors.location = "Location is required";
+    if (step === 4) {
+      if (!selectedAddress || !coord) {
+        nextErrors.location = "Location is required";
+      } else if (!isVerified && userLoc) {
+        const d = getDistanceKm(userLoc.lat, userLoc.lng, coord.lat, coord.lng);
+        if (d > 100) {
+          nextErrors.location = `Distance: ${d.toFixed(1)} km. Unverified users can only create events within 100 km.`;
+        }
+      }
     }
     if (step === 5) {
-      const isPaid = kind === "event_paid" || kind === "service";
+      const isPaid = kind === "event_paid";
       if (isPaid && (!priceText.trim() || parseInt(priceText) <= 0)) {
         nextErrors.price = "Valid price is required";
       }
@@ -928,10 +978,15 @@ export default function AddEventFields(props: Props) {
 
   const primaryLabel = useMemo(() => {
     if (submitting) return "Publishing…";
-    if (kind === "service") return "Create Service";
+    if (isRecurringFlow) return "Create Recurring Activity";
     if (kind === "event_paid") return "Publish Paid Event";
     return "Publish Free Event";
   }, [submitting, kind]);
+
+  const itemLabel = useMemo(() => {
+    if (isRecurringFlow) return "Activity";
+    return "Event";
+  }, [kind]);
 
   const toggleSlot = (slot: string) => {
     setSlots(slots.includes(slot) ? slots.filter(s => s !== slot) : [...slots, slot]);
@@ -952,7 +1007,7 @@ export default function AddEventFields(props: Props) {
       <>
         <WizardHeader
           step={1} stepLabel="STEP 01"
-          title="What Kind of Event?"
+          title="What are you creating?"
           sub="Choose your event type — it shapes the whole experience."
           onBack={goBack} onClose={onClose} showBack={false}
           accentColor={accent} accentBg={accentBg} accentText={accentText}
@@ -969,7 +1024,7 @@ export default function AddEventFields(props: Props) {
                 <Ionicons name="people" size={28} color={kind === "event_free" ? C.purple : C.muted} />
               </View>
               <View style={S.step1TextContent}>
-                <Text style={S.step1Name}>Free Event</Text>
+                <Text style={S.step1Name}>{isRecurringFlow ? "Free Recurring Activity" : "Free Event"}</Text>
                 <Text style={S.step1Sub}>Open to everyone. Best for meetups, hangouts, and community vibes.</Text>
               </View>
               {kind === "event_free" && (
@@ -989,7 +1044,7 @@ export default function AddEventFields(props: Props) {
                 <Ionicons name="ticket" size={28} color={kind === "event_paid" ? C.purple : C.muted} />
               </View>
               <View style={S.step1TextContent}>
-                <Text style={S.step1Name}>Paid Event</Text>
+                <Text style={S.step1Name}>{isRecurringFlow ? "Paid Recurring Activity" : "Paid Event"}</Text>
                 <Text style={S.step1Sub}>Charge a ticket price. Earn from your passion and expertise.</Text>
               </View>
               {kind === "event_paid" && (
@@ -998,9 +1053,10 @@ export default function AddEventFields(props: Props) {
                 </View>
               )}
             </TouchableOpacity>
+
           </View>
           <View style={{ marginTop: 10 }}>
-             <ContinueBtn label="Continue" onPress={handleNext} color={accent} />
+            <ContinueBtn label="Continue" onPress={handleNext} color={accent} />
           </View>
         </ScrollView>
       </>
@@ -1015,7 +1071,7 @@ export default function AddEventFields(props: Props) {
       <>
         <WizardHeader
           step={2} stepLabel="STEP 02"
-          title="Name your Event"
+          title={`Name your ${itemLabel}`}
           sub="Give it a title that makes people stop scrolling."
           onBack={goBack} onClose={onClose} showBack
           accentColor={accent} accentBg={accentBg} accentText={accentText}
@@ -1026,7 +1082,7 @@ export default function AddEventFields(props: Props) {
           {/* ── TITLE — primary / large ── */}
           <View style={ST2.titleSection}>
             <Text style={ST2.fieldLabel}>
-              Event title
+              {itemLabel} title
             </Text>
             <View style={[ST2.titleShell, !!errors.title && ST2.titleShellError]}>
               <TextInput
@@ -1078,109 +1134,246 @@ export default function AddEventFields(props: Props) {
           onBack={goBack} onClose={onClose} showBack
           accentColor={accent} accentBg={accentBg} accentText={accentText}
         />
-        <ScrollView style={{ backgroundColor: C.bg }} contentContainerStyle={S.body} showsVerticalScrollIndicator={false}>
+        <ScrollView style={{ backgroundColor: C.bg }} contentContainerStyle={[S.body, { paddingBottom: Math.max(32, kbHeight + 20) }]}
+            showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
-          <Text style={S.sectionLabel}>When</Text>
-          <View style={S.card}>
-            <Pressable
-              onPress={() => {
-                LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-                setShowWhen(!showWhen);
-              }}
-              style={S.toggleRow}
-            >
-              <View style={[S.toggleIconBox, { backgroundColor: accentBg }]}>
-                <Ionicons name="calendar-outline" size={18} color={accent} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={S.toggleTitle}>Date &amp; time</Text>
-                <Text style={S.toggleSub}>{showWhen ? "Tap to hide" : "When does it start?"}</Text>
-              </View>
-              <Ionicons name={showWhen ? "chevron-up" : "chevron-down"} size={16} color={C.muted} />
-            </Pressable>
-
-            {showWhen && (
+            {/* When Card */}
+            <View style={S.titleSection}>
+              <Text style={S.fieldLabel}>When</Text>
+              {!isRecurringFlow && (
+                <View style={S.segmented}>
+                  <SegmentButton label="Specific Date" hint="One-time" active={!showWhen} onPress={() => setShowWhen(false)} />
+                  <SegmentButton label="Set Times" hint="Range" active={showWhen} onPress={() => setShowWhen(true)} />
+                </View>
+              )}
               <View style={S.cardInner}>
-                {/* Row 1: Start Date */}
-                <View style={S.whenGrid}>
-                  <Pressable
-                    onPress={() => { setDateOpen(true); if (errors.date) setErrors(e => ({ ...e, date: "" })); }}
-                    style={[S.whenTile, dateISO ? { borderColor: C.green + "88", backgroundColor: C.greenBg } : {}, errors.date && { borderColor: C.error, backgroundColor: C.error + "08" }]}
-                  >
-                    <View style={S.whenTileTop}>
-                      <View style={[S.whenBadge, { backgroundColor: accentBg }]}>
-                        <Ionicons name="calendar-outline" size={14} color={accent} />
-                      </View>
-                      <Text style={S.whenTileLabel}>Date</Text>
+                {!isRecurringFlow ? (
+                  <>
+                    {/* Row 1: Start Date */}
+                    <View style={S.whenGrid}>
+                      <Pressable
+                        onPress={() => { setDateOpen(true); if (errors.date) setErrors(e => ({ ...e, date: "" })); }}
+                        style={[S.whenTile, dateISO ? { borderColor: C.green + "88", backgroundColor: C.greenBg } : {}, errors.date && { borderColor: C.error, backgroundColor: C.error + "08" }]}
+                      >
+                        <View style={S.whenTileTop}>
+                          <View style={[S.whenBadge, { backgroundColor: accentBg }]}>
+                            <Ionicons name="calendar-outline" size={14} color={accent} />
+                          </View>
+                          <Text style={S.whenTileLabel}>Date</Text>
+                        </View>
+                        <Text numberOfLines={1} style={[S.whenTileValue, !dateISO && S.whenTileValueMuted]}>
+                          {dateISO ? dateLabel : "Tap to set"}
+                        </Text>
+                        <Text style={S.whenTileHint}>Tap to choose</Text>
+                      </Pressable>
                     </View>
-                    <Text numberOfLines={1} style={[S.whenTileValue, !dateISO && S.whenTileValueMuted]}>
-                      {dateISO ? dateLabel : "Tap to set"}
-                    </Text>
-                    <Text style={S.whenTileHint}>Tap to choose</Text>
-                  </Pressable>
-                </View>
 
-                {/* Row 2: Start Time & End Time */}
-                <View style={[S.whenGrid, { marginTop: 12 }]}>
-                  <Pressable
-                    onPress={() => { setTimeOpen(true); if (errors.time) setErrors(e => ({ ...e, time: "" })); }}
-                    style={[S.whenTile, time24 ? { borderColor: C.amber + "88", backgroundColor: C.amberBg } : {}, errors.time && { borderColor: C.error, backgroundColor: C.error + "08" }]}
-                  >
-                    <View style={S.whenTileTop}>
-                      <View style={[S.whenBadge, { backgroundColor: C.amberBg }]}>
-                        <Ionicons name="time-outline" size={14} color={C.amber} />
-                      </View>
-                      <Text style={S.whenTileLabel}>Start Time</Text>
+                    {/* Row 2: Start Time & (optional) End Time */}
+                    <View style={[S.whenGrid, { marginTop: 12 }]}>
+                      <Pressable
+                        onPress={() => { setTimeOpen(true); if (errors.time) setErrors(e => ({ ...e, time: "" })); }}
+                        style={[S.whenTile, time24 ? { borderColor: C.amber + "88", backgroundColor: C.amberBg } : {}, errors.time && { borderColor: C.error, backgroundColor: C.error + "08" }]}
+                      >
+                        <View style={S.whenTileTop}>
+                          <View style={[S.whenBadge, { backgroundColor: C.amberBg }]}>
+                            <Ionicons name="time-outline" size={14} color={C.amber} />
+                          </View>
+                          <Text style={S.whenTileLabel}>Start Time</Text>
+                        </View>
+                        <Text numberOfLines={1} style={[S.whenTileValue, !time24 && S.whenTileValueMuted]}>
+                          {time24 ? timeLabel : "Tap to set"}
+                        </Text>
+                        <Text style={S.whenTileHint}>Tap to choose</Text>
+                      </Pressable>
+
+                      {showWhen && (
+                        <Pressable
+                          onPress={() => setEndTimeOpen(true)}
+                          style={[S.whenTile, endTime24 ? { borderColor: C.pink + "88", backgroundColor: C.pinkBg } : {}]}
+                        >
+                          <View style={S.whenTileTop}>
+                            <View style={[S.whenBadge, { backgroundColor: C.pinkBg }]}>
+                              <Ionicons name="time-outline" size={14} color={C.pink} />
+                            </View>
+                            <Text style={S.whenTileLabel}>End Time</Text>
+                          </View>
+                          <Text numberOfLines={1} style={[S.whenTileValue, !endTime24 && S.whenTileValueMuted]}>
+                            {endTime24 ? endTimeLabel : "Tap to set"}
+                          </Text>
+                          <Text style={S.whenTileHint}>Tap to choose</Text>
+                        </Pressable>
+                      )}
                     </View>
-                    <Text numberOfLines={1} style={[S.whenTileValue, !time24 && S.whenTileValueMuted]}>
-                      {time24 ? timeLabel : "Tap to set"}
-                    </Text>
-                    <Text style={S.whenTileHint}>Tap to choose</Text>
-                  </Pressable>
 
-                  <Pressable
-                    onPress={() => setEndTimeOpen(true)}
-                    style={[S.whenTile, endTime24 ? { borderColor: C.pink + "88", backgroundColor: C.pinkBg } : {}]}
-                  >
-                    <View style={S.whenTileTop}>
-                      <View style={[S.whenBadge, { backgroundColor: C.pinkBg }]}>
-                        <Ionicons name="time-outline" size={14} color={C.pink} />
+                    {(!!errors.date || !!errors.time) && (
+                      <View style={{ marginTop: 10 }}>
+                        {!!errors.date && <Text style={S.errorMsg}>• {errors.date}</Text>}
+                        {!!errors.time && <Text style={S.errorMsg}>• {errors.time}</Text>}
                       </View>
-                      <Text style={S.whenTileLabel}>End Time</Text>
+                    )}
+
+                    {(dateISO || time24 || endTime24) && (
+                      <Pressable hitSlop={10} onPress={() => { setDateISO(""); setTime24(""); setEndTime24(""); }} style={S.clearPill}>
+                        <Text style={S.clearPillText}>Clear all</Text>
+                      </Pressable>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <Text style={[S.whenTileLabel, { marginBottom: 10, paddingLeft: 4 }]}>Weekly Schedule</Text>
+                    <View style={{ gap: 12 }}>
+                      {["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map((dayName, i) => {
+                        const sched = recurringSchedule.find(s => s.day === i);
+                        const isActive = !!sched;
+                        return (
+                          <View key={i} style={{ flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: isActive ? C.greenBg : C.inputBg, padding: 10, borderRadius: 12, borderWidth: 1, borderColor: isActive ? C.greenBorder : C.inputBorder }}>
+                            {/* Toggle */}
+                            <Pressable
+                              style={{ width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: isActive ? C.green : C.hint, backgroundColor: isActive ? C.green : "transparent", alignItems: "center", justifyContent: "center" }}
+                              onPress={() => {
+                                if (isActive) {
+                                  setRecurringSchedule(recurringSchedule.filter(s => s.day !== i));
+                                } else {
+                                  setRecurringSchedule([...recurringSchedule, { day: i, startTime: "09:00", endTime: "17:00" }].sort((a,b) => a.day - b.day));
+                                }
+                              }}
+                            >
+                              {isActive && <Ionicons name="checkmark" size={16} color="#fff" />}
+                            </Pressable>
+                            
+                            <Text style={{ width: 80, fontSize: 14, fontWeight: "700", color: isActive ? C.greenText : C.muted }}>{dayName}</Text>
+
+                            {/* Times */}
+                            {isActive ? (
+                              <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 8 }}>
+                                <Pressable
+                                  style={{ flex: 1, backgroundColor: C.card, paddingVertical: 8, borderRadius: 8, alignItems: "center", borderWidth: 1, borderColor: C.cardBorder }}
+                                  onPress={() => setSchedDayObj({ day: i, field: "start" })}
+                                >
+                                  <Text style={{ fontSize: 13, fontWeight: "700", color: C.ink }}>{fmtTime(sched.startTime)}</Text>
+                                </Pressable>
+                                <Text style={{ color: C.hint, fontSize: 12, fontWeight: "800" }}>to</Text>
+                                <Pressable
+                                  style={{ flex: 1, backgroundColor: C.card, paddingVertical: 8, borderRadius: 8, alignItems: "center", borderWidth: 1, borderColor: C.cardBorder }}
+                                  onPress={() => setSchedDayObj({ day: i, field: "end" })}
+                                >
+                                  <Text style={{ fontSize: 13, fontWeight: "700", color: C.ink }}>{fmtTime(sched.endTime)}</Text>
+                                </Pressable>
+                              </View>
+                            ) : (
+                              <Text style={{ flex: 1, fontSize: 13, color: C.hint, fontWeight: "600", fontStyle: "italic", textAlign: "center" }}>Unavailable</Text>
+                            )}
+                          </View>
+                        );
+                      })}
                     </View>
-                    <Text numberOfLines={1} style={[S.whenTileValue, !endTime24 && S.whenTileValueMuted]}>
-                      {endTime24 ? endTimeLabel : "Tap to set"}
-                    </Text>
-                    <Text style={S.whenTileHint}>Tap to choose</Text>
-                  </Pressable>
-                </View>
-
-                {(!!errors.date || !!errors.time) && (
-                  <View style={{ marginTop: 10 }}>
-                    {!!errors.date && <Text style={S.errorMsg}>• {errors.date}</Text>}
-                    {!!errors.time && <Text style={S.errorMsg}>• {errors.time}</Text>}
-                  </View>
-                )}
-
-                {(dateISO || time24 || endTime24) && (
-                  <Pressable hitSlop={10} onPress={() => { setDateISO(""); setTime24(""); setEndTime24(""); }} style={S.clearPill}>
-                    <Text style={S.clearPillText}>Clear all</Text>
-                  </Pressable>
+                    {!!errors.schedule && <Text style={S.errorMsg}>• {errors.schedule}</Text>}
+                  </>
                 )}
               </View>
+            </View>
+
+            {/* ✅ RECURRING-ONLY: Booking Window & Daily Capacity */}
+            {isRecurringFlow && (
+              <>
+                {/* Booking Window Card */}
+                <Text style={S.sectionLabel}>Booking Window</Text>
+                <View style={S.card}>
+                  <View style={S.cardInner}>
+                    <View style={S.cardTitleRow}>
+                      <View style={[S.cardIconBox, { backgroundColor: "#E0F2FE" }]}>
+                        <Ionicons name="calendar-number-outline" size={18} color="#0284C7" />
+                      </View>
+                      <Text style={S.cardTitle}>How far ahead can users book?</Text>
+                    </View>
+                    <Text style={S.cardSub}>Users can book a session this far in advance. Helps you plan and manage attendance.</Text>
+                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
+                      {[
+                        { label: "Same Day", value: 0 },
+                        { label: "1 Day", value: 1 },
+                        { label: "3 Days", value: 3 },
+                        { label: "1 Week", value: 7 },
+                        { label: "2 Weeks", value: 14 },
+                        { label: "1 Month", value: 30 },
+                      ].map(opt => {
+                        const active = bookingWindowDays === opt.value;
+                        return (
+                          <Pressable
+                            key={opt.value}
+                            onPress={() => setBookingWindowDays(opt.value)}
+                            style={[
+                              {
+                                paddingHorizontal: 14, paddingVertical: 9,
+                                borderRadius: 99, borderWidth: 1.5,
+                                borderColor: active ? "#0284C7" : C.inputBorder,
+                                backgroundColor: active ? "#E0F2FE" : C.inputBg,
+                                flexDirection: "row", alignItems: "center", gap: 5,
+                              }
+                            ]}
+                          >
+                            <Ionicons name="calendar-outline" size={12} color={active ? "#0284C7" : C.muted} />
+                            <Text style={{ fontSize: 12, fontWeight: "800", color: active ? "#0284C7" : C.muted }}>
+                              {opt.label}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 12, paddingHorizontal: 4, backgroundColor: "#F0F9FF", borderRadius: 10, padding: 10 }}>
+                      <Ionicons name="information-circle-outline" size={14} color="#0284C7" />
+                      <Text style={{ fontSize: 12, color: "#0369A1", fontWeight: "600", flex: 1 }}>
+                        {bookingWindowDays === 0
+                          ? "Users can only book today's session on the same day."
+                          : `Users can book up to ${bookingWindowDays} day${bookingWindowDays > 1 ? "s" : ""} in advance.`}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Daily Capacity Card */}
+                <Text style={S.sectionLabel}>Daily Capacity</Text>
+                <View style={S.card}>
+                  <View style={S.cardInner}>
+                    <View style={S.cardTitleRow}>
+                      <View style={[S.cardIconBox, { backgroundColor: C.greenBg }]}>
+                        <Ionicons name="people-outline" size={18} color={C.green} />
+                      </View>
+                      <Text style={S.cardTitle}>Max bookings per day</Text>
+                    </View>
+                    <Text style={S.cardSub}>Limit how many people can book each day. Leave empty for unlimited slots.</Text>
+                    <View style={S.segmented}>
+                      <SegmentButton label="Unlimited" hint="No cap" active={!dailyCapacityText} onPress={() => setDailyCapacityText("")} />
+                      <SegmentButton label="Set Limit" hint="Max per day" active={!!dailyCapacityText} onPress={() => { if (!dailyCapacityText) setDailyCapacityText("10"); }} />
+                    </View>
+                    {!!dailyCapacityText && (
+                      <View style={{ marginTop: 14 }}>
+                        <Text style={S.smallLabel}>Max people per day</Text>
+                        <View style={S.inputShell}>
+                          <Ionicons name="people-outline" size={16} color={C.hint} />
+                          <TextInput
+                            value={dailyCapacityText}
+                            onChangeText={(t) => setDailyCapacityText(t.replace(/[^\d]/g, ""))}
+                            placeholder="e.g., 15"
+                            placeholderTextColor={C.hint}
+                            keyboardType={Platform.select({ ios: "number-pad", android: "numeric" })}
+                            style={S.textInput}
+                          />
+                          {!!dailyCapacityText && parseInt(dailyCapacityText) > 0 && (
+                            <View style={S.goodPill}><Text style={S.goodPillText}>Set</Text></View>
+                          )}
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              </>
             )}
-          </View>
-
-
-
-
           <ContinueBtn label="Continue" onPress={handleNext} color={accent} />
         </ScrollView>
-
         {/* Date Modal */}
         <Modal transparent visible={dateOpen} animationType="slide" onRequestClose={() => setDateOpen(false)}>
           <Pressable style={S.pickerOverlay} onPress={() => setDateOpen(false)}>
-            <Pressable style={S.pickerCard} onPress={() => {}}>
+            <Pressable style={S.pickerCard} onPress={() => { }}>
               <Text style={S.pickerTitle}>Pick a date</Text>
               <DateTimePicker
                 value={dateISO ? isoToSafeDate(dateISO) : todayMidday()}
@@ -1204,14 +1397,14 @@ export default function AddEventFields(props: Props) {
         {/* Time Modal */}
         <Modal transparent visible={timeOpen} animationType="slide" onRequestClose={() => setTimeOpen(false)}>
           <Pressable style={S.pickerOverlay} onPress={() => setTimeOpen(false)}>
-            <Pressable style={S.pickerCard} onPress={() => {}}>
+            <Pressable style={S.pickerCard} onPress={() => { }}>
               <Text style={S.pickerTitle}>Pick a time</Text>
               <DateTimePicker
                 value={timeToDate(time24)} mode="time"
                 display={Platform.OS === "ios" ? "spinner" : "default"} themeVariant="light"
                 onChange={(_, d) => {
                   if (!d) return;
-                  setTime24(`${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`);
+                  setTime24(`${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`);
                   if (Platform.OS !== "ios") setTimeOpen(false);
                 }}
               />
@@ -1227,14 +1420,14 @@ export default function AddEventFields(props: Props) {
         {/* End Time Modal */}
         <Modal transparent visible={endTimeOpen} animationType="slide" onRequestClose={() => setEndTimeOpen(false)}>
           <Pressable style={S.pickerOverlay} onPress={() => setEndTimeOpen(false)}>
-            <Pressable style={S.pickerCard} onPress={() => {}}>
+            <Pressable style={S.pickerCard} onPress={() => { }}>
               <Text style={S.pickerTitle}>Pick an end time</Text>
               <DateTimePicker
                 value={timeToDate(endTime24)} mode="time"
                 display={Platform.OS === "ios" ? "spinner" : "default"} themeVariant="light"
                 onChange={(_, d) => {
                   if (!d) return;
-                  setEndTime24(`${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`);
+                  setEndTime24(`${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`);
                   if (Platform.OS !== "ios") setEndTimeOpen(false);
                 }}
               />
@@ -1244,6 +1437,36 @@ export default function AddEventFields(props: Props) {
             </Pressable>
           </Pressable>
         </Modal>
+
+        {/* Schedule Time Modal */}
+        <Modal transparent visible={!!schedDayObj} animationType="slide" onRequestClose={() => setSchedDayObj(null)}>
+          <Pressable style={S.pickerOverlay} onPress={() => setSchedDayObj(null)}>
+            <Pressable style={S.pickerCard} onPress={() => { }}>
+              <Text style={S.pickerTitle}>Pick {schedDayObj?.field === "start" ? "start" : "end"} time</Text>
+              {schedDayObj && (
+                <DateTimePicker
+                  value={timeToDate(recurringSchedule.find(s => s.day === schedDayObj.day)?.[schedDayObj.field === "start" ? "startTime" : "endTime"] || "09:00")} mode="time"
+                  display={Platform.OS === "ios" ? "spinner" : "default"} themeVariant="light"
+                  onChange={(_, d) => {
+                    if (!d) return;
+                    const val = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+                    setRecurringSchedule(recurringSchedule.map(s => {
+                      if (s.day === schedDayObj.day) {
+                        return { ...s, [schedDayObj.field === "start" ? "startTime" : "endTime"]: val };
+                      }
+                      return s;
+                    }));
+                    if (Platform.OS !== "ios") setSchedDayObj(null);
+                  }}
+                />
+              )}
+              <TouchableOpacity style={S.pickerDone} onPress={() => setSchedDayObj(null)} activeOpacity={0.9}>
+                <Text style={S.pickerDoneText}>Done</Text>
+              </TouchableOpacity>
+            </Pressable>
+          </Pressable>
+        </Modal>
+
       </>
     );
   }
@@ -1295,9 +1518,9 @@ export default function AddEventFields(props: Props) {
                 <View style={{ marginTop: 12, borderRadius: R.input, overflow: "hidden", borderWidth: 1, borderColor: C.cardBorder }}>
                   {[
                     { id: "current", label: "Current Location", sub: "", dotColor: "#EF4444", icon: null },
-                    { id: "venue",   label: "Choose a Venue",   sub: "Search a specific Place", iconName: "business-outline" as const, iconBg: C.tealBg,   iconColor: C.teal },
-                    { id: "online",  label: "Online / Virtual", sub: "",                        iconName: "laptop-outline" as const,   iconBg: C.purpleBg, iconColor: C.purple },
-                    { id: "custom",  label: "Custom Address",   sub: "Type your own address",   iconName: "pencil-outline" as const,   iconBg: C.amberBg,  iconColor: C.amber },
+                    { id: "venue", label: "Choose a Venue", sub: "Search a specific Place", iconName: "business-outline" as const, iconBg: C.tealBg, iconColor: C.teal },
+                    { id: "online", label: "Online / Virtual", sub: "", iconName: "laptop-outline" as const, iconBg: C.purpleBg, iconColor: C.purple },
+                    { id: "custom", label: "Custom Address", sub: "Type your own address", iconName: "pencil-outline" as const, iconBg: C.amberBg, iconColor: C.amber },
                   ].map((opt, idx, arr) => (
                     <View key={opt.id}
                       style={[S.locOptionRow, idx === arr.length - 1 ? { borderBottomWidth: 0 } : {}]}>
@@ -1382,6 +1605,15 @@ export default function AddEventFields(props: Props) {
                   </>
                 )}
               </View>
+              {(() => {
+                if (!isVerified && userLoc && coord) {
+                  const d = getDistanceKm(userLoc.lat, userLoc.lng, coord.lat, coord.lng);
+                  if (d > 100) {
+                    return <Text style={[S.errorMsg, { marginTop: 10, fontSize: 13, lineHeight: 18 }]}>{`Unverified users can only create events within 100 km of their current location. (Distance: ${d.toFixed(1)} km). Please complete your identity verification to create events anywhere.`}</Text>;
+                  }
+                }
+                return null;
+              })()}
               {!!errors.location && <Text style={[S.errorMsg, { marginTop: 10 }]}>{errors.location}</Text>}
               {!!err && <Text style={S.err}>{err}</Text>}
             </View>
@@ -1402,172 +1634,172 @@ export default function AddEventFields(props: Props) {
         <WizardHeader
           step={5} stepLabel="STEP 05"
           title={kind === "event_paid" ? "What's the price" : "Attendance & Access"}
-          sub={kind === "event_paid" ? "Set the ticket price for your event." : "Control who can join your event."}
+          sub={kind === "event_paid" ? `Set the ticket price for your ${itemLabel.toLowerCase()}.` : `Control who can join your ${itemLabel.toLowerCase()}.`}
           onBack={goBack} onClose={onClose} showBack
           accentColor={accent} accentBg={accentBg} accentText={accentText}
         />
-        <ScrollView style={{ backgroundColor: C.bg }} contentContainerStyle={S.body}
-          showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        <ScrollView style={{ backgroundColor: C.bg }} contentContainerStyle={[S.body, { paddingBottom: Math.max(32, kbHeight + 20) }]}
+            showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
-          {/* Price (paid events) */}
-          {(kind === "event_paid") && (
-            <>
-              <Text style={S.sectionLabel}>Price {kind === "event_paid" ? "• ticket" : "• per slot"}</Text>
-              <View style={S.card}>
-                <View style={S.cardInner}>
-                  <View style={S.cardTitleRow}>
-                    <View style={[S.cardIconBox, { backgroundColor: C.amberBg }]}>
-                      <Ionicons name="pricetag-outline" size={18} color={C.amber} />
-                    </View>
-                    <Text style={S.cardTitle}>Ticket Price</Text>
-                  </View>
-                  <View style={[S.inputShell, errors.price && { borderColor: C.error + "44", backgroundColor: C.error + "08" }]}>
-                    <Text style={[S.pricePrefix, { color: accent }]}>₹</Text>
-                    <TextInput
-                      value={priceText} onChangeText={(t) => { setPriceText(t); if (errors.price) setErrors(e => ({ ...e, price: "" })); }}
-                      placeholder={kind === "event_paid" ? "299" : "500"}
-                      placeholderTextColor={C.hint}
-                      keyboardType={Platform.select({ ios: "decimal-pad", android: "numeric" })}
-                      style={S.priceInput}
-                    />
-                    {priceCents !== null && (
-                      <View style={S.goodPill}><Text style={S.goodPillText}>Set</Text></View>
-                    )}
-                  </View>
-                  {!!errors.price && <Text style={S.errorMsg}>{errors.price}</Text>}
-                  {/* Quick price tags */}
-                  <View style={S.priceTagRow}>
-                    {QUICK_PRICES.map(p => {
-                      const active = priceText === p;
-                      return (
-                        <TouchableOpacity key={p} onPress={() => setPriceText(p)}
-                          style={[S.priceTag, active && { borderColor: accent, backgroundColor: accentBg }]} activeOpacity={0.8}>
-                          <Text style={[S.priceTagText, active && { color: accentText, fontWeight: "800" }]}>₹{p}</Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                  {priceText.length > 0 && priceCents === null && (
-                    <Text style={S.helper}>Enter a valid price greater than 0.</Text>
-                  )}
-                </View>
-              </View>
-            </>
-          )}
-
-          {/* Attendance (free events) */}
-          {kind === "event_free" && (
-            <>
-              <Text style={S.sectionLabel}>Attendance</Text>
-              <View style={S.card}>
-                <View style={S.cardInner}>
-                  <View style={S.cardTitleRow}>
-                    <View style={[S.cardIconBox, { backgroundColor: C.tealBg }]}>
-                      <Ionicons name="people-outline" size={18} color={C.teal} />
-                    </View>
-                    <Text style={S.cardTitle}>Who can come?</Text>
-                  </View>
-                  <Text style={S.cardSub}>Keep it open or cap the headcount.</Text>
-                  <View style={S.segmented}>
-                    <SegmentButton label="Open"  hint="Unlimited" active={!limitEnabled} onPress={() => setLimitEnabled(false)} />
-                    <SegmentButton label="Limit" hint="Set max"   active={limitEnabled}  onPress={() => setLimitEnabled(true)} />
-                  </View>
-                  {limitEnabled && (
-                    <View style={{ marginTop: 14 }}>
-                      <Text style={S.smallLabel}>Max people</Text>
-                      <View style={[S.inputShell, errors.capacity && { borderColor: C.error + "44", backgroundColor: C.error + "08" }]}>
-                        <Ionicons name="people-outline" size={16} color={C.hint} />
-                        <TextInput
-                          value={capacityText} onChangeText={(t) => { setCapacityText(t); if (errors.capacity) setErrors(e => ({ ...e, capacity: "" })); }}
-                          placeholder="e.g., 20" placeholderTextColor={C.hint}
-                          keyboardType={Platform.select({ ios: "number-pad", android: "numeric" })}
-                          style={S.textInput}
-                        />
+            {/* Price (paid events) */}
+            {(kind === "event_paid") && (
+              <>
+                <Text style={S.sectionLabel}>Price {kind === "event_paid" ? "• ticket" : "• per slot"}</Text>
+                <View style={S.card}>
+                  <View style={S.cardInner}>
+                    <View style={S.cardTitleRow}>
+                      <View style={[S.cardIconBox, { backgroundColor: C.amberBg }]}>
+                        <Ionicons name="pricetag-outline" size={18} color={C.amber} />
                       </View>
-                      {!!errors.capacity && <Text style={S.errorMsg}>{errors.capacity}</Text>}
-                      {!capacityOk && capacityText.length > 0 && (
-                        <Text style={S.helper}>Enter a valid number greater than 0.</Text>
+                      <Text style={S.cardTitle}>Ticket Price</Text>
+                    </View>
+                    <View style={[S.inputShell, errors.price && { borderColor: C.error + "44", backgroundColor: C.error + "08" }]}>
+                      <Text style={[S.pricePrefix, { color: accent }]}>₹</Text>
+                      <TextInput
+                        value={priceText} onChangeText={(t) => { setPriceText(t); if (errors.price) setErrors(e => ({ ...e, price: "" })); }}
+                        placeholder={kind === "event_paid" ? "299" : "500"}
+                        placeholderTextColor={C.hint}
+                        keyboardType={Platform.select({ ios: "decimal-pad", android: "numeric" })}
+                        style={S.priceInput}
+                      />
+                      {priceCents !== null && (
+                        <View style={S.goodPill}><Text style={S.goodPillText}>Set</Text></View>
                       )}
                     </View>
-                  )}
-                </View>
-              </View>
-            </>
-          )}
-
-          {/* Description */}
-          <Text style={S.sectionLabel}>Event Description</Text>
-          <View style={S.card}>
-            <View style={S.cardInner}>
-              <View style={S.cardTitleRow}>
-                <View style={[S.cardIconBox, { backgroundColor: C.purpleBg }]}>
-                  <Ionicons name="document-text-outline" size={18} color={C.purple} />
-                </View>
-                <Text style={S.cardTitle}>Tell them more</Text>
-              </View>
-              <Text style={S.cardSub}>Add agenda, rules, what to bring, and any other details.</Text>
-
-              <View style={[S.descShell, errors.description && { borderColor: C.error + "44", backgroundColor: C.error + "08" }]}>
-                <TextInput
-                  value={description} onChangeText={(t) => { setDescription(t); if (errors.description) setErrors(e => ({ ...e, description: "" })); }}
-                  placeholder="e.g., Meet at the main gate. Bring water and a positive vibe!"
-                  placeholderTextColor={C.hint} multiline textAlignVertical="top"
-                  style={S.descInput} returnKeyType="default"
-                />
-              </View>
-              {!!errors.description && <Text style={S.errorMsg}>{errors.description}</Text>}
-            </View>
-          </View>
-
-          {/* Access */}
-          {kind !== "service" && (
-            <>
-              <Text style={S.sectionLabel}>Access</Text>
-              <View style={S.card}>
-                <View style={S.cardInner}>
-                  <View style={S.cardTitleRow}>
-                    <View style={[S.cardIconBox, { backgroundColor: C.greenBg }]}>
-                      <Ionicons name="shield-checkmark-outline" size={18} color={C.green} />
+                    {!!errors.price && <Text style={S.errorMsg}>{errors.price}</Text>}
+                    {/* Quick price tags */}
+                    <View style={S.priceTagRow}>
+                      {QUICK_PRICES.map(p => {
+                        const active = priceText === p;
+                        return (
+                          <TouchableOpacity key={p} onPress={() => setPriceText(p)}
+                            style={[S.priceTag, active && { borderColor: accent, backgroundColor: accentBg }]} activeOpacity={0.8}>
+                            <Text style={[S.priceTagText, active && { color: accentText, fontWeight: "800" }]}>₹{p}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
                     </View>
-                    <Text style={S.cardTitle}>Who can join?</Text>
-                  </View>
-                  <Text style={S.cardSub}>Control how people get into your event.</Text>
-                  <View style={{ gap: 8, marginTop: 4 }}>
-                    <TouchableOpacity onPress={() => setJoinPolicy("open")} activeOpacity={0.85}
-                      style={[S.accessCard, joinPolicy === "open" && { borderColor: C.green, backgroundColor: C.greenBg }]}>
-                      <View style={[S.radioOuter, joinPolicy === "open" && S.radioOuterActive]}>
-                        {joinPolicy === "open" && <View style={S.radioDot} />}
-                      </View>
-                      <View style={[S.accessIconBox, { backgroundColor: joinPolicy === "open" ? C.card : C.inputBg }]}>
-                        <Ionicons name="globe-outline" size={18} color={joinPolicy === "open" ? C.green : C.muted} />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={S.accessTitle}>Anyone — direct join</Text>
-                        <Text style={S.accessSub}>People join instantly, no approval needed</Text>
-                      </View>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => setJoinPolicy("approval")} activeOpacity={0.85}
-                      style={[S.accessCard, joinPolicy === "approval" && { borderColor: C.purple, backgroundColor: C.purpleBg }]}>
-                      <View style={[S.radioOuter, joinPolicy === "approval" && { borderColor: C.purple, backgroundColor: C.purple }]}>
-                        {joinPolicy === "approval" && <View style={S.radioDot} />}
-                      </View>
-                      <View style={[S.accessIconBox, { backgroundColor: joinPolicy === "approval" ? C.card : C.inputBg }]}>
-                        <Ionicons name="checkmark-done-outline" size={18} color={joinPolicy === "approval" ? C.purple : C.muted} />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={S.accessTitle}>Approval required</Text>
-                        <Text style={S.accessSub}>You review and approve each request</Text>
-                      </View>
-                      <View style={S.hostBadge}><Text style={S.hostBadgeText}>HOST</Text></View>
-                    </TouchableOpacity>
+                    {priceText.length > 0 && priceCents === null && (
+                      <Text style={S.helper}>Enter a valid price greater than 0.</Text>
+                    )}
                   </View>
                 </View>
-              </View>
-            </>
-          )}
+              </>
+            )}
 
-          <ContinueBtn label="Continue" onPress={handleNext} color={accent} />
-        </ScrollView>
+            {/* Attendance (free events) */}
+            {kind === "event_free" && !isRecurringFlow && (
+              <>
+                <Text style={S.sectionLabel}>Attendance</Text>
+                <View style={S.card}>
+                  <View style={S.cardInner}>
+                    <View style={S.cardTitleRow}>
+                      <View style={[S.cardIconBox, { backgroundColor: C.tealBg }]}>
+                        <Ionicons name="people-outline" size={18} color={C.teal} />
+                      </View>
+                      <Text style={S.cardTitle}>Who can come?</Text>
+                    </View>
+                    <Text style={S.cardSub}>Keep it open or cap the headcount.</Text>
+                    <View style={S.segmented}>
+                      <SegmentButton label="Open" hint="Unlimited" active={!limitEnabled} onPress={() => setLimitEnabled(false)} />
+                      <SegmentButton label="Limit" hint="Set max" active={limitEnabled} onPress={() => setLimitEnabled(true)} />
+                    </View>
+                    {limitEnabled && (
+                      <View style={{ marginTop: 14 }}>
+                        <Text style={S.smallLabel}>Max people</Text>
+                        <View style={[S.inputShell, errors.capacity && { borderColor: C.error + "44", backgroundColor: C.error + "08" }]}>
+                          <Ionicons name="people-outline" size={16} color={C.hint} />
+                          <TextInput
+                            value={capacityText} onChangeText={(t) => { setCapacityText(t); if (errors.capacity) setErrors(e => ({ ...e, capacity: "" })); }}
+                            placeholder="e.g., 20" placeholderTextColor={C.hint}
+                            keyboardType={Platform.select({ ios: "number-pad", android: "numeric" })}
+                            style={S.textInput}
+                          />
+                        </View>
+                        {!!errors.capacity && <Text style={S.errorMsg}>{errors.capacity}</Text>}
+                        {!capacityOk && capacityText.length > 0 && (
+                          <Text style={S.helper}>Enter a valid number greater than 0.</Text>
+                        )}
+                      </View>
+                    )}
+                  </View>
+                </View>
+              </>
+            )}
+
+            {/* Description */}
+            <Text style={S.sectionLabel}>{itemLabel} Description</Text>
+            <View style={S.card}>
+              <View style={S.cardInner}>
+                <View style={S.cardTitleRow}>
+                  <View style={[S.cardIconBox, { backgroundColor: C.purpleBg }]}>
+                    <Ionicons name="document-text-outline" size={18} color={C.purple} />
+                  </View>
+                  <Text style={S.cardTitle}>Tell them more</Text>
+                </View>
+                <Text style={S.cardSub}>Add agenda, rules, what to bring, and any other details.</Text>
+
+                <View style={[S.descShell, errors.description && { borderColor: C.error + "44", backgroundColor: C.error + "08" }]}>
+                  <TextInput
+                    value={description} onChangeText={(t) => { setDescription(t); if (errors.description) setErrors(e => ({ ...e, description: "" })); }}
+                    placeholder="e.g., Meet at the main gate. Bring water and a positive vibe!"
+                    placeholderTextColor={C.hint} multiline textAlignVertical="top"
+                    style={S.descInput} returnKeyType="default"
+                  />
+                </View>
+                {!!errors.description && <Text style={S.errorMsg}>{errors.description}</Text>}
+              </View>
+            </View>
+
+            {/* Access */}
+            {true && (
+              <>
+                <Text style={S.sectionLabel}>Access</Text>
+                <View style={S.card}>
+                  <View style={S.cardInner}>
+                    <View style={S.cardTitleRow}>
+                      <View style={[S.cardIconBox, { backgroundColor: C.greenBg }]}>
+                        <Ionicons name="shield-checkmark-outline" size={18} color={C.green} />
+                      </View>
+                      <Text style={S.cardTitle}>Who can join?</Text>
+                    </View>
+                    <Text style={S.cardSub}>Control how people get into your event.</Text>
+                    <View style={{ gap: 8, marginTop: 4 }}>
+                      <TouchableOpacity onPress={() => setJoinPolicy("open")} activeOpacity={0.85}
+                        style={[S.accessCard, joinPolicy === "open" && { borderColor: C.green, backgroundColor: C.greenBg }]}>
+                        <View style={[S.radioOuter, joinPolicy === "open" && S.radioOuterActive]}>
+                          {joinPolicy === "open" && <View style={S.radioDot} />}
+                        </View>
+                        <View style={[S.accessIconBox, { backgroundColor: joinPolicy === "open" ? C.card : C.inputBg }]}>
+                          <Ionicons name="globe-outline" size={18} color={joinPolicy === "open" ? C.green : C.muted} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={S.accessTitle}>Anyone — direct join</Text>
+                          <Text style={S.accessSub}>People join instantly, no approval needed</Text>
+                        </View>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => setJoinPolicy("approval")} activeOpacity={0.85}
+                        style={[S.accessCard, joinPolicy === "approval" && { borderColor: C.purple, backgroundColor: C.purpleBg }]}>
+                        <View style={[S.radioOuter, joinPolicy === "approval" && { borderColor: C.purple, backgroundColor: C.purple }]}>
+                          {joinPolicy === "approval" && <View style={S.radioDot} />}
+                        </View>
+                        <View style={[S.accessIconBox, { backgroundColor: joinPolicy === "approval" ? C.card : C.inputBg }]}>
+                          <Ionicons name="checkmark-done-outline" size={18} color={joinPolicy === "approval" ? C.purple : C.muted} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={S.accessTitle}>Approval required</Text>
+                          <Text style={S.accessSub}>You review and approve each request</Text>
+                        </View>
+                        <View style={S.hostBadge}><Text style={S.hostBadgeText}>HOST</Text></View>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+              </>
+            )}
+
+            <ContinueBtn label="Continue" onPress={handleNext} color={accent} />
+          </ScrollView>
       </>
     );
   }
@@ -1588,7 +1820,7 @@ export default function AddEventFields(props: Props) {
       />
       <ScrollView style={{ backgroundColor: C.bg }} contentContainerStyle={S.body} showsVerticalScrollIndicator={false}>
 
-        <Text style={S.sectionLabel}>Your event</Text>
+        <Text style={S.sectionLabel}>Your {itemLabel.toLowerCase()}</Text>
         <View style={S.previewCard}>
           {/* Banner */}
           <View style={S.previewBanner}>
@@ -1602,13 +1834,13 @@ export default function AddEventFields(props: Props) {
             )}
             <View style={[S.previewKindBadge, { backgroundColor: accent }]}>
               <Text style={S.previewKindBadgeText}>
-                {kind === "event_paid" ? "Paid" : "Free"}
+                {isRecurringFlow ? "Recurring Activity" : kind === "event_paid" ? "Paid Event" : "Free Event"}
               </Text>
             </View>
           </View>
 
           <View style={S.previewBody}>
-            <Text style={S.previewEventTitle}>{title || "Untitled Event"}</Text>
+            <Text style={S.previewEventTitle}>{title || `Untitled ${itemLabel}`}</Text>
             {!!description && <Text style={S.previewEventSub} numberOfLines={2}>{description}</Text>}
             <View style={S.previewDivider} />
 
@@ -1667,7 +1899,7 @@ export default function AddEventFields(props: Props) {
             )}
 
             {/* Access */}
-            {kind !== "service" && (
+            {true && (
               <View style={[S.previewDetailRow, { borderBottomWidth: 0, marginBottom: 0 }]}>
                 <View style={[S.previewDetailIcon, { backgroundColor: C.purpleBg }]}>
                   <Ionicons name="shield-checkmark-outline" size={16} color={C.purple} />
@@ -1680,6 +1912,58 @@ export default function AddEventFields(props: Props) {
                 </View>
               </View>
             )}
+
+            {/* ✅ Recurring-specific preview */}
+            {isRecurringFlow && (
+              <>
+                <View style={S.previewDivider} />
+                {/* Repeats On */}
+                <View style={S.previewDetailRow}>
+                  <View style={[S.previewDetailIcon, { backgroundColor: "#ECFDF5" }]}>
+                    <Ionicons name="repeat-outline" size={16} color="#10B981" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={S.previewDetailLabel}>Repeats On</Text>
+                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
+                      {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map((d, i) => {
+                        const on = recurringSchedule.some(s => s.day === i);
+                        return (
+                          <View key={i} style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: on ? "#ECFDF5" : C.inputBg, borderWidth: 1, borderColor: on ? "#10B981" : C.inputBorder }}>
+                            <Text style={{ fontSize: 11, fontWeight: "700", color: on ? "#059669" : C.hint }}>{d}</Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </View>
+                </View>
+                {/* Booking Window */}
+                <View style={S.previewDetailRow}>
+                  <View style={[S.previewDetailIcon, { backgroundColor: "#E0F2FE" }]}>
+                    <Ionicons name="calendar-number-outline" size={16} color="#0284C7" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={S.previewDetailLabel}>Booking Window</Text>
+                    <Text style={S.previewDetailVal}>
+                      {bookingWindowDays === 0 ? "Same day only" : `Up to ${bookingWindowDays} day${bookingWindowDays > 1 ? "s" : ""} in advance`}
+                    </Text>
+                  </View>
+                </View>
+                {/* Daily Capacity */}
+                <View style={[S.previewDetailRow, { borderBottomWidth: 0, marginBottom: 0 }]}>
+                  <View style={[S.previewDetailIcon, { backgroundColor: C.greenBg }]}>
+                    <Ionicons name="people-outline" size={16} color={C.green} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={S.previewDetailLabel}>Daily Capacity</Text>
+                    <Text style={S.previewDetailVal}>
+                      {dailyCapacityText && parseInt(dailyCapacityText) > 0
+                        ? `Max ${dailyCapacityText} people/day`
+                        : "Unlimited"}
+                    </Text>
+                  </View>
+                </View>
+              </>
+            )}
           </View>
         </View>
 
@@ -1689,8 +1973,8 @@ export default function AddEventFields(props: Props) {
             <Text style={S.secondaryText}>Cancel</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[S.primaryBtn, { backgroundColor: accent }, !canCreate && { opacity: 0.45 }]}
-            onPress={onCreate} activeOpacity={0.92} disabled={!canCreate}
+            style={[S.primaryBtn, { backgroundColor: accent }]}
+            onPress={onCreate} activeOpacity={0.92}
           >
             {submitting ? (
               <ActivityIndicator color="#fff" />

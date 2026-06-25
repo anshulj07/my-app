@@ -21,8 +21,8 @@ function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLon = (lon2 - lon1) * Math.PI / 180;
   const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
@@ -45,17 +45,19 @@ const C = {
   red: "#FF4B6E",
 };
 
-const PALETTES = ["#D3E9DE","#D4E5F7","#F5DDD3","#EAD9F5","#F5EAD1","#D3EDF5"];
+const PALETTES = ["#D3E9DE", "#D4E5F7", "#F5DDD3", "#EAD9F5", "#F5EAD1", "#D3EDF5"];
 
 const CATS = [
-  { key: "All",      label: "All",      icon: "grid",               color: "#6C63FF" },
-  { key: "Fitness",  label: "Fitness",  icon: "barbell-outline",    color: "#FF6B6B" },
-  { key: "Wellness", label: "Wellness", icon: "leaf-outline",       color: "#22C55E" },
-  { key: "Food",     label: "Food",     icon: "restaurant-outline", color: "#F59E0B" },
-  { key: "Activity", label: "Activity", icon: "bicycle-outline",    color: "#06B6D4" },
+  { key: "All", label: "All", icon: "grid", color: "#6C63FF" },
+  { key: "All Events", label: "All Events", icon: "calendar-outline", color: "#10B981" },
+  { key: "Recurring", label: "Recurring", icon: "repeat-outline", color: "#14B8A6" },
+  { key: "Fitness", label: "Fitness", icon: "barbell-outline", color: "#FF6B6B" },
+  { key: "Wellness", label: "Wellness", icon: "leaf-outline", color: "#22C55E" },
+  { key: "Food", label: "Food", icon: "restaurant-outline", color: "#F59E0B" },
+  { key: "Activity", label: "Activity", icon: "bicycle-outline", color: "#06B6D4" },
 ];
 
-type TripEvent = {
+export type TripEvent = {
   _id: string;
   title: string;
   emoji?: string;
@@ -76,6 +78,7 @@ type TripEvent = {
     countryCode?: string;
   };
   creatorName?: string;
+  creatorClerkId?: string;
   distanceKm?: number;
 };
 
@@ -109,7 +112,7 @@ function HeroCard({ ev, onPress }: { ev: TripEvent; onPress?: () => void }) {
         {/* Bottom Content Overlay (Glassmorphism) */}
         <BlurView intensity={25} tint="dark" style={S.heroGlass}>
           <Text style={S.heroTitle} numberOfLines={1}>{ev.title}</Text>
-          
+
           <View style={S.heroMetaRow}>
             <View style={S.heroMetaItem}>
               <Ionicons name="time-outline" size={12} color="#fff" />
@@ -208,7 +211,7 @@ export default function TripScreen() {
         const c = (rev?.[0]?.city || rev?.[0]?.district || rev?.[0]?.subregion || "").trim();
         if (c) setCity(c);
         if (rev?.[0]?.country) setUserCountry(rev[0].country);
-      } catch {}
+      } catch { }
     })();
   }, []);
 
@@ -221,35 +224,20 @@ export default function TripScreen() {
     if (!API_BASE) return;
     setLoading(true);
     try {
-      const res = await apiFetch(`${API_BASE}/api/events/get-events?limit=200`, { method: "GET", headers });
+      const res = await apiFetch(`${API_BASE}/api/events/get-events?limit=200&includePausedFor=${userId || ""}`, { method: "GET", headers });
       const json = await res.json().catch(() => ({}));
       setEvents(Array.isArray(json?.events) ? json.events : []);
     } catch { setEvents([]); }
     finally { setLoading(false); setRefreshing(false); }
-  }, [API_BASE, headers]);
+  }, [API_BASE, headers, userId]);
 
   useEffect(() => { load(); }, [load]);
   const onRefresh = useCallback(() => { setRefreshing(true); setDisplayCount(20); load(); }, [load]);
 
-  // ✅ Infinite scroll: auto-load more when user is within 300px of bottom
-  const handleScroll = useCallback((e: any) => {
-    const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
-    const distanceFromBottom = contentSize.height - contentOffset.y - layoutMeasurement.height;
-    if (distanceFromBottom < 300 && !isLoadingMore.current) {
-      setDisplayCount(prev => {
-        if (prev >= (filtered?.length ?? 0)) return prev; // already showing all
-        isLoadingMore.current = true;
-        setTimeout(() => { isLoadingMore.current = false; }, 500); // cooldown
-        return prev + LOAD_MORE_SIZE;
-      });
-    }
-  }, [filtered]);
-
   const filtered = useMemo(() => {
     let list = events.filter(e => {
       const st = String((e as any).status || "active").toLowerCase();
-      const isMine = userId && String((e as any).creatorClerkId) === userId;
-      return st === "active" || st === "live" || (st === "paused" && isMine);
+      return st === "active" || st === "live" || (st === "paused" && e.creatorClerkId === userId);
     });
 
     // Reset display count on filter change
@@ -265,11 +253,11 @@ export default function TripScreen() {
         const addressMatch = (e.location?.address ?? "").toLowerCase().includes(q);
         const formattedAddressMatch = (e.location?.formattedAddress ?? "").toLowerCase().includes(q);
         const admin1Match = (e.location?.admin1 ?? "").toLowerCase().includes(q);
-        const countryMatch = (e.location?.countryName ?? "").toLowerCase().includes(q) || 
-                             (e.location?.countryCode ?? "").toLowerCase().includes(q);
+        const countryMatch = (e.location?.countryName ?? "").toLowerCase().includes(q) ||
+          (e.location?.countryCode ?? "").toLowerCase().includes(q);
         const creatorMatch = (e.creatorName ?? "").toLowerCase().includes(q);
-                          (e.kind === "paid" && "paid".includes(q)) ||
-                          (e.kind === "free" && "free".includes(q));
+        const kindMatch = (e.kind === "paid" && "paid".includes(q)) ||
+          (e.kind === "free" && "free".includes(q));
 
         return (
           titleMatch ||
@@ -291,6 +279,8 @@ export default function TripScreen() {
       list = list.filter(e => {
         const t = e.title.toLowerCase();
         const k = (e.kind || "").toLowerCase();
+        if (f === "all events") return k.includes("free") || k.includes("paid");
+        if (f === "recurring") return k.includes("recurring");
         if (f === "fitness") return t.includes("fit") || k.includes("fitness");
         if (f === "wellness") return t.includes("well") || k.includes("wellness");
         if (f === "food") return t.includes("food") || k.includes("food");
@@ -353,6 +343,20 @@ export default function TripScreen() {
     });
   }, [events, search, catFilter, filters, userCoords, userId]);
 
+  // ✅ Infinite scroll: auto-load more when user is within 300px of bottom
+  const handleScroll = useCallback((e: any) => {
+    const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
+    const distanceFromBottom = contentSize.height - contentOffset.y - layoutMeasurement.height;
+    if (distanceFromBottom < 300 && !isLoadingMore.current) {
+      setDisplayCount(prev => {
+        if (prev >= (filtered?.length ?? 0)) return prev; // already showing all
+        isLoadingMore.current = true;
+        setTimeout(() => { isLoadingMore.current = false; }, 500); // cooldown
+        return prev + LOAD_MORE_SIZE;
+      });
+    }
+  }, [filtered]);
+
   const heroEvents = useMemo(() => {
     // Show most popular events in the Hero banner (Country-wise if available)
     let candidates = filtered;
@@ -395,9 +399,9 @@ export default function TripScreen() {
   const openSheet = (ev: TripEvent) => {
     router.push({
       pathname: "/newApp/event-detail",
-      params: { 
-        eventId: ev._id, 
-        title: ev.title, 
+      params: {
+        eventId: ev._id,
+        title: ev.title,
         emoji: ev.emoji,
         bannerUri: ev.bannerUri || (ev as any).bannerImage || (ev as any).banner || "",
         date: ev.date || "",
@@ -416,9 +420,9 @@ export default function TripScreen() {
   return (
     <Animated.View style={[S.screen, { opacity: fade }]}>
       <View style={StyleSheet.absoluteFill}>
-        <LinearGradient colors={["#E0E7FF", "#FCE7F3", "#EDE9FE"]} style={StyleSheet.absoluteFill} start={{x:0, y:0}} end={{x:1, y:1}} />
+        <LinearGradient colors={["#E0E7FF", "#FCE7F3", "#EDE9FE"]} style={StyleSheet.absoluteFill} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} />
         <Animated.View style={[StyleSheet.absoluteFill, { opacity: gradAnim }]}>
-          <LinearGradient colors={["#EDE9FE", "#FFE4E6", "#DBEAFE"]} style={StyleSheet.absoluteFill} start={{x:1, y:0}} end={{x:0, y:1}} />
+          <LinearGradient colors={["#EDE9FE", "#FFE4E6", "#DBEAFE"]} style={StyleSheet.absoluteFill} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} />
         </Animated.View>
       </View>
       <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
@@ -453,9 +457,9 @@ export default function TripScreen() {
         </View>
       </View>
 
-      <FilterSheet 
-        visible={showFilters} 
-        onClose={() => setShowFilters(false)} 
+      <FilterSheet
+        visible={showFilters}
+        onClose={() => setShowFilters(false)}
         initialFilters={filters || {}}
         onApply={(data) => {
           setFilters(data);
@@ -480,10 +484,10 @@ export default function TripScreen() {
             {CATS.map(cat => {
               const active = catFilter === cat.key;
               return (
-                <TouchableOpacity 
-                  key={cat.key} 
-                  style={[S.catItem, active && S.catItemActive]} 
-                  onPress={() => { setCatFilter(cat.key); setDisplayCount(50); }} 
+                <TouchableOpacity
+                  key={cat.key}
+                  style={[S.catItem, active && S.catItemActive]}
+                  onPress={() => { setCatFilter(cat.key); setDisplayCount(50); }}
                   activeOpacity={0.78}
                 >
                   <Ionicons name={cat.icon as any} size={16} color={active ? "#fff" : C.ink2} />
@@ -505,17 +509,17 @@ export default function TripScreen() {
               <Ionicons name="search-outline" size={50} color={C.muted} />
             </View>
             <Text style={S.emptyTitle}>
-              {search 
-                ? `No results for "${search}"` 
-                : catFilter !== "All" 
+              {search
+                ? `No results for "${search}"`
+                : catFilter !== "All"
                   ? `No ${catFilter} events found`
                   : "No events found"}
             </Text>
             <Text style={S.emptySub}>Try adjusting your filters or search terms to find what you're looking for.</Text>
-            
+
             {(search.length > 0 || catFilter !== "All" || filters) && (
-              <TouchableOpacity 
-                onPress={() => { setSearch(""); setCatFilter("All"); setFilters(null); }} 
+              <TouchableOpacity
+                onPress={() => { setSearch(""); setCatFilter("All"); setFilters(null); }}
                 style={S.clearBtn}
               >
                 <Text style={S.clearBtnTxt}>Clear All Filters</Text>
@@ -667,10 +671,10 @@ const S = StyleSheet.create({
 
   // Category
   catScroll: { paddingHorizontal: PAD, gap: 10 },
-  catItem: { 
-    flexDirection: "row", alignItems: "center", gap: 6, 
-    paddingHorizontal: 18, paddingVertical: 12, 
-    borderRadius: 99, 
+  catItem: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 18, paddingVertical: 12,
+    borderRadius: 99,
     backgroundColor: "rgba(255,255,255,0.6)",
     borderWidth: 1, borderColor: "rgba(255,255,255,0.9)"
   },
@@ -746,13 +750,13 @@ const S = StyleSheet.create({
   // New Services Grid Styles
   hGridScroll: { paddingHorizontal: PAD, gap: 16 },
   vCol: { gap: 12 },
-  compactServiceCard: { 
-    flexDirection: "row", 
-    width: SW * 0.75, 
-    backgroundColor: C.white, 
-    borderRadius: 16, 
+  compactServiceCard: {
+    flexDirection: "row",
+    width: SW * 0.75,
+    backgroundColor: C.white,
+    borderRadius: 16,
     padding: 10,
-    borderWidth: 1, 
+    borderWidth: 1,
     borderColor: C.border,
     alignItems: "center",
     gap: 12

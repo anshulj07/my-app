@@ -42,6 +42,8 @@ export type EventDoc = {
   startsAt?: string;
   endsAt?: string;
   joinPolicy?: string;
+  recurringSchedule?: any[];
+  isRecurring?: boolean;
 };
 
 function eventStartMs(ev: EventDoc): number {
@@ -55,6 +57,10 @@ function getDisplayState(ev: EventDoc) {
   const status = String(ev.status || "active").toLowerCase();
   if (status === "paused") return { label: "Paused", color: C.red, text: C.redText, key: "paused" };
   if (status === "ended") return { label: "Ended", color: "#F1F5F9", text: C.muted, key: "ended" };
+
+  if (ev.isRecurring) {
+    return { label: "Recurring", color: "#E0F2FE", text: "#0284C7", key: "recurring" };
+  }
 
   const start = eventStartMs(ev);
   if (!Number.isFinite(start) || start === Number.POSITIVE_INFINITY) return { label: "Upcoming", color: C.blue, text: C.blueText, key: "upcoming" };
@@ -151,7 +157,11 @@ function EventCard({ e, onPress, onManage, onVerify }: any) {
         <View style={T.grid}>
           <View style={T.gridCell}>
             <Text style={T.gridLabel}>WHEN</Text>
-            <Text style={T.gridValue}>{e.date || "Not set"}</Text>
+            <Text style={T.gridValue}>
+              {e.isRecurring && Array.isArray(e.recurringSchedule) && e.recurringSchedule.length > 0
+                ? `Every ${e.recurringSchedule.map((s: any) => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][s.day]).join(", ")}`
+                : e.date || "Not set"}
+            </Text>
           </View>
           <View style={T.gridCell}>
             <Text style={T.gridLabel}>WHERE</Text>

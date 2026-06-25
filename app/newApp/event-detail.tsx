@@ -63,6 +63,9 @@ export default function EventDetailScreen() {
     eventStr?: string;
     creatorClerkId?: string;
     isVerified?: string;
+    endDate?: string;
+    endTime?: string;
+    bookingWindowDays?: string;
   }>();
 
   const [event, setEvent] = useState<any>(() => {
@@ -173,9 +176,9 @@ export default function EventDetailScreen() {
   };
 
   const handleEdit = () => {
-    const kind = event?.kind === "service" ? "service" : "event";
+    const isRecurring = ev?.isRecurring === true || String(ev?.isRecurring) === "true" || ev?.kind === "recurring" || params.kind === "recurring";
     router.push({
-      pathname: kind === "service" ? "/edit-service/[eventId]" : "/edit-event/[eventId]",
+      pathname: isRecurring ? "/edit-recurring/[eventId]" : "/edit-event/[eventId]",
       params: { eventId: params.eventId }
     } as any);
   };
@@ -257,8 +260,68 @@ export default function EventDetailScreen() {
     return now >= (startMs - 3600000);
   }, [isJoined, isPast, startMs]);
 
+  const dateDisplay = useMemo(() => {
+    const isRecurr = ev?.isRecurring === true || String(ev?.isRecurring) === "true" || ev?.kind === "recurring" || params.kind === "recurring";
+    if (isRecurr) {
+      if (Array.isArray(ev?.recurringSchedule) && ev.recurringSchedule.length > 0) {
+        const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        const rDays = ev.recurringSchedule.map((s: any) => days[s.day]).join(", ");
+        return `Every ${rDays}`;
+      } else if (Array.isArray(ev?.recurringDays) && ev.recurringDays.length > 0) {
+        const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        const rDays = ev.recurringDays.map((d: any) => days[d]).join(", ");
+        return `Every ${rDays}`;
+      }
+      return "Recurring Event";
+    }
+    let d1 = ev?.date || params.date || "";
+    let d2 = ev?.endDate || params.endDate || "";
+    if (ev?.startsAt) {
+      d1 = new Date(ev.startsAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    }
+    if (ev?.endsAt) {
+      d2 = new Date(ev.endsAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    }
+    if (!d1) return "TBD";
+    if (!d2 || d1 === d2) return d1;
+    return `${d1} - ${d2}`;
+  }, [ev, params]);
 
-
+  const timeDisplay = useMemo(() => {
+    const isRecurr = ev?.isRecurring === true || String(ev?.isRecurring) === "true" || ev?.kind === "recurring" || params.kind === "recurring";
+    if (isRecurr) {
+      if (Array.isArray(ev?.recurringSchedule) && ev.recurringSchedule.length > 0) {
+        const first = ev.recurringSchedule[0];
+        let t1 = first.startTime || "";
+        let t2 = first.endTime || "";
+        if (t1) {
+          const [h, m] = t1.split(":");
+          const d = new Date(); d.setHours(Number(h), Number(m));
+          t1 = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+        }
+        if (t2) {
+          const [h, m] = t2.split(":");
+          const d = new Date(); d.setHours(Number(h), Number(m));
+          t2 = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+        }
+        if (!t1) return "TBD";
+        if (!t2 || t1 === t2) return t1;
+        return `${t1} - ${t2}`;
+      }
+      return "Time varies";
+    }
+    let t1 = ev?.time || params.time || "";
+    let t2 = ev?.endTime || params.endTime || "";
+    if (ev?.startsAt) {
+      t1 = new Date(ev.startsAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    }
+    if (ev?.endsAt) {
+      t2 = new Date(ev.endsAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    }
+    if (!t1) return "TBD";
+    if (!t2 || t1 === t2) return t1;
+    return `${t1} - ${t2}`;
+  }, [ev, params]);
   const handleLeave = async () => {
     const titleText = isPending ? "Cancel Join Request" : "Leave Event";
     const msgText = isPending 
@@ -421,14 +484,14 @@ export default function EventDetailScreen() {
           
           <Text style={S.mainTitle}>{title}</Text>
           
-          <View style={[S.row, { gap: 20, marginTop: 12 }]}>
+          <View style={{ gap: 8, marginTop: 12 }}>
             <View style={S.row}>
               <Ionicons name="calendar-outline" size={16} color={C.accent} />
-              <Text style={S.statText}>{ev?.date || params.date || "TBD"}</Text>
+              <Text style={[S.statText, { flexShrink: 1 }]} numberOfLines={2}>{dateDisplay}</Text>
             </View>
             <View style={S.row}>
               <Ionicons name="time-outline" size={16} color={C.accent} />
-              <Text style={S.statText}>{ev?.time || params.time || "TBD"}</Text>
+              <Text style={[S.statText, { flexShrink: 1 }]} numberOfLines={2}>{timeDisplay}</Text>
             </View>
           </View>
 
@@ -674,8 +737,17 @@ export default function EventDetailScreen() {
                 </>
               ) : (
                 <>
-                  <Text style={S.footerLabel}>Starts From</Text>
-                  <Text style={S.footerPrice}>{price} <Text style={S.perPerson}>/ person</Text></Text>
+                  {kind === "free" || price === "Free" || price === "₹0" ? (
+                    <>
+                      <Text style={S.footerLabel}>Price</Text>
+                      <Text style={S.footerPrice}>Free</Text>
+                    </>
+                  ) : (
+                    <>
+                      <Text style={S.footerLabel}>Starts From</Text>
+                      <Text style={S.footerPrice}>{price} <Text style={S.perPerson}>/ person</Text></Text>
+                    </>
+                  )}
                 </>
               )}
             </View>
@@ -691,6 +763,9 @@ export default function EventDetailScreen() {
                autoOpen={params.booking === "true"}
                eventLat={ev?.location?.lat || (params.lat ? Number(params.lat) : undefined)}
                eventLng={ev?.location?.lng || (params.lng ? Number(params.lng) : undefined)}
+               isRecurring={ev?.isRecurring === true || String(ev?.isRecurring) === "true" || ev?.kind === "recurring" || params.kind === "recurring"}
+               recurringSchedule={ev?.recurringSchedule}
+               bookingWindowDays={ev?.bookingWindowDays !== undefined ? ev.bookingWindowDays : (params.bookingWindowDays ? Number(params.bookingWindowDays) : undefined)}
                onJoined={() => loadAll()}
                joinPolicy={joinPolicy}
                disabled={isButtonDisabled}

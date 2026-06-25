@@ -97,20 +97,32 @@ function EventCard({ e, onPress, onSummary }: { e: EventDoc; onPress: () => void
         </View>
 
         <View style={T.tagRow}>
-          <View style={[T.tag, { backgroundColor: C.blue }]}>
-            <Text style={[T.tagText, { color: C.blueText }]}>Paid event</Text>
-          </View>
+          {(e.kind === "paid" || e.kind === "event_paid" || (e.priceCents && e.priceCents > 0)) && (
+            <View style={[T.tag, { backgroundColor: C.blue }]}>
+              <Text style={[T.tagText, { color: C.blueText }]}>Paid event</Text>
+            </View>
+          )}
           <View style={[T.tag, { backgroundColor: C.purple }]}>
             <Ionicons name="bookmark" size={10} color={C.purpleText} />
             <Text style={[T.tagText, { color: C.purpleText }]}>Attended</Text>
           </View>
+          {e.isRecurring && (
+            <View style={[T.tag, { backgroundColor: "#E0F2FE" }]}>
+              <Ionicons name="repeat" size={10} color="#0284C7" />
+              <Text style={[T.tagText, { color: "#0284C7" }]}>Recurring</Text>
+            </View>
+          )}
         </View>
 
         {/* INFO GRID */}
         <View style={T.grid}>
           <View style={T.gridCell}>
             <Text style={T.gridLabel}>WHEN</Text>
-            <Text style={T.gridValue}>{e.date || "Past"}</Text>
+            <Text style={T.gridValue} numberOfLines={2}>
+              {e.isRecurring && Array.isArray(e.recurringSchedule) && e.recurringSchedule.length > 0
+                ? `Every ${e.recurringSchedule.map((s: any) => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][s.day]).join(", ")}`
+                : e.date || "Past"}
+            </Text>
           </View>
           <View style={T.gridCell}>
             <Text style={T.gridLabel}>WHERE</Text>

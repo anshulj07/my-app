@@ -1,9 +1,9 @@
-export type CreateEvent = { title: string; lat: number; lng: number; emoji: string };
+export type CreateEvent = { title: string; lat: number; lng: number; emoji: string; distanceKm?: number };
 
 export type Suggestion = { id: string; main: string; secondary?: string };
 export type Option = { label: string; value: string };
 
-// ✅ events can be free/paid, and services are separate
+// ✅ events can be free/paid, services are separate
 export type ListingKind = "event_free" | "event_paid" | "service";
 
 export type LocationPayload = {
@@ -32,6 +32,7 @@ export type AddressComponent = { long_name: string; short_name: string; types: s
 // ✅ optional: data you submit from the modal (no backend stuff here)
 export type CreateListingPayload = {
   kind: ListingKind;
+  isRecurring?: boolean;
   title: string;
   description?: string;
   emoji?: string;
@@ -45,6 +46,12 @@ export type CreateListingPayload = {
 
   // for paid event + service
   priceCents?: number;
+
+  // for recurring activities
+  bookingWindowDays?: number; // 0 = same day, 1 = 1 day ahead, 7 = week ahead
+  dailyCapacity?: number | null; // max bookings per day (null = unlimited)
+  recurringSchedule?: { day: number; startTime: string; endTime: string }[];
+
 
   // location
   location: LocationPayload;

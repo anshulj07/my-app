@@ -111,6 +111,7 @@ export default function MapView({
   initialCenter,
   searchLabel,
   locationStatus = "unknown",
+  initialLoadDone = false,
   onPinPress,
   onLocationUpdate,
   onStackOpen,
@@ -121,6 +122,7 @@ export default function MapView({
   initialCenter?: { lat: number; lng: number } | null;
   searchLabel?: string | null;
   locationStatus?: "unknown" | "granted" | "denied";
+  initialLoadDone?: boolean;
   onPinPress?: (pin: EventPin) => void;
   /** Called with fresh lat/lng whenever the map pans to user's location */
   onLocationUpdate?: (lat: number, lng: number) => void;
@@ -199,9 +201,9 @@ export default function MapView({
 
   React.useEffect(() => {
     if (webViewReady && webViewRef.current) {
-      webViewRef.current.postMessage(JSON.stringify({ type: "updateEvents", events: safeEvents }));
+      webViewRef.current.postMessage(JSON.stringify({ type: "updateEvents", events: safeEvents, initialLoadDone }));
     }
-  }, [safeEventsJson, webViewReady]);
+  }, [safeEventsJson, webViewReady, initialLoadDone]);
 
   React.useEffect(() => {
     if (webViewReady && webViewRef.current && initialCenter) {

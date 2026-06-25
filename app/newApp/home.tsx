@@ -2,7 +2,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   TouchableOpacity, Text, StyleSheet, Platform,
-  Modal, View, Pressable, Animated, Dimensions
+  Modal, View, Pressable, Animated, Dimensions, Alert
 } from "react-native";
 import * as Location from "expo-location";
 import Constants from "expo-constants";
@@ -14,10 +14,12 @@ import { useAuth } from "@clerk/clerk-expo";
 
 import MapView from "../../components/Map/MapView";
 import type { EventPin } from "../../components/Map/MapView";
+import type { ListingKind } from "../../components/AddEventModal/types";
 import MapSearchHeader from "../../components/SearchHeaderHomeScreen/MapSearchHeader";
 import ModalizeEventSheet from "../../components/AddEventModal/AddEvent";
 import EventsListModal from "../../components/List/EventsListModal";
 import EditEventModal from "../../components/EditEventModal/EditEvent";
+import EditRecurringModal, { type RecurringEvent } from "../../components/EditRecurringModal/EditRecurring";
 
 // ─── Design tokens ───────────────────────────────────────────────────────────
 const C = {
@@ -140,7 +142,8 @@ export default function Home() {
 
   const [open, setOpen] = useState(false);
   const [showList, setShowList] = useState(false);
-  const [defaultKind, setDefaultKind] = useState<"event_free">("event_free");
+  const [defaultKind, setDefaultKind] = useState<ListingKind>("event_free");
+  const [defaultIsRecurring, setDefaultIsRecurring] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
 
   const [events, setEvents] = useState<EventPin[]>([]);
@@ -150,9 +153,14 @@ export default function Home() {
   const [locStatus, setLocStatus] = useState<"unknown" | "granted" | "denied">("unknown");
   // ✅ Don't render map until we have a real location OR permission is denied
   const [locReady, setLocReady] = useState(false);
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
 
   const [editOpen, setEditOpen] = useState(false);
   const [editEvent, setEditEvent] = useState<EditEventValue>(null);
+
+  // ✅ Recurring edit modal
+  const [editRecurringOpen, setEditRecurringOpen] = useState(false);
+  const [editRecurringEvent, setEditRecurringEvent] = useState<RecurringEvent | null>(null);
 
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
   const [mapStackOpen, setMapStackOpen] = useState(false);
@@ -198,7 +206,7 @@ export default function Home() {
     const lat = customLat ?? loc?.lat;
     const lng = customLng ?? loc?.lng;
 
-    const baseQuery = `?limit=100`;
+    const baseQuery = `?limit=100&includePausedFor=${userId || ""}`;
 
     isFetchingRef.current = true;
     try {
@@ -212,8 +220,16 @@ export default function Home() {
       let dbEvents: EventPin[] = [];
       if (res.ok) {
         const json = await res.json().catch(() => ({}));
-        dbEvents = (Array.isArray(json?.events) ? json.events : []).map(normalizeEvent).filter(Boolean) as EventPin[];
+        dbEvents = (Array.isArray(json?.events) ? json.events : [])
+          .map(normalizeEvent)
+          .filter((ev: any) => {
+            if (!ev) return false;
+            const st = String(ev.status || "active").toLowerCase();
+            const isMine = userId && String(ev.creatorClerkId) === userId;
+            return st === "active" || st === "live" || (st === "paused" && isMine);
+          }) as EventPin[];
         setEvents(dbEvents);
+        setInitialLoadDone(true);
         lastFetchRef.current = Date.now();
       }
 
@@ -223,7 +239,7 @@ export default function Home() {
     } finally {
       isFetchingRef.current = false;
     }
-  }, [API_BASE, EVENT_API_KEY]); // ✅ myLoc removed from deps — uses ref now
+  }, [API_BASE, EVENT_API_KEY, userId]); // ✅ myLoc removed from deps — uses ref now
 
   const loadMyLocation = useCallback(async () => {
     try {
@@ -312,15 +328,12 @@ export default function Home() {
   }, [loadEvents]);
 
   const filteredEvents = useMemo(() => {
-    // ✅ Show active events + live events (started but status still "active")
     const now = Date.now();
-    const active = events.filter(e => {
-      const st = String(e.status ?? "active").toLowerCase();
-      const isMine = userId && String(e.creatorClerkId) === userId;
-
-      // ✅ AUTOMATIC ENDING: If event has an end time and it's in the past, hide it.
-      // ⚠️ EXCEPTION: Services never "end" automatically based on time. They stay on map.
-      if (e.kind !== "service" && e.endsAt) {
+    let active = events.filter(e => {
+      const st = String((e as any).status || "active").toLowerCase();
+      const isMine = userId && String((e as any).creatorClerkId) === userId;
+      
+      if (e.endsAt) {
         const endTs = new Date(e.endsAt).getTime();
         if (Number.isFinite(endTs) && now > endTs) return false;
       }
@@ -383,6 +396,7 @@ export default function Home() {
         <MapView
           key={mapKey}
           events={filteredEvents}
+          initialLoadDone={initialLoadDone}
           initialCenter={myLoc}
           searchLabel={searchLabel}
           locationStatus={locStatus}
@@ -419,6 +433,29 @@ export default function Home() {
         onClose={() => { setEditOpen(false); setEditEvent(null); }}
         onUpdated={() => { setEditOpen(false); setEditEvent(null); loadEvents(); }}
         onDeleted={() => { setEditOpen(false); setEditEvent(null); loadEvents(); }}
+      />
+
+      {/* ✅ RECURRING activity edit modal with Pause/Resume */}
+      <EditRecurringModal
+        visible={editRecurringOpen}
+        event={editRecurringEvent}
+        onClose={() => { setEditRecurringOpen(false); setEditRecurringEvent(null); }}
+        onUpdated={() => { setEditRecurringOpen(false); setEditRecurringEvent(null); loadEvents(); }}
+        onDeleted={(_id) => {
+          setEditRecurringOpen(false);
+          setEditRecurringEvent(null);
+          // Remove pin immediately from local state
+          setEvents(prev => prev.filter(e => e._id !== _id));
+        }}
+        onPauseToggled={(_id, status) => {
+          // Immediately update local event status so the pin hides/shows without a full reload
+          setEvents(prev => prev.map(e =>
+            e._id === _id ? { ...e, status } : e
+          ));
+          if (editRecurringEvent) {
+            setEditRecurringEvent(prev => prev ? { ...prev, status } : prev);
+          }
+        }}
       />
 
       {/* ── FAB ──────────────────────────────────────── */}
@@ -474,7 +511,7 @@ export default function Home() {
 
             {/* Option — Event */}
             <PickerOption
-              onPress={() => { setDefaultKind("event_free"); setShowPicker(false); setTimeout(() => setOpen(true), 120); }}
+              onPress={() => { setDefaultKind("event_free"); setDefaultIsRecurring(false); setShowPicker(false); setTimeout(() => setOpen(true), 120); }}
               iconName="calendar"
               iconColor={C.purpleText}
               iconBg={C.purpleDim}
@@ -487,6 +524,20 @@ export default function Home() {
               badgeBg={C.purpleDim}
             />
 
+            {/* Option — Recurring Activity */}
+            <PickerOption
+              onPress={() => { setDefaultKind("event_free"); setDefaultIsRecurring(true); setShowPicker(false); setTimeout(() => setOpen(true), 120); }}
+              iconName="repeat"
+              iconColor={C.greenText}
+              iconBg={C.greenDim}
+              borderColor={C.green + "30"}
+              glowColor={C.greenGlow}
+              title="Recurring Activity"
+              subtitle="Daily or weekly · Stays on map"
+              badgeText="Perpetual"
+              badgeColor={C.greenText}
+              badgeBg={C.greenDim}
+            />
             {/* Cancel */}
             <TouchableOpacity style={P.cancelBtn} activeOpacity={0.8} onPress={() => setShowPicker(false)}>
               <Text style={P.cancelText}>Cancel</Text>
@@ -497,12 +548,20 @@ export default function Home() {
       </Modal>
 
       <ModalizeEventSheet
-        visible={open} onClose={() => setOpen(false)} defaultKind={defaultKind}
+        visible={open} onClose={() => setOpen(false)} defaultKind={defaultKind} defaultIsRecurring={defaultIsRecurring}
         onCreate={(e: any) => {
           const n = normalizeEvent(e) ?? (e as EventPin);
           setEvents(prev => [n, ...prev]);
           setOpen(false);
           loadEvents();
+          
+          if (e.distanceKm && e.distanceKm > 100) {
+            Alert.alert(
+              "Event Published",
+              `You've created an event approx ${Math.round(e.distanceKm)} km away. Have a safe trip!`,
+              [{ text: "OK" }]
+            );
+          }
         }}
       />
     </>

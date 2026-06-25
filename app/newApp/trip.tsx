@@ -180,8 +180,10 @@ export default function TripScreen() {
   const [filters, setFilters] = useState<FilterData | null>(null);
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [userCountry, setUserCountry] = useState<string>("");
-  const [displayCount, setDisplayCount] = useState(50);
-  const LOAD_MORE_SIZE = 50;
+  const [displayCount, setDisplayCount] = useState(20); // ✅ Start with 20
+  const LOAD_MORE_SIZE = 20; // ✅ Load 20 at a time
+  const isLoadingMore = useRef(false); // ✅ Prevent double-trigger
+  const scrollRef = useRef<any>(null);
 
   const fade = useRef(new Animated.Value(0)).current;
   const gradAnim = useRef(new Animated.Value(0)).current;
@@ -227,7 +229,21 @@ export default function TripScreen() {
   }, [API_BASE, headers]);
 
   useEffect(() => { load(); }, [load]);
-  const onRefresh = useCallback(() => { setRefreshing(true); setDisplayCount(50); load(); }, [load]);
+  const onRefresh = useCallback(() => { setRefreshing(true); setDisplayCount(20); load(); }, [load]);
+
+  // ✅ Infinite scroll: auto-load more when user is within 300px of bottom
+  const handleScroll = useCallback((e: any) => {
+    const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
+    const distanceFromBottom = contentSize.height - contentOffset.y - layoutMeasurement.height;
+    if (distanceFromBottom < 300 && !isLoadingMore.current) {
+      setDisplayCount(prev => {
+        if (prev >= (filtered?.length ?? 0)) return prev; // already showing all
+        isLoadingMore.current = true;
+        setTimeout(() => { isLoadingMore.current = false; }, 500); // cooldown
+        return prev + LOAD_MORE_SIZE;
+      });
+    }
+  }, [filtered]);
 
   const filtered = useMemo(() => {
     let list = events.filter(e => {
@@ -443,14 +459,17 @@ export default function TripScreen() {
         initialFilters={filters || {}}
         onApply={(data) => {
           setFilters(data);
-          setDisplayCount(50);
+          setDisplayCount(20);
         }}
       />
 
       <ScrollView
+        ref={scrollRef}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.accent} />}
         contentContainerStyle={{ paddingBottom: 110 }}
+        onScroll={handleScroll}
+        scrollEventThrottle={200}
       >
         {/* BROWSE BY CATEGORY */}
         <View style={[S.section, { marginTop: 10, marginBottom: 20 }]}>
@@ -554,13 +573,15 @@ export default function TripScreen() {
                 ))}
               </View>
               {hasMore && (
-                <TouchableOpacity
-                  style={S.loadMoreBtn}
-                  onPress={() => setDisplayCount(c => c + LOAD_MORE_SIZE)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={S.loadMoreTxt}>Load More ({filtered.length - displayCount} remaining)</Text>
-                </TouchableOpacity>
+                <View style={S.loadMoreIndicator}>
+                  <ActivityIndicator size="small" color={C.accent} />
+                  <Text style={S.loadMoreTxt}>{filtered.length - displayCount} more events</Text>
+                </View>
+              )}
+              {!hasMore && allEvents.length > 0 && (
+                <View style={S.allDoneRow}>
+                  <Text style={S.allDoneTxt}>✓ All {filtered.length} events loaded</Text>
+                </View>
               )}
             </View>
           </>
@@ -711,13 +732,16 @@ const S = StyleSheet.create({
   emptyBoxTxt: { color: C.muted, fontWeight: "700", fontSize: 14 },
   clearBtn: { backgroundColor: C.accent, paddingHorizontal: 25, paddingVertical: 14, borderRadius: 16, shadowColor: C.accent, shadowOpacity: 0.3, shadowRadius: 10, elevation: 5 },
   clearBtnTxt: { color: "#fff", fontWeight: "800", fontSize: 15 },
-  loadMoreBtn: {
-    marginHorizontal: PAD, marginTop: 16, marginBottom: 8,
-    backgroundColor: C.white, borderWidth: 1, borderColor: C.border,
-    borderRadius: 16, paddingVertical: 14, alignItems: "center",
-    shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 6, elevation: 2,
+  loadMoreIndicator: {
+    marginHorizontal: PAD, marginTop: 16, marginBottom: 24,
+    paddingVertical: 14, alignItems: "center", justifyContent: "center", gap: 8,
   },
-  loadMoreTxt: { fontSize: 14, fontWeight: "800", color: C.accent },
+  loadMoreTxt: { fontSize: 13, fontWeight: "600", color: C.muted },
+  allDoneRow: {
+    marginHorizontal: PAD, marginTop: 16, marginBottom: 24,
+    paddingVertical: 14, alignItems: "center", justifyContent: "center",
+  },
+  allDoneTxt: { fontSize: 13, fontWeight: "700", color: C.muted },
 
   // New Services Grid Styles
   hGridScroll: { paddingHorizontal: PAD, gap: 16 },

@@ -176,15 +176,23 @@ export default function MapView({
 
   const safeEventsJson = useMemo(() => JSON.stringify(safeEvents), [safeEvents]);
 
-  // ✅ Use a ref to capture the initial center AND initial events for the HTML payload.
-  // This prevents the WebView from reloading when they change.
+  // ✅ Use refs to capture the initial center AND initial events for the HTML payload.
+  // This prevents the WebView from reloading when props change.
   const initialHtmlCenter = useRef(center);
   const initialEventsJson = useRef(safeEventsJson);
-
-  const html = useMemo(
-    () => buildMapHtml({ googleKey: GOOGLE_KEY, eventsJson: initialEventsJson.current, center: initialHtmlCenter.current, zoom, userId }),
-    [GOOGLE_KEY, zoom, userId]
-  );
+  // ✅ FIX: Freeze the HTML after first render — it must never change
+  // Events are updated via postMessage, center via postMessage too
+  const htmlRef = useRef<string | null>(null);
+  if (!htmlRef.current) {
+    htmlRef.current = buildMapHtml({
+      googleKey: GOOGLE_KEY,
+      eventsJson: initialEventsJson.current,
+      center: initialHtmlCenter.current,
+      zoom,
+      userId,
+    });
+  }
+  const html = htmlRef.current;
 
   // ✅ Silently update events in the WebView without reloading the HTML
   const [webViewReady, setWebViewReady] = useState(false);
@@ -268,7 +276,8 @@ export default function MapView({
         javaScriptEnabled
         domStorageEnabled
         source={{ html }}
-        key={locationStatus}
+        // ✅ FIX: No key here — WebView should NEVER remount after first render
+        // locationStatus changes are handled via postMessage
         onMessage={(e) => {
           try {
             const msg = JSON.parse(e.nativeEvent.data);

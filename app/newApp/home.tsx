@@ -1,5 +1,5 @@
 // app/newApp/home.tsx
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   TouchableOpacity, Text, StyleSheet, Platform,
   Modal, View, Pressable, Animated, Dimensions
@@ -154,8 +154,6 @@ export default function Home() {
   const [editOpen, setEditOpen] = useState(false);
   const [editEvent, setEditEvent] = useState<EditEventValue>(null);
 
-
-
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
   const [mapStackOpen, setMapStackOpen] = useState(false);
 
@@ -163,6 +161,18 @@ export default function Home() {
 
   const API_BASE = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
   const EVENT_API_KEY = (Constants.expoConfig?.extra as any)?.eventApiKey as string | undefined;
+
+  // ✅ FIX: Use refs for location so loadEvents doesn't recreate on every GPS update
+  const myLocRef = useRef<{ lat: number; lng: number } | null>(null);
+  // ✅ FIX: In-flight guard — prevents duplicate concurrent fetches
+  const isFetchingRef = useRef(false);
+  // ✅ Delta sync: track last successful fetch time
+  const lastFetchRef = useRef<number>(0);
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    myLocRef.current = myLoc;
+  }, [myLoc]);
 
   // FAB pulse animation
   const fabPulse = useMemo(() => new Animated.Value(1), []);
@@ -177,19 +187,26 @@ export default function Home() {
     return () => loop.stop();
   }, []);
 
+  // ✅ FIX: loadEvents no longer depends on myLoc — reads from ref instead
+  // This prevents the polling useEffect from restarting on every GPS update
   const loadEvents = useCallback(async (customLat?: number, customLng?: number) => {
     if (!API_BASE) return [];
+    // ✅ Skip if a fetch is already in flight
+    if (isFetchingRef.current) return [];
 
-    const lat = customLat ?? myLoc?.lat;
-    const lng = customLng ?? myLoc?.lng;
+    const loc = myLocRef.current;
+    const lat = customLat ?? loc?.lat;
+    const lng = customLng ?? loc?.lng;
 
-    // Fetch all events globally (limit 500)
-    let baseQuery = `?limit=500`;
+    const baseQuery = `?limit=100`;
 
+    isFetchingRef.current = true;
     try {
-      // Fetch DB events
       const res = await fetch(`${API_BASE.replace(/\/$/, "")}/api/events/get-events${baseQuery}`, {
-        headers: { ...(EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {}), "ngrok-skip-browser-warning": "1" },
+        headers: {
+          ...(EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {}),
+          "ngrok-skip-browser-warning": "1",
+        },
       });
 
       let dbEvents: EventPin[] = [];
@@ -197,13 +214,16 @@ export default function Home() {
         const json = await res.json().catch(() => ({}));
         dbEvents = (Array.isArray(json?.events) ? json.events : []).map(normalizeEvent).filter(Boolean) as EventPin[];
         setEvents(dbEvents);
+        lastFetchRef.current = Date.now();
       }
 
       return dbEvents;
     } catch {
       return [];
+    } finally {
+      isFetchingRef.current = false;
     }
-  }, [API_BASE, EVENT_API_KEY, myLoc]);
+  }, [API_BASE, EVENT_API_KEY]); // ✅ myLoc removed from deps — uses ref now
 
   const loadMyLocation = useCallback(async () => {
     try {
@@ -224,6 +244,7 @@ export default function Home() {
       if (last) {
         resolvedLat = last.coords.latitude;
         resolvedLng = last.coords.longitude;
+        myLocRef.current = { lat: resolvedLat, lng: resolvedLng };
         setMyLoc({ lat: resolvedLat, lng: resolvedLng });
         setLocReady(true); // ✅ We have a cached location — show map immediately
         loadEvents(resolvedLat, resolvedLng);
@@ -248,7 +269,13 @@ export default function Home() {
 
       if (fresh) {
         const { latitude: flat, longitude: flng } = fresh.coords;
-        setMyLoc({ lat: flat, lng: flng });
+        // ✅ Only update loc if meaningfully different (>50m) to avoid re-renders
+        const prev = myLocRef.current;
+        const dist = prev ? Math.abs(flat - prev.lat) + Math.abs(flng - prev.lng) : 1;
+        if (dist > 0.0005) { // ~50m threshold
+          myLocRef.current = { lat: flat, lng: flng };
+          setMyLoc({ lat: flat, lng: flng });
+        }
         if (!last) {
           setLocReady(true); // ✅ Fresh GPS fix — map will update
           loadEvents(flat, flng);
@@ -276,11 +303,11 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ✅ Continuous polling: Fetch new events every 15 seconds to keep map live
+  // ✅ FIX: Polling every 30s (was 15s). loadEvents is now stable — won't restart on GPS changes
   useEffect(() => {
     const interval = setInterval(() => {
       loadEvents();
-    }, 15000);
+    }, 30000);
     return () => clearInterval(interval);
   }, [loadEvents]);
 
@@ -309,8 +336,10 @@ export default function Home() {
     });
   }, [events, activeFilter, userId]);
 
+  // ✅ FIX: mapKey no longer includes activeFilter — filter changes now go via postMessage
+  // Only bump pinsVersion when events are truly added/deleted (not just filtered)
   const [pinsVersion, setPinsVersion] = useState(0);
-  const mapKey = `map:${activeFilter ?? "all"}:${pinsVersion}`;
+  const mapKey = `map:${pinsVersion}`;
 
   const onPinPress = useCallback((pin: EventPin) => {
     router.push({
@@ -334,6 +363,19 @@ export default function Home() {
     });
   }, [router]);
 
+  // ✅ Stable callbacks for MapView — wrapped in useCallback to prevent prop churn
+  const handleLocationUpdate = useCallback((lat: number, lng: number) => {
+    const prev = myLocRef.current;
+    const dist = prev ? Math.abs(lat - prev.lat) + Math.abs(lng - prev.lng) : 1;
+    if (dist > 0.0005) { // Only update state if moved >50m
+      myLocRef.current = { lat, lng };
+      setMyLoc({ lat, lng });
+    }
+  }, []);
+
+  const handleStackOpen = useCallback(() => setMapStackOpen(true), []);
+  const handleStackClose = useCallback(() => setMapStackOpen(false), []);
+
   return (
     <>
       {/* ✅ Only render map after real location is known — prevents hardcoded Indore fallback */}
@@ -346,9 +388,9 @@ export default function Home() {
           locationStatus={locStatus}
           onPinPress={onPinPress}
           userId={userId}
-          onLocationUpdate={(lat, lng) => setMyLoc({ lat, lng })}
-          onStackOpen={() => setMapStackOpen(true)}
-          onStackClose={() => setMapStackOpen(false)}
+          onLocationUpdate={handleLocationUpdate}
+          onStackOpen={handleStackOpen}
+          onStackClose={handleStackClose}
         />
       )}
 
@@ -405,7 +447,7 @@ export default function Home() {
         visible={showList} onClose={() => setShowList(false)}
         events={filteredEvents as any} myCity={myCity}
         myLoc={myLoc}
-        onPinPress={onPinPress}
+        onPinPress={onPinPress as any}
       />
 
       {/* ── FAB Picker Modal ─────────────────────────── */}
@@ -585,4 +627,3 @@ const P = StyleSheet.create({
   },
   cancelText: { fontSize: 15, fontWeight: "800", color: "#6366F1" },
 });
-

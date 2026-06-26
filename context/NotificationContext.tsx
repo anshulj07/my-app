@@ -3,6 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import Constants from "expo-constants";
 import { apiFetch } from "../lib/apiFetch";
+import { usePushNotifications } from "../hooks/usePushNotifications";
 
 export type NotifItem = {
   id: string;
@@ -45,6 +46,22 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     "Content-Type": "application/json",
     ...(EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {}),
   }), [EVENT_API_KEY]);
+
+  const { expoPushToken } = usePushNotifications();
+
+  // Send push token to backend when it becomes available
+  useEffect(() => {
+    if (expoPushToken && userId && API_BASE) {
+      apiFetch(`${API_BASE}/api/profile`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({
+          clerkUserId: userId,
+          expoPushToken,
+        }),
+      }).catch(err => console.log("Failed to sync push token:", err));
+    }
+  }, [expoPushToken, userId, API_BASE, headers]);
 
   // Load last seen timestamp from storage
   useEffect(() => {

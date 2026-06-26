@@ -471,7 +471,13 @@ export default function EventsListModal({
       onClose();
       router.push({
         pathname: "/newApp/event-detail",
-        params: { eventId: ev._id, title: ev.title, emoji: ev.emoji }
+        params: { 
+          eventId: ev._id, 
+          title: ev.title, 
+          emoji: ev.emoji,
+          isRecurring: String((ev as any).isRecurring === true),
+          eventStr: JSON.stringify(ev)
+        }
       });
     }
   };

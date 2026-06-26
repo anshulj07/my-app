@@ -246,8 +246,8 @@ export default function EditRecurringModal({
   const handleDelete = () => {
     if (!isCreator || busy || !event?._id) return;
     Alert.alert(
-      "Delete Activity?",
-      "This will permanently remove the recurring activity and all its pins. This cannot be undone.",
+      "Delete Event?",
+      "This will permanently remove the recurring event and all its pins. This cannot be undone.",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -309,7 +309,7 @@ export default function EditRecurringModal({
             <Ionicons name="repeat" size={22} color={isPaused ? C.orange : C.green} />
           </View>
           <View>
-            <Text style={S.headerTitle}>Edit Recurring Activity</Text>
+            <Text style={S.headerTitle}>Edit Recurring Event</Text>
             {/* Live / Paused status pill */}
             <View style={[S.statusPill, isPaused ? S.statusPillPaused : S.statusPillLive]}>
               <View style={[S.statusDot, isPaused ? S.statusDotPaused : S.statusDotLive]} />

@@ -44,7 +44,7 @@ export function textToEmoji(t: string): string {
   if (has(["yoga", "meditate", "meditation", "stretch", "stretching", "breathwork", "pilates"])) return "🧘‍♀️";
   if (has(["hike", "hiking", "trek", "trekking", "mountain", "summit", "nature"])) return "🥾";
   if (has(["beach", "ocean", "seaside", "sunset"])) return "🏖️";
-  if (has(["park", "picnic", "garden", "botanical"])) return "🌳";
+  if (has(["park", "picnic", "garden", "botanical", "tree", "trees", "forest", "nature"])) return "🌳";
   if (has(["camp", "camping", "bonfire", "firepit", "campfire", "smores"])) return "🔥";
 
   // --- Sports / active ---

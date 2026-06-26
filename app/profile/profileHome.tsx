@@ -1111,6 +1111,7 @@ type MyEventDoc = {
   attendance?: number | null; attendees?: any[];
   location?: { city?: string; admin1Code?: string; countryCode?: string };
   _role?: "created" | "attended";
+  isRecurring?: boolean;
 };
 type MyEventsTab = "created" | "going" | "past";
 
@@ -1454,6 +1455,11 @@ function MyEventCard({
                 <View style={[ME.badge, { backgroundColor: kindCfg.accentBg, borderColor: kindCfg.accent + "55" }]}>
                   <Text style={[ME.badgeText, { color: kindCfg.accentText }]}>{kindCfg.label}</Text>
                 </View>
+                {ev.isRecurring && (
+                  <View style={[ME.badge, { backgroundColor: EC.blueBg, borderColor: EC.blue + "55" }]}>
+                    <Text style={[ME.badgeText, { color: EC.blueText }]}>Recurring</Text>
+                  </View>
+                )}
                 {isLive && (
                   <View style={[ME.badge, { backgroundColor: "#FEE2E2", borderColor: "#FCA5A5", flexDirection: "row", alignItems: "center", gap: 3 }]}>
                     <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#EF4444" }} />

@@ -176,9 +176,8 @@ export default function EventDetailScreen() {
   };
 
   const handleEdit = () => {
-    const isRecurring = ev?.isRecurring === true || String(ev?.isRecurring) === "true" || ev?.kind === "recurring" || params.kind === "recurring";
     router.push({
-      pathname: isRecurring ? "/edit-recurring/[eventId]" : "/edit-event/[eventId]",
+      pathname: isRecurringEvent ? "/edit-recurring/[eventId]" : "/edit-event/[eventId]",
       params: { eventId: params.eventId }
     } as any);
   };
@@ -186,6 +185,7 @@ export default function EventDetailScreen() {
   // ✅ INSTANT FIX: Use parsed event immediately. Fallback to params if not present.
   const ev = (event?._id === params.eventId || event?.eventId === params.eventId) ? event : null;
   const kind = ev?.kind || params.kind || "event";
+  const isRecurringEvent = ev?.isRecurring === true || String(ev?.isRecurring) === "true" || ev?.kind === "recurring" || params.kind === "recurring" || String(params.isRecurring) === "true";
 
 
   const title = ev?.title || params.title || "Event";
@@ -261,8 +261,7 @@ export default function EventDetailScreen() {
   }, [isJoined, isPast, startMs]);
 
   const dateDisplay = useMemo(() => {
-    const isRecurr = ev?.isRecurring === true || String(ev?.isRecurring) === "true" || ev?.kind === "recurring" || params.kind === "recurring";
-    if (isRecurr) {
+    if (isRecurringEvent) {
       if (Array.isArray(ev?.recurringSchedule) && ev.recurringSchedule.length > 0) {
         const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
         const rDays = ev.recurringSchedule.map((s: any) => days[s.day]).join(", ");
@@ -288,8 +287,7 @@ export default function EventDetailScreen() {
   }, [ev, params]);
 
   const timeDisplay = useMemo(() => {
-    const isRecurr = ev?.isRecurring === true || String(ev?.isRecurring) === "true" || ev?.kind === "recurring" || params.kind === "recurring";
-    if (isRecurr) {
+    if (isRecurringEvent) {
       if (Array.isArray(ev?.recurringSchedule) && ev.recurringSchedule.length > 0) {
         const first = ev.recurringSchedule[0];
         let t1 = first.startTime || "";
@@ -801,7 +799,7 @@ export default function EventDetailScreen() {
           <View style={S.hostActionsRow}>
             <TouchableOpacity style={S.editBtn} onPress={handleEdit}>
               <Ionicons name="create-outline" size={20} color={C.ink} />
-              <Text style={S.editBtnText}>Edit Event</Text>
+              <Text style={S.editBtnText}>{isRecurringEvent ? "Edit Recurring" : "Edit Event"}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={S.verifyBtn} onPress={() => setShowOtpModal(true)}>
               <Ionicons name="scan-outline" size={20} color="#fff" />

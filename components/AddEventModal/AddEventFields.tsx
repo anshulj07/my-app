@@ -916,7 +916,9 @@ export default function AddEventFields(props: Props & { isRecurringFlow?: boolea
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [schedDayObj, setSchedDayObj] = useState<{ day: number; field: "start" | "end" } | null>(null);
 
+  const scrollRef = React.useRef<ScrollView>(null);
   const [kbHeight, setKbHeight] = useState(0);
+  const [showDailyLimit, setShowDailyLimit] = useState(!!dailyCapacityText);
   React.useEffect(() => {
     const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
     const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
@@ -978,13 +980,13 @@ export default function AddEventFields(props: Props & { isRecurringFlow?: boolea
 
   const primaryLabel = useMemo(() => {
     if (submitting) return "Publishing…";
-    if (isRecurringFlow) return "Create Recurring Activity";
+    if (isRecurringFlow) return "Create Recurring Event";
     if (kind === "event_paid") return "Publish Paid Event";
     return "Publish Free Event";
   }, [submitting, kind]);
 
   const itemLabel = useMemo(() => {
-    if (isRecurringFlow) return "Activity";
+    if (isRecurringFlow) return "Event";
     return "Event";
   }, [kind]);
 
@@ -1000,9 +1002,6 @@ export default function AddEventFields(props: Props & { isRecurringFlow?: boolea
   //  STEP 1 — Event Type
   // ════════════════════════════════════════════
   if (step === 1) {
-    // Import styles from external styles file if needed, but here S is local.
-    // I'll add the new styles to S local in AddEventFields.tsx or use the props.
-    // Wait, S is local to AddEventFields.tsx. I should add the new styles to S in AddEventFields.tsx too.
     return (
       <>
         <WizardHeader
@@ -1012,7 +1011,7 @@ export default function AddEventFields(props: Props & { isRecurringFlow?: boolea
           onBack={goBack} onClose={onClose} showBack={false}
           accentColor={accent} accentBg={accentBg} accentText={accentText}
         />
-        <ScrollView style={{ backgroundColor: C.bg }} contentContainerStyle={{ padding: 18, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+        <ScrollView ref={scrollRef} style={{ backgroundColor: C.bg }} contentContainerStyle={{ padding: 18, paddingBottom: Math.max(80, kbHeight + 60) }} showsVerticalScrollIndicator={false}>
           <View style={{ gap: 2 }}>
             {/* Free Card */}
             <TouchableOpacity
@@ -1024,7 +1023,7 @@ export default function AddEventFields(props: Props & { isRecurringFlow?: boolea
                 <Ionicons name="people" size={28} color={kind === "event_free" ? C.purple : C.muted} />
               </View>
               <View style={S.step1TextContent}>
-                <Text style={S.step1Name}>{isRecurringFlow ? "Free Recurring Activity" : "Free Event"}</Text>
+                <Text style={S.step1Name}>{isRecurringFlow ? "Free Recurring Event" : "Free Event"}</Text>
                 <Text style={S.step1Sub}>Open to everyone. Best for meetups, hangouts, and community vibes.</Text>
               </View>
               {kind === "event_free" && (
@@ -1044,7 +1043,7 @@ export default function AddEventFields(props: Props & { isRecurringFlow?: boolea
                 <Ionicons name="ticket" size={28} color={kind === "event_paid" ? C.purple : C.muted} />
               </View>
               <View style={S.step1TextContent}>
-                <Text style={S.step1Name}>{isRecurringFlow ? "Paid Recurring Activity" : "Paid Event"}</Text>
+                <Text style={S.step1Name}>{isRecurringFlow ? "Paid Recurring Event" : "Paid Event"}</Text>
                 <Text style={S.step1Sub}>Charge a ticket price. Earn from your passion and expertise.</Text>
               </View>
               {kind === "event_paid" && (
@@ -1076,7 +1075,7 @@ export default function AddEventFields(props: Props & { isRecurringFlow?: boolea
           onBack={goBack} onClose={onClose} showBack
           accentColor={accent} accentBg={accentBg} accentText={accentText}
         />
-        <ScrollView style={{ backgroundColor: C.bg }} contentContainerStyle={ST2.body}
+        <ScrollView ref={scrollRef} style={{ backgroundColor: C.bg }} contentContainerStyle={{ padding: 18, paddingBottom: Math.max(80, kbHeight + 60) }}
           showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
           {/* ── TITLE — primary / large ── */}
@@ -1134,7 +1133,7 @@ export default function AddEventFields(props: Props & { isRecurringFlow?: boolea
           onBack={goBack} onClose={onClose} showBack
           accentColor={accent} accentBg={accentBg} accentText={accentText}
         />
-        <ScrollView style={{ backgroundColor: C.bg }} contentContainerStyle={[S.body, { paddingBottom: Math.max(32, kbHeight + 20) }]}
+        <ScrollView ref={scrollRef} style={{ backgroundColor: C.bg }} contentContainerStyle={[S.body, { paddingBottom: Math.max(80, kbHeight + 60) }]}
             showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
             {/* When Card */}
@@ -1276,6 +1275,44 @@ export default function AddEventFields(props: Props & { isRecurringFlow?: boolea
             {/* ✅ RECURRING-ONLY: Booking Window & Daily Capacity */}
             {isRecurringFlow && (
               <>
+                {/* Daily Capacity Card */}
+                <Text style={S.sectionLabel}>Daily Capacity</Text>
+                <View style={S.card}>
+                  <View style={S.cardInner}>
+                    <View style={S.cardTitleRow}>
+                      <View style={[S.cardIconBox, { backgroundColor: C.greenBg }]}>
+                        <Ionicons name="people-outline" size={18} color={C.green} />
+                      </View>
+                      <Text style={S.cardTitle}>Max bookings per day</Text>
+                    </View>
+                    <Text style={S.cardSub}>Limit how many people can book each day. Leave empty for unlimited slots.</Text>
+                    <View style={S.segmented}>
+                      <SegmentButton label="Unlimited" hint="No cap" active={!showDailyLimit} onPress={() => { setShowDailyLimit(false); setDailyCapacityText(""); }} />
+                      <SegmentButton label="Set Limit" hint="Max per day" active={showDailyLimit} onPress={() => { setShowDailyLimit(true); if (!dailyCapacityText) setDailyCapacityText("10"); }} />
+                    </View>
+                    {showDailyLimit && (
+                      <View style={{ marginTop: 14 }}>
+                        <Text style={S.smallLabel}>Max people per day</Text>
+                        <View style={S.inputShell}>
+                          <Ionicons name="people-outline" size={16} color={C.hint} />
+                          <TextInput
+                            value={dailyCapacityText}
+                            onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 150)}
+                            onChangeText={(t) => setDailyCapacityText(t.replace(/[^\d]/g, ""))}
+                            placeholder="e.g., 15"
+                            placeholderTextColor={C.hint}
+                            keyboardType={Platform.select({ ios: "number-pad", android: "numeric" })}
+                            style={S.textInput}
+                          />
+                          {!!dailyCapacityText && parseInt(dailyCapacityText) > 0 && (
+                            <View style={S.goodPill}><Text style={S.goodPillText}>Set</Text></View>
+                          )}
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                </View>
+
                 {/* Booking Window Card */}
                 <Text style={S.sectionLabel}>Booking Window</Text>
                 <View style={S.card}>
@@ -1327,43 +1364,6 @@ export default function AddEventFields(props: Props & { isRecurringFlow?: boolea
                           : `Users can book up to ${bookingWindowDays} day${bookingWindowDays > 1 ? "s" : ""} in advance.`}
                       </Text>
                     </View>
-                  </View>
-                </View>
-
-                {/* Daily Capacity Card */}
-                <Text style={S.sectionLabel}>Daily Capacity</Text>
-                <View style={S.card}>
-                  <View style={S.cardInner}>
-                    <View style={S.cardTitleRow}>
-                      <View style={[S.cardIconBox, { backgroundColor: C.greenBg }]}>
-                        <Ionicons name="people-outline" size={18} color={C.green} />
-                      </View>
-                      <Text style={S.cardTitle}>Max bookings per day</Text>
-                    </View>
-                    <Text style={S.cardSub}>Limit how many people can book each day. Leave empty for unlimited slots.</Text>
-                    <View style={S.segmented}>
-                      <SegmentButton label="Unlimited" hint="No cap" active={!dailyCapacityText} onPress={() => setDailyCapacityText("")} />
-                      <SegmentButton label="Set Limit" hint="Max per day" active={!!dailyCapacityText} onPress={() => { if (!dailyCapacityText) setDailyCapacityText("10"); }} />
-                    </View>
-                    {!!dailyCapacityText && (
-                      <View style={{ marginTop: 14 }}>
-                        <Text style={S.smallLabel}>Max people per day</Text>
-                        <View style={S.inputShell}>
-                          <Ionicons name="people-outline" size={16} color={C.hint} />
-                          <TextInput
-                            value={dailyCapacityText}
-                            onChangeText={(t) => setDailyCapacityText(t.replace(/[^\d]/g, ""))}
-                            placeholder="e.g., 15"
-                            placeholderTextColor={C.hint}
-                            keyboardType={Platform.select({ ios: "number-pad", android: "numeric" })}
-                            style={S.textInput}
-                          />
-                          {!!dailyCapacityText && parseInt(dailyCapacityText) > 0 && (
-                            <View style={S.goodPill}><Text style={S.goodPillText}>Set</Text></View>
-                          )}
-                        </View>
-                      </View>
-                    )}
                   </View>
                 </View>
               </>
@@ -1656,7 +1656,9 @@ export default function AddEventFields(props: Props & { isRecurringFlow?: boolea
                     <View style={[S.inputShell, errors.price && { borderColor: C.error + "44", backgroundColor: C.error + "08" }]}>
                       <Text style={[S.pricePrefix, { color: accent }]}>₹</Text>
                       <TextInput
-                        value={priceText} onChangeText={(t) => { setPriceText(t); if (errors.price) setErrors(e => ({ ...e, price: "" })); }}
+                        value={priceText} 
+                        onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 150)}
+                        onChangeText={(t) => { setPriceText(t); if (errors.price) setErrors(e => ({ ...e, price: "" })); }}
                         placeholder={kind === "event_paid" ? "299" : "500"}
                         placeholderTextColor={C.hint}
                         keyboardType={Platform.select({ ios: "decimal-pad", android: "numeric" })}
@@ -1710,7 +1712,9 @@ export default function AddEventFields(props: Props & { isRecurringFlow?: boolea
                         <View style={[S.inputShell, errors.capacity && { borderColor: C.error + "44", backgroundColor: C.error + "08" }]}>
                           <Ionicons name="people-outline" size={16} color={C.hint} />
                           <TextInput
-                            value={capacityText} onChangeText={(t) => { setCapacityText(t); if (errors.capacity) setErrors(e => ({ ...e, capacity: "" })); }}
+                            value={capacityText} 
+                            onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 150)}
+                            onChangeText={(t) => { setCapacityText(t); if (errors.capacity) setErrors(e => ({ ...e, capacity: "" })); }}
                             placeholder="e.g., 20" placeholderTextColor={C.hint}
                             keyboardType={Platform.select({ ios: "number-pad", android: "numeric" })}
                             style={S.textInput}
@@ -1741,7 +1745,9 @@ export default function AddEventFields(props: Props & { isRecurringFlow?: boolea
 
                 <View style={[S.descShell, errors.description && { borderColor: C.error + "44", backgroundColor: C.error + "08" }]}>
                   <TextInput
-                    value={description} onChangeText={(t) => { setDescription(t); if (errors.description) setErrors(e => ({ ...e, description: "" })); }}
+                    value={description} 
+                    onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 150)}
+                    onChangeText={(t) => { setDescription(t); if (errors.description) setErrors(e => ({ ...e, description: "" })); }}
                     placeholder="e.g., Meet at the main gate. Bring water and a positive vibe!"
                     placeholderTextColor={C.hint} multiline textAlignVertical="top"
                     style={S.descInput} returnKeyType="default"
@@ -1834,7 +1840,7 @@ export default function AddEventFields(props: Props & { isRecurringFlow?: boolea
             )}
             <View style={[S.previewKindBadge, { backgroundColor: accent }]}>
               <Text style={S.previewKindBadgeText}>
-                {isRecurringFlow ? "Recurring Activity" : kind === "event_paid" ? "Paid Event" : "Free Event"}
+                {isRecurringFlow ? "Recurring Event" : kind === "event_paid" ? "Paid Event" : "Free Event"}
               </Text>
             </View>
           </View>

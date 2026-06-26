@@ -390,6 +390,10 @@ export default function TripScreen() {
     return m.length > 0 ? m : filtered.slice(0, 8);
   }, [filtered, city]);
 
+  const recurringEvents = useMemo(() => {
+    return filtered.filter(e => e.isRecurring === true || String(e.isRecurring) === "true" || e.kind === "recurring");
+  }, [filtered]);
+
 
 
   const allEvents = useMemo(() => filtered.slice(0, displayCount), [filtered, displayCount]);
@@ -412,6 +416,7 @@ export default function TripScreen() {
         kind: ev.kind || "event",
         priceCents: String((ev as any).priceCents ?? 0),
         joinPolicy: (ev as any).joinPolicy || "anyone_can_join",
+        isRecurring: String(ev.isRecurring === true),
         eventStr: JSON.stringify(ev)
       }
     });
@@ -561,6 +566,24 @@ export default function TripScreen() {
                 </ScrollView>
               )}
             </View>
+
+
+            {/* RECURRING EVENTS */}
+            {recurringEvents.length > 0 && (
+              <View style={S.section}>
+                <View style={S.sectionHead}>
+                  <View>
+                    <Text style={[S.sectionTitle, { color: C.ink }]}>Recurring Events</Text>
+                    <Text style={[S.sectionSub, { color: C.muted }]}>Activities that happen regularly</Text>
+                  </View>
+                </View>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={S.hList}>
+                  {recurringEvents.map(ev => (
+                    <SmallCard key={ev._id} ev={ev} width={SW * 0.52} onPress={() => openSheet(ev)} />
+                  ))}
+                </ScrollView>
+              </View>
+            )}
 
 
             {/* ALL EVENTS */}

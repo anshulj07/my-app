@@ -29,7 +29,7 @@ export default function EditRecurringPage() {
           setEventData(json.event);
         }
       } catch (err) {
-        console.error("Failed to load recurring activity for editing:", err);
+        console.error("Failed to load recurring event for editing:", err);
       } finally {
         setLoading(false);
       }

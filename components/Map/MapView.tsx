@@ -23,6 +23,7 @@ export type EventPin = {
   kind?: "free" | "paid" | "service" | "event_free" | "event_paid";
   priceCents?: number | string | null;
   status?: string;
+  isRecurring?: boolean;
   tags?: string[];
   when?: string;
   address?: string;
@@ -97,6 +98,7 @@ function normalizeEvent(e: any, i: number): EventPin | null {
     joinPolicy: e?.joinPolicy ?? undefined,
     attendees: Array.isArray(e?.attendees) ? e.attendees : undefined,
     pendingRequests: Array.isArray(e?.pendingRequests) ? e.pendingRequests : undefined,
+    isRecurring: e?.isRecurring === true || String(e?.isRecurring) === "true",
     startsAt: e?.startsAt ?? null,
     description: typeof e?.description === "string" ? e.description : undefined,
     bannerUri: e?.bannerUri ?? e?.bannerImage ?? undefined,

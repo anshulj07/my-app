@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Dimensions, Keyboard } from "react-native";
 import { Modalize } from "react-native-modalize";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import { apiFetch } from "../../lib/apiFetch";
 import { WebView } from "react-native-webview";
@@ -183,6 +184,71 @@ export default function AddEventModal({
     return !!GOOGLE_KEY && !!API_BASE && !!userId && !!title.trim() && hasLocation && !submitting && !locLoading && priceOk && capacityOk;
   }, [GOOGLE_KEY, API_BASE, userId, title, hasLocation, submitting, locLoading, kind, priceCents, capacityOk]);
 
+  const draftKey = `event_draft_${isRecurringFlow ? "recurring" : "normal"}`;
+  const [draftLoaded, setDraftLoaded] = useState(false);
+  const isClosingRef = useRef(false);
+
+  // Load Draft
+  useEffect(() => {
+    if (visible) {
+      isClosingRef.current = false;
+      AsyncStorage.getItem(draftKey).then(str => {
+        if (str) {
+          try {
+            const data = JSON.parse(str);
+            if (data.title) setTitle(data.title);
+            if (data.kind) setKind(data.kind);
+            if (data.priceText) setPriceText(data.priceText);
+            if (data.joinPolicy) setJoinPolicy(data.joinPolicy);
+            if (data.description) setDescription(data.description);
+            if (data.dateISO) setDateISO(data.dateISO);
+            if (data.time24) setTime24(data.time24);
+            if (data.endDateISO) setEndDateISO(data.endDateISO);
+            if (data.endTime24) setEndTime24(data.endTime24);
+            if (data.limitEnabled !== undefined) setLimitEnabled(data.limitEnabled);
+            if (data.capacityText) setCapacityText(data.capacityText);
+            if (data.bookingWindowDays !== undefined) setBookingWindowDays(data.bookingWindowDays);
+            if (data.dailyCapacityText) setDailyCapacityText(data.dailyCapacityText);
+            if (data.recurringSchedule) setRecurringSchedule(data.recurringSchedule);
+            if (data.coord) setCoord(data.coord);
+            if (data.selectedAddress) setSelectedAddress(data.selectedAddress);
+            if (data.locationPayload) setLocationPayload(data.locationPayload);
+            if (data.bannerUri) setBannerUri(data.bannerUri);
+            if (data.query) setQuery(data.query);
+          } catch (e) {
+            console.warn("Failed to parse draft", e);
+          }
+        }
+        setDraftLoaded(true);
+      });
+    } else {
+      setDraftLoaded(false);
+    }
+  }, [visible, draftKey]);
+
+  // Save Draft
+  useEffect(() => {
+    if (!visible || !draftLoaded || isClosingRef.current) return;
+    const t = setTimeout(() => {
+      const draftData = {
+        title, description, kind, priceText, joinPolicy,
+        dateISO, time24, endDateISO, endTime24,
+        limitEnabled, capacityText,
+        bookingWindowDays, dailyCapacityText, recurringSchedule,
+        coord, selectedAddress, locationPayload, bannerUri, query
+      };
+      AsyncStorage.setItem(draftKey, JSON.stringify(draftData)).catch(() => {});
+    }, 1000);
+    return () => clearTimeout(t);
+  }, [
+    title, description, kind, priceText, joinPolicy,
+    dateISO, time24, endDateISO, endTime24,
+    limitEnabled, capacityText,
+    bookingWindowDays, dailyCapacityText, recurringSchedule,
+    coord, selectedAddress, locationPayload, bannerUri, query,
+    visible, draftLoaded, draftKey
+  ]);
+
   useEffect(() => {
     if (visible) sheetRef.current?.open();
     else sheetRef.current?.close();
@@ -218,7 +284,11 @@ export default function AddEventModal({
     setBookingWindowDays(1); setDailyCapacityText("");
   };
 
-  const handleFullClose = () => { hardReset(); onClose(); };
+  const handleFullClose = () => { 
+    isClosingRef.current = true;
+    hardReset(); 
+    onClose(); 
+  };
 
   const handlePickSuggestion = async (s: Suggestion) => {
     if (!GOOGLE_KEY) return;
@@ -278,7 +348,7 @@ export default function AddEventModal({
     const needsPrice = backendKind === "paid" || (isRecurringFlow && kind === "event_paid");
     if (needsPrice && priceCents === null) throw new Error("Enter a valid price.");
     if (kind === "event_free" && limitEnabled && !capacityOk) throw new Error("Enter a valid capacity.");
-    if (isRecurringFlow && recurringSchedule.length === 0) throw new Error("Enable and configure at least one day for the recurring activity.");
+    if (isRecurringFlow && recurringSchedule.length === 0) throw new Error("Enable and configure at least one day for the recurring event.");
 
     const timezone = typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "Asia/Kolkata";
     const startsAt = dateISO && time24 ? new Date(`${dateISO}T${time24}:00`).toISOString() : undefined;
@@ -340,7 +410,7 @@ export default function AddEventModal({
 
     if (!title.trim()) { setErr("Please enter an event title."); return; }
     if (isRecurringFlow) {
-      if (recurringSchedule.length === 0) { setErr("Please select at least one day for the recurring activity."); return; }
+      if (recurringSchedule.length === 0) { setErr("Please select at least one day for the recurring event."); return; }
     } else {
       if (!dateISO || !time24) { setErr("Please select both date and time."); return; }
     }
@@ -362,8 +432,9 @@ export default function AddEventModal({
       }
 
       const created = await saveToBackend(userCurrentLocation);
+      await AsyncStorage.removeItem(draftKey);
       const ev = created?.event;
-      onCreate({ title: ev?.title ?? title.trim(), lat: ev?.location?.lat ?? coord?.lat ?? DEFAULT_CENTER.lat, lng: ev?.location?.lng ?? coord?.lng ?? DEFAULT_CENTER.lng, emoji: ev?.emoji ?? emoji, distanceKm: created?.distanceKm });
+      onCreate(ev ? { ...ev, distanceKm: created?.distanceKm } : { title: title.trim(), lat: coord?.lat ?? DEFAULT_CENTER.lat, lng: coord?.lng ?? DEFAULT_CENTER.lng, emoji, distanceKm: created?.distanceKm });
       sheetRef.current?.close();
     } catch (e: any) {
       setErr(e?.message || "Something went wrong. Please try again.");

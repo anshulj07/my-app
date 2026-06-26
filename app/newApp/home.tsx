@@ -345,6 +345,7 @@ export default function Home() {
       const kind = String((e as any).kind ?? "").toLowerCase(), f = activeFilter.toLowerCase();
       if (f === "free" || f === "event_free") return kind === "free" || kind === "event_free";
       if (f === "paid" || f === "event_paid") return kind === "paid" || kind === "event_paid";
+      if (f === "recurring") return String((e as any).isRecurring) === "true" || kind === "recurring";
       return true;
     });
   }, [events, activeFilter, userId]);
@@ -371,6 +372,7 @@ export default function Home() {
         kind: (pin as any).kind || "event",
         priceCents: String((pin as any).priceCents ?? 0),
         joinPolicy: (pin as any).joinPolicy || "anyone_can_join",
+        isRecurring: String((pin as any).isRecurring === true),
         eventStr: JSON.stringify(pin)
       }
     });
@@ -517,7 +519,7 @@ export default function Home() {
               iconBg={C.purpleDim}
               borderColor={C.purple + "30"}
               glowColor={C.purpleGlow}
-              title="Event"
+              title="One-time Event"
               subtitle="Free or paid · People join & attend"
               badgeText="Free / Paid"
               badgeColor={C.purpleText}
@@ -532,7 +534,7 @@ export default function Home() {
               iconBg={C.greenDim}
               borderColor={C.green + "30"}
               glowColor={C.greenGlow}
-              title="Recurring Activity"
+              title="Recurring Event"
               subtitle="Daily or weekly · Stays on map"
               badgeText="Perpetual"
               badgeColor={C.greenText}

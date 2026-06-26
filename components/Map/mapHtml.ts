@@ -165,18 +165,18 @@ export function buildMapHtml(args: {
     }
 
     function kindLabel(ev){
+      if(ev.isRecurring)       return 'Recurring Event';
       if(isOwn(ev)) return 'My event';
       var k=ev.kind||'';
-      if(ev.isRecurring)       return 'Activity';
       if(k.indexOf('free')>=0) return 'Free';
       if(k.indexOf('paid')>=0) return 'Paid';
       if(k==='service')        return 'Service';
       return '';
     }
     function kindPillClass(ev){
+      if(ev.isRecurring)       return 'recurring';
       if(isOwn(ev)) return 'mine';
       var k=ev.kind||'';
-      if(ev.isRecurring)       return 'recurring';
       if(k.indexOf('free')>=0) return 'free';
       if(k.indexOf('paid')>=0) return 'paid';
       if(k==='service')        return 'service';

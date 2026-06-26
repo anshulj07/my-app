@@ -306,7 +306,9 @@ export default function SectionEventsScreen() {
         creatorAvatar: (ev as any).creatorAvatar || "",
         kind: ev.kind || "event",
         priceCents: String((ev as any).priceCents ?? 0),
-        joinPolicy: (ev as any).joinPolicy || "anyone_can_join"
+        joinPolicy: (ev as any).joinPolicy || "anyone_can_join",
+        isRecurring: String((ev as any).isRecurring === true),
+        eventStr: JSON.stringify(ev)
       }
     });
   };

@@ -55,6 +55,9 @@ function eventStartMs(ev: EventDoc): number {
 
 function getDisplayState(ev: EventDoc) {
   const status = String(ev.status || "active").toLowerCase();
+  
+  if (status === "waiting" || status === "pending") return { label: "In Review", color: "#FEF3C7", text: "#D97706", key: "waiting" };
+  if (status === "rejected") return { label: "Rejected", color: C.red, text: C.redText, key: "rejected" };
   if (status === "paused") return { label: "Paused", color: C.red, text: C.redText, key: "paused" };
   if (status === "ended") return { label: "Ended", color: "#F1F5F9", text: C.muted, key: "ended" };
 

@@ -1,7 +1,7 @@
 
 // components/AddEventModal/AddEvent.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Dimensions, Keyboard } from "react-native";
+import { Dimensions, Keyboard, Alert } from "react-native";
 import { Modalize } from "react-native-modalize";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
@@ -436,6 +436,10 @@ export default function AddEventModal({
       const ev = created?.event;
       onCreate(ev ? { ...ev, distanceKm: created?.distanceKm } : { title: title.trim(), lat: coord?.lat ?? DEFAULT_CENTER.lat, lng: coord?.lng ?? DEFAULT_CENTER.lng, emoji, distanceKm: created?.distanceKm });
       sheetRef.current?.close();
+      Alert.alert(
+        "Under Review", 
+        "Your event has been submitted and is waiting for review. It will be live soon!"
+      );
     } catch (e: any) {
       setErr(e?.message || "Something went wrong. Please try again.");
       setSubmitting(false);

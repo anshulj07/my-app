@@ -7,7 +7,7 @@ import { usePushNotifications } from "../hooks/usePushNotifications";
 
 export type NotifItem = {
   id: string;
-  type: "joined" | "pending";
+  type: "joined" | "pending" | "bot_alert";
   eventId: string;
   eventTitle: string;
   eventEmoji: string;
@@ -17,6 +17,9 @@ export type NotifItem = {
   message: string;
   timestamp: string;
   paid?: boolean; // ✅ Added for payment tracking
+  flags?: any[];
+  moderatorNote?: string;
+  isApproved?: boolean;
 };
 
 type NotificationContextType = {

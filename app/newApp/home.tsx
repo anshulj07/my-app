@@ -8,7 +8,7 @@ import * as Location from "expo-location";
 import Constants from "expo-constants";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useRouter, useNavigation } from "expo-router";
 import { BlurView } from "expo-blur";
 import { useAuth } from "@clerk/clerk-expo";
 
@@ -139,6 +139,8 @@ export default function Home() {
   const { userId } = useAuth();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const navigation = useNavigation();
+  const lastTabPressRef = useRef(0);
 
   const [open, setOpen] = useState(false);
   const [showList, setShowList] = useState(false);
@@ -206,7 +208,7 @@ export default function Home() {
     const lat = customLat ?? loc?.lat;
     const lng = customLng ?? loc?.lng;
 
-    const baseQuery = `?limit=100&includePausedFor=${userId || ""}`;
+    const baseQuery = `?limit=100&includePausedFor=${userId || ""}&_t=${Date.now()}`;
 
     isFetchingRef.current = true;
     try {
@@ -214,6 +216,7 @@ export default function Home() {
         headers: {
           ...(EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {}),
           "ngrok-skip-browser-warning": "1",
+          "Cache-Control": "no-cache",
         },
       });
 
@@ -240,6 +243,19 @@ export default function Home() {
       isFetchingRef.current = false;
     }
   }, [API_BASE, EVENT_API_KEY, userId]); // ✅ myLoc removed from deps — uses ref now
+
+  // Listen for double tab presses to refresh
+  useEffect(() => {
+    const unsubscribe = (navigation as any).addListener("tabPress", (e: any) => {
+      const now = Date.now();
+      if (now - lastTabPressRef.current < 500) {
+        // Double tap on tab
+        loadEvents();
+      }
+      lastTabPressRef.current = now;
+    });
+    return unsubscribe;
+  }, [navigation, loadEvents]);
 
   const loadMyLocation = useCallback(async () => {
     try {
@@ -429,6 +445,17 @@ export default function Home() {
         <Ionicons name="chatbubble-ellipses" size={18} color={C.amber} />
       </TouchableOpacity>
 
+      {/* ── Refresh button ────────────────────────────── */}
+      {!mapStackOpen && (
+        <TouchableOpacity
+          style={[OL.refreshBtn, { top: insets.top + 125 }]}
+          onPress={() => loadEvents()}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="refresh" size={20} color={C.greenText} />
+        </TouchableOpacity>
+      )}
+
       {/* ── Sheets ───────────────────────────────────── */}
       <EditEventModal
         visible={editOpen} event={editEvent}
@@ -574,6 +601,15 @@ export default function Home() {
 const OL = StyleSheet.create({
   chatBtn: {
     position: "absolute", left: 16,
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: "rgba(255,255,255,0.9)",
+    borderWidth: 1, borderColor: "rgba(0,0,0,0.05)",
+    alignItems: "center", justifyContent: "center",
+    shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 15, shadowOffset: { width: 0, height: 6 },
+    elevation: 8, zIndex: 10,
+  },
+  refreshBtn: {
+    position: "absolute", right: 16,
     width: 44, height: 44, borderRadius: 22,
     backgroundColor: "rgba(255,255,255,0.9)",
     borderWidth: 1, borderColor: "rgba(0,0,0,0.05)",

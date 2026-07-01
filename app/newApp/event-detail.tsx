@@ -15,6 +15,7 @@ import { apiFetch } from "../../lib/apiFetch";
 import JoinEventButton from "../../components/ClickPin/JoinEventButton";
 import AttendanceSheet from "../../components/MyBookings/AttendanceSheet";
 import OtpVerifyModal from "../../components/modals/OtpVerifyModal";
+import BroadcastModal from "../../components/modals/BroadcastModal";
 
 
 const { width: SW } = Dimensions.get("window");
@@ -59,6 +60,12 @@ export default function EventDetailScreen() {
     lat?: string;
     lng?: string;
     maxCapacity?: string;
+    eventStr?: string;
+    creatorClerkId?: string;
+    isVerified?: string;
+    endDate?: string;
+    endTime?: string;
+    bookingWindowDays?: string;
   }>();
 
   const [event, setEvent] = useState<any>(() => {
@@ -71,6 +78,7 @@ export default function EventDetailScreen() {
   const [newRating, setNewRating] = useState(5);
   const [newComment, setNewComment] = useState("");
   const [showOtpModal, setShowOtpModal] = useState(false);
+  const [showBroadcastModal, setShowBroadcastModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -168,9 +176,8 @@ export default function EventDetailScreen() {
   };
 
   const handleEdit = () => {
-    const kind = event?.kind === "service" ? "service" : "event";
     router.push({
-      pathname: kind === "service" ? "/edit-service/[eventId]" : "/edit-event/[eventId]",
+      pathname: isRecurringEvent ? "/edit-recurring/[eventId]" : "/edit-event/[eventId]",
       params: { eventId: params.eventId }
     } as any);
   };
@@ -178,7 +185,8 @@ export default function EventDetailScreen() {
   // ✅ INSTANT FIX: Use parsed event immediately. Fallback to params if not present.
   const ev = (event?._id === params.eventId || event?.eventId === params.eventId) ? event : null;
   const kind = ev?.kind || params.kind || "event";
-  const isService = kind === "service";
+  const isRecurringEvent = ev?.isRecurring === true || String(ev?.isRecurring) === "true" || ev?.kind === "recurring" || params.kind === "recurring" || String(params.isRecurring) === "true";
+
 
   const title = ev?.title || params.title || "Event";
   const banner = ev?.bannerUri || (ev as any)?.bannerImage || params.bannerUri || "";
@@ -252,8 +260,66 @@ export default function EventDetailScreen() {
     return now >= (startMs - 3600000);
   }, [isJoined, isPast, startMs]);
 
+  const dateDisplay = useMemo(() => {
+    if (isRecurringEvent) {
+      if (Array.isArray(ev?.recurringSchedule) && ev.recurringSchedule.length > 0) {
+        const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        const rDays = ev.recurringSchedule.map((s: any) => days[s.day]).join(", ");
+        return `Every ${rDays}`;
+      } else if (Array.isArray(ev?.recurringDays) && ev.recurringDays.length > 0) {
+        const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        const rDays = ev.recurringDays.map((d: any) => days[d]).join(", ");
+        return `Every ${rDays}`;
+      }
+      return "Recurring Event";
+    }
+    let d1 = ev?.date || params.date || "";
+    let d2 = ev?.endDate || params.endDate || "";
+    if (ev?.startsAt) {
+      d1 = new Date(ev.startsAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    }
+    if (ev?.endsAt) {
+      d2 = new Date(ev.endsAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    }
+    if (!d1) return "TBD";
+    if (!d2 || d1 === d2) return d1;
+    return `${d1} - ${d2}`;
+  }, [ev, params]);
 
-
+  const timeDisplay = useMemo(() => {
+    if (isRecurringEvent) {
+      if (Array.isArray(ev?.recurringSchedule) && ev.recurringSchedule.length > 0) {
+        const first = ev.recurringSchedule[0];
+        let t1 = first.startTime || "";
+        let t2 = first.endTime || "";
+        if (t1) {
+          const [h, m] = t1.split(":");
+          const d = new Date(); d.setHours(Number(h), Number(m));
+          t1 = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+        }
+        if (t2) {
+          const [h, m] = t2.split(":");
+          const d = new Date(); d.setHours(Number(h), Number(m));
+          t2 = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+        }
+        if (!t1) return "TBD";
+        if (!t2 || t1 === t2) return t1;
+        return `${t1} - ${t2}`;
+      }
+      return "Time varies";
+    }
+    let t1 = ev?.time || params.time || "";
+    let t2 = ev?.endTime || params.endTime || "";
+    if (ev?.startsAt) {
+      t1 = new Date(ev.startsAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    }
+    if (ev?.endsAt) {
+      t2 = new Date(ev.endsAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    }
+    if (!t1) return "TBD";
+    if (!t2 || t1 === t2) return t1;
+    return `${t1} - ${t2}`;
+  }, [ev, params]);
   const handleLeave = async () => {
     const titleText = isPending ? "Cancel Join Request" : "Leave Event";
     const msgText = isPending 
@@ -339,7 +405,6 @@ export default function EventDetailScreen() {
           </TouchableOpacity>
           <Text style={S.stickyTitle} numberOfLines={1}>{title}</Text>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            {loading && <ActivityIndicator size="small" color={C.accent} />}
             <TouchableOpacity onPress={handleShare} style={S.navIconBtn}>
               <Ionicons name="share-social-outline" size={22} color={C.ink} />
             </TouchableOpacity>
@@ -360,7 +425,7 @@ export default function EventDetailScreen() {
         {/* HERO BANNER */}
         <View style={S.bannerContainer}>
           {banner ? (
-            <Image source={{ uri: banner }} style={S.banner} contentFit="cover" transition={300} />
+            <Image source={{ uri: banner }} style={S.banner} contentFit="cover" transition={300} placeholder={{ blurhash: "L6PZfSi_.AyE_3t7t7R**0o#DgR4" }} />
           ) : (
             <View style={[S.banner, { backgroundColor: "#E5E7EB", justifyContent: "center", alignItems: "center" }]}>
               <Text style={{ fontSize: 80 }}>{ev?.emoji || "📍"}</Text>
@@ -417,14 +482,14 @@ export default function EventDetailScreen() {
           
           <Text style={S.mainTitle}>{title}</Text>
           
-          <View style={[S.row, { gap: 20, marginTop: 12 }]}>
+          <View style={{ gap: 8, marginTop: 12 }}>
             <View style={S.row}>
-              <Ionicons name={isService ? "calendar-clear-outline" : "calendar-outline"} size={16} color={C.accent} />
-              <Text style={S.statText}>{ev?.date || params.date || (isService ? "Flexible Schedule" : "TBD")}</Text>
+              <Ionicons name="calendar-outline" size={16} color={C.accent} />
+              <Text style={[S.statText, { flexShrink: 1 }]} numberOfLines={2}>{dateDisplay}</Text>
             </View>
             <View style={S.row}>
-              <Ionicons name={isService ? "timer-outline" : "time-outline"} size={16} color={C.accent} />
-              <Text style={S.statText}>{isService ? (ev?.duration || "1 Hour Session") : (ev?.time || params.time || "TBD")}</Text>
+              <Ionicons name="time-outline" size={16} color={C.accent} />
+              <Text style={[S.statText, { flexShrink: 1 }]} numberOfLines={2}>{timeDisplay}</Text>
             </View>
           </View>
 
@@ -481,12 +546,18 @@ export default function EventDetailScreen() {
               style={S.hostImg} 
               contentFit="cover" 
               transition={200} 
+              placeholder={{ blurhash: "L6PZfSi_.AyE_3t7t7R**0o#DgR4" }}
             />
             <View style={{ flex: 1, justifyContent: "center" }}>
-              {loading && finalCreatorName === "Local Host" && !isHost ? (
-                <ActivityIndicator size="small" color={C.accent} style={{ alignSelf: "flex-start", marginBottom: 2 }} />
+              {finalCreatorName === "Local Host" && !isHost ? (
+                <Text style={S.hostName}>Host</Text>
               ) : (
-                <Text style={S.hostName}>{finalCreatorName}</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <Text style={S.hostName}>{finalCreatorName}</Text>
+                  {(ev?.isVerified || params.isVerified === "true") && (
+                    <Ionicons name="checkmark-circle" size={16} color="#0A84FF" />
+                  )}
+                </View>
               )}
               <Text style={S.hostSub}>HOST & ORGANIZER</Text>
             </View>
@@ -500,9 +571,9 @@ export default function EventDetailScreen() {
 
         {/* ABOUT THE EVENT */}
         <View style={S.section}>
-          <Text style={S.sectionTitle}>About the {isService ? "Service" : "Event"}</Text>
+          <Text style={S.sectionTitle}>About the Event</Text>
           <Text style={S.aboutText}>
-            {ev?.description || (loading ? "Loading details from network..." : `Experience an unforgettable ${isService ? "service" : "evening"}. Join us for a perfect blend of networking, music, and great vibes.`)}
+            {ev?.description || `Experience an unforgettable evening. Join us for a perfect blend of networking, music, and great vibes.`}
           </Text>
         </View>
 
@@ -511,10 +582,10 @@ export default function EventDetailScreen() {
           <Text style={S.sectionTitle}>What to Expect</Text>
           <View style={S.grid}>
             {[
-              { label: isService ? "Expertise" : "Fiber WiFi", sub: isService ? "CERTIFIED" : "100 MBPS", icon: isService ? "ribbon" : "wifi" },
+              { label: "Fiber WiFi", sub: "100 MBPS", icon: "wifi" },
               { label: "Networking", sub: "ALL NOMADS", icon: "people" },
               { label: "High Quality", sub: "TOP RATED", icon: "star" },
-              { label: isService ? "Duration" : "Co-working", sub: isService ? "1 HOUR" : "FAST ACCESS", icon: isService ? "time" : "laptop" },
+              { label: "Co-working", sub: "FAST ACCESS", icon: "laptop" },
             ].map((item, i) => (
               <View key={i} style={S.gridItem}>
                 <View style={S.gridIconBox}>
@@ -526,22 +597,16 @@ export default function EventDetailScreen() {
             ))}
           </View>
         </View>
-
         {/* WHO'S GOING / ATTENDEES */}
         <View style={S.section}>
           <View style={S.rowBetween}>
-            <Text style={S.sectionTitle}>{isService ? "Recent Clients" : "Who's Going"}</Text>
+            <Text style={S.sectionTitle}>Who's Going</Text>
             <TouchableOpacity onPress={() => setShowAttendeesModal(true)}>
               <Text style={S.seeAll}>See All ({attendees.length})</Text>
             </TouchableOpacity>
           </View>
           <View style={S.attendeeRow}>
-            {loading && attendees.length === 0 ? (
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 10 }}>
-                <ActivityIndicator size="small" color={C.accent} />
-                <Text style={[S.goingCountText, { color: C.muted }]}>Refreshing guest list...</Text>
-              </View>
-            ) : (
+            {false ? null : (
               <>
                 <View style={S.avatarStack}>
                   {attendees.slice(0, 4).map((att: any, i: number) => (
@@ -560,7 +625,7 @@ export default function EventDetailScreen() {
                     ? attendees.length === 1
                       ? `${attendees[0].name || "1 person"} has already joined`
                       : `${attendees[0].name || "1 person"} and ${attendees.length - 1} others joined`
-                    : isService ? "Be the first one to book!" : "Be the first one to join!"}
+                    : "Be the first one to join!"}
                 </Text>
               </>
             )}
@@ -581,12 +646,7 @@ export default function EventDetailScreen() {
           </View>
           
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 15, paddingRight: 20, paddingTop: 15 }}>
-            {loading ? (
-              <View style={[S.reviewCard, { width: SW - 80, alignItems: 'center', justifyContent: 'center', minHeight: 100 }]}>
-                <ActivityIndicator size="small" color={C.accent} />
-                <Text style={[S.muted, { marginTop: 8 }]}>Loading reviews...</Text>
-              </View>
-            ) : reviews.length > 0 ? (
+            {loading && reviews.length === 0 ? null : reviews.length > 0 ? (
               <>
                 {reviews.slice(0, 10).map((r, i) => (
                   <View key={i} style={S.reviewCard}>
@@ -608,7 +668,7 @@ export default function EventDetailScreen() {
               </>
             ) : (
               <View style={[S.reviewCard, { width: SW - 80, alignItems: 'center', justifyContent: 'center' }]}>
-                <Text style={S.muted}>No reviews yet. Be the first!</Text>
+                <Text style={{ color: C.muted }}>No reviews yet. Be the first!</Text>
               </View>
             )}
           </ScrollView>
@@ -655,7 +715,7 @@ export default function EventDetailScreen() {
             <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 10 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                 <Ionicons name="checkmark-done-circle" size={24} color={C.muted} />
-                <Text style={{ fontSize: 16, fontFamily: "Outfit_700Bold", color: C.muted }}>This {isService ? "service" : "event"} has ended</Text>
+                <Text style={{ fontSize: 16, fontFamily: "Outfit_700Bold", color: C.muted }}>This event has ended</Text>
               </View>
             </View>
           )
@@ -675,8 +735,17 @@ export default function EventDetailScreen() {
                 </>
               ) : (
                 <>
-                  <Text style={S.footerLabel}>Starts From</Text>
-                  <Text style={S.footerPrice}>{price} <Text style={S.perPerson}>/ person</Text></Text>
+                  {kind === "free" || price === "Free" || price === "₹0" ? (
+                    <>
+                      <Text style={S.footerLabel}>Price</Text>
+                      <Text style={S.footerPrice}>Free</Text>
+                    </>
+                  ) : (
+                    <>
+                      <Text style={S.footerLabel}>Starts From</Text>
+                      <Text style={S.footerPrice}>{price} <Text style={S.perPerson}>/ person</Text></Text>
+                    </>
+                  )}
                 </>
               )}
             </View>
@@ -692,6 +761,9 @@ export default function EventDetailScreen() {
                autoOpen={params.booking === "true"}
                eventLat={ev?.location?.lat || (params.lat ? Number(params.lat) : undefined)}
                eventLng={ev?.location?.lng || (params.lng ? Number(params.lng) : undefined)}
+               isRecurring={ev?.isRecurring === true || String(ev?.isRecurring) === "true" || ev?.kind === "recurring" || params.kind === "recurring"}
+               recurringSchedule={ev?.recurringSchedule}
+               bookingWindowDays={ev?.bookingWindowDays !== undefined ? ev.bookingWindowDays : (params.bookingWindowDays ? Number(params.bookingWindowDays) : undefined)}
                onJoined={() => loadAll()}
                joinPolicy={joinPolicy}
                disabled={isButtonDisabled}
@@ -703,7 +775,7 @@ export default function EventDetailScreen() {
                      (isFull && !isJoined && !isPending) && { backgroundColor: "#9CA3AF" },
                      (isLive && !isJoined && !isPending) && { backgroundColor: "#ef4444" }
                    ]} 
-                   onPress={(isJoined || isPending) ? handleLeave : onPress}
+                   onPress={(isJoined || isPending) ? () => { handleLeave(); } : () => { onPress(); }}
                    disabled={isButtonDisabled}
                  >
                    {submitting || (loading && !ev) ? (
@@ -711,7 +783,7 @@ export default function EventDetailScreen() {
                    ) : (
                      <>
                        <Text style={S.reserveText}>
-                         {isJoined ? "Cancel Booking" : (isPending ? "Cancel Request" : (isLive ? "Event Live" : (isFull ? "Event Full" : (isService ? "Book Now" : "Join Now"))))}
+                         {isJoined ? "Cancel Booking" : (isPending ? "Cancel Request" : (isLive ? "Event Live" : (isFull ? "Event Full" : "Join Now")))}
                        </Text>
                        {!isJoined && !isPending && !isFull && !isLive && <Ionicons name="arrow-forward" size={18} color="#fff" />}
                        {!isJoined && (isFull || isLive) && !isPending && <Ionicons name="lock-closed" size={18} color="#fff" />}
@@ -727,11 +799,14 @@ export default function EventDetailScreen() {
           <View style={S.hostActionsRow}>
             <TouchableOpacity style={S.editBtn} onPress={handleEdit}>
               <Ionicons name="create-outline" size={20} color={C.ink} />
-              <Text style={S.editBtnText}>Edit {isService ? "Service" : "Event"}</Text>
+              <Text style={S.editBtnText}>{isRecurringEvent ? "Edit Recurring" : "Edit Event"}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={S.verifyBtn} onPress={() => setShowOtpModal(true)}>
               <Ionicons name="scan-outline" size={20} color="#fff" />
               <Text style={S.verifyBtnText}>Verify OTP</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={S.broadcastBtn} onPress={() => setShowBroadcastModal(true)}>
+              <Ionicons name="megaphone-outline" size={20} color="#fff" />
             </TouchableOpacity>
           </View>
         )}
@@ -743,6 +818,14 @@ export default function EventDetailScreen() {
         eventId={params.eventId}
         eventTitle={event?.title}
         onSuccess={loadAll}
+      />
+
+      {/* BROADCAST MODAL */}
+      <BroadcastModal
+        visible={showBroadcastModal}
+        onClose={() => setShowBroadcastModal(false)}
+        eventId={params.eventId}
+        hostClerkUserId={ev?.creatorClerkId || ev?.clerkUserId || userId || ""}
       />
 
       {/* REVIEW MODAL */}
@@ -1006,6 +1089,12 @@ const S = StyleSheet.create({
     shadowColor: C.accent, shadowOpacity: 0.25, shadowRadius: 10, elevation: 6,
   },
   verifyBtnText: { color: "#fff", fontSize: 15, fontFamily: "Outfit_700Bold" },
+  broadcastBtn: {
+    backgroundColor: C.gold,
+    width: 50, height: 50, borderRadius: 18,
+    alignItems: "center", justifyContent: "center",
+    shadowColor: C.gold, shadowOpacity: 0.25, shadowRadius: 10, elevation: 6,
+  },
 
   otpInput: { 
     backgroundColor: "#F8FAFC", borderRadius: 16, padding: 20, 

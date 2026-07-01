@@ -111,7 +111,7 @@ function EventCard({ ev, idx, wished, onWish, onPress }: {
     : ev.location?.formattedAddress ?? "";
 
   // Category badge: derive from kind or use creator name
-  const badge = ev.kind === "paid" ? "Paid" : ev.kind === "service" ? "Service" : "Free";
+  const badge = ev.kind === "paid" ? "Paid" : "Free";
 
   // Mock rating for display (real data would have this)
   const rating = ((4.5 + (idx % 5) * 0.1)).toFixed(1);
@@ -306,7 +306,9 @@ export default function SectionEventsScreen() {
         creatorAvatar: (ev as any).creatorAvatar || "",
         kind: ev.kind || "event",
         priceCents: String((ev as any).priceCents ?? 0),
-        joinPolicy: (ev as any).joinPolicy || "anyone_can_join"
+        joinPolicy: (ev as any).joinPolicy || "anyone_can_join",
+        isRecurring: String((ev as any).isRecurring === true),
+        eventStr: JSON.stringify(ev)
       }
     });
   };
@@ -317,9 +319,10 @@ export default function SectionEventsScreen() {
     allEvents.forEach(e => {
       if (e.kind === "free")    kinds.add("Free");
       if (e.kind === "paid")    kinds.add("Paid");
-      if (e.kind === "service") kinds.add("Service");
-      // You can add more logic if events have tags
+      if (e.isRecurring) kinds.add("Recurring");
     });
+    kinds.add("All Events");
+    kinds.add("Recurring");
     // Also add static category options to give richer UI like Image 1
     ["Wellness", "Cafe", "Leisure", "Active", "Fitness"].forEach(k => kinds.add(k));
     return Array.from(kinds);
@@ -331,6 +334,7 @@ export default function SectionEventsScreen() {
       const q = catFilter.toLowerCase();
       evs = evs.filter(e =>
         e.kind?.toLowerCase() === q ||
+        (q === "all events" && (e.kind?.toLowerCase() === "free" || e.kind?.toLowerCase() === "paid")) ||
         e.title?.toLowerCase().includes(q) ||
         e.creatorName?.toLowerCase().includes(q),
       );

@@ -1,24 +1,24 @@
 // components/MyBookings/Tabs/PastTab.tsx
 import React from "react";
 import {
-  View, Text, Image, RefreshControl, 
+  View, Text, Image, RefreshControl,
   SectionList, StyleSheet, TouchableOpacity,
 } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { EventDoc } from "./CreatedTab";
 
 const C = {
-  bg:          "#F8FAFC",
-  white:       "#FFFFFF",
-  border:      "#F1F5F9",
-  ink:         "#111827",
-  muted:       "#6B7280",
-  accent:      "#6C63FF",
+  bg: "#F8FAFC",
+  white: "#FFFFFF",
+  border: "#F1F5F9",
+  ink: "#111827",
+  muted: "#6B7280",
+  accent: "#6C63FF",
   accentLight: "#EEF2FF",
-  purple:      "#F5F3FF",
-  purpleText:  "#7C3AED",
-  blue:        "#EFF6FF",
-  blueText:    "#2563EB",
+  purple: "#F5F3FF",
+  purpleText: "#7C3AED",
+  blue: "#EFF6FF",
+  blueText: "#2563EB",
 };
 
 export default function PastTab({
@@ -39,7 +39,7 @@ export default function PastTab({
       ListEmptyComponent={
         <View style={T.empty}>
           <View style={T.emptyImgBox}>
-             <Ionicons name="time-outline" size={60} color={C.muted} />
+            <Ionicons name="time-outline" size={60} color={C.muted} />
           </View>
           <Text style={T.emptyTitle}>No Past Events</Text>
           <Text style={T.emptySub}>Your past experiences will show up here.</Text>
@@ -49,9 +49,9 @@ export default function PastTab({
         <Text style={T.sectionTitle}>{section.title}</Text>
       )}
       renderItem={({ item }) => (
-        <EventCard 
-          e={item} 
-          onPress={() => onPressEvent(item)} 
+        <EventCard
+          e={item}
+          onPress={() => onPressEvent(item)}
           onSummary={() => onSummaryEvent?.(item)}
         />
       )}
@@ -62,8 +62,8 @@ export default function PastTab({
 
 function EventCard({ e, onPress, onSummary }: { e: EventDoc; onPress: () => void; onSummary: () => void }) {
   const banner = e.bannerUri || e.bannerImage || "";
-  const price = e.priceCents ? `₹${(e.priceCents/100).toFixed(0)}` : "FREE";
-  
+  const price = e.priceCents ? `₹${(e.priceCents / 100).toFixed(0)}` : "FREE";
+
   return (
     <TouchableOpacity activeOpacity={0.9} onPress={onPress} style={T.card}>
       {/* IMAGE SECTION */}
@@ -72,14 +72,14 @@ function EventCard({ e, onPress, onSummary }: { e: EventDoc; onPress: () => void
           <Image source={{ uri: banner }} style={T.img} />
         ) : (
           <View style={[T.img, { backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center" }]}>
-             <Text style={{ fontSize: 40 }}>{e.emoji || "📍"}</Text>
+            <Text style={{ fontSize: 40 }}>{e.emoji || "📍"}</Text>
           </View>
         )}
         <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.05)" }} />
         <View style={T.badgeLeft}>
           <View style={T.endedBadge}>
             <Ionicons name="checkmark-circle" size={12} color="#fff" />
-            <Text style={T.badgeText}>Ended</Text>
+            <Text style={T.badgeText}>Ended Event</Text>
           </View>
         </View>
         <View style={T.badgeRight}>
@@ -95,26 +95,38 @@ function EventCard({ e, onPress, onSummary }: { e: EventDoc; onPress: () => void
           <Text style={T.title}>{e.title || "Event"}</Text>
           <Ionicons name="share-social-outline" size={20} color={C.accent} />
         </View>
-        
+
         <View style={T.tagRow}>
-          <View style={[T.tag, { backgroundColor: C.blue }]}>
-             <Text style={[T.tagText, { color: C.blueText }]}>Paid event</Text>
-          </View>
+          {(e.kind === "paid" || e.kind === "event_paid" || (e.priceCents && e.priceCents > 0)) && (
+            <View style={[T.tag, { backgroundColor: C.blue }]}>
+              <Text style={[T.tagText, { color: C.blueText }]}>Paid event</Text>
+            </View>
+          )}
           <View style={[T.tag, { backgroundColor: C.purple }]}>
-             <Ionicons name="bookmark" size={10} color={C.purpleText} />
-             <Text style={[T.tagText, { color: C.purpleText }]}>Attended</Text>
+            <Ionicons name="bookmark" size={10} color={C.purpleText} />
+            <Text style={[T.tagText, { color: C.purpleText }]}>Attended</Text>
           </View>
+          {e.isRecurring && (
+            <View style={[T.tag, { backgroundColor: "#E0F2FE" }]}>
+              <Ionicons name="repeat" size={10} color="#0284C7" />
+              <Text style={[T.tagText, { color: "#0284C7" }]}>Recurring</Text>
+            </View>
+          )}
         </View>
 
         {/* INFO GRID */}
         <View style={T.grid}>
           <View style={T.gridCell}>
-             <Text style={T.gridLabel}>WHEN</Text>
-             <Text style={T.gridValue}>{e.date || "Past"}</Text>
+            <Text style={T.gridLabel}>WHEN</Text>
+            <Text style={T.gridValue} numberOfLines={2}>
+              {e.isRecurring && Array.isArray(e.recurringSchedule) && e.recurringSchedule.length > 0
+                ? `Every ${e.recurringSchedule.map((s: any) => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][s.day]).join(", ")}`
+                : e.date || "Past"}
+            </Text>
           </View>
           <View style={T.gridCell}>
-             <Text style={T.gridLabel}>WHERE</Text>
-             <Text style={T.gridValue} numberOfLines={1}>{e.location?.city || "Unknown"}</Text>
+            <Text style={T.gridLabel}>WHERE</Text>
+            <Text style={T.gridValue} numberOfLines={1}>{e.location?.city || "Unknown"}</Text>
           </View>
         </View>
 
@@ -134,7 +146,7 @@ function EventCard({ e, onPress, onSummary }: { e: EventDoc; onPress: () => void
 const T = StyleSheet.create({
   list: { padding: 20, paddingBottom: 60 },
   sectionTitle: { fontSize: 13, fontWeight: "900", color: C.muted, marginBottom: 15, textTransform: "uppercase", letterSpacing: 0.5 },
-  
+
   card: {
     backgroundColor: C.white, borderRadius: 28, marginBottom: 25,
     shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 15, elevation: 3,
@@ -152,7 +164,7 @@ const T = StyleSheet.create({
   body: { padding: 20 },
   titleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
   title: { fontSize: 18, fontWeight: "800", color: C.ink, flex: 1, marginRight: 10 },
-  
+
   tagRow: { flexDirection: "row", gap: 8, marginBottom: 20 },
   tag: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   tagText: { fontSize: 11, fontWeight: "800" },
@@ -162,7 +174,7 @@ const T = StyleSheet.create({
   gridLabel: { fontSize: 8, fontWeight: "900", color: C.muted, marginBottom: 4, letterSpacing: 0.5 },
   gridValue: { fontSize: 11, fontWeight: "700", color: C.ink },
 
-  summaryBtn: { 
+  summaryBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10,
     backgroundColor: "#EFF6FF", paddingVertical: 14, borderRadius: 16
   },

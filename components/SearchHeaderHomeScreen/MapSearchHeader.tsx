@@ -974,6 +974,9 @@ const C = {
   card:        "#FFFFFF",
   border:      "rgba(240,235,227,0.95)",
   borderDark:  "rgba(28,26,23,0.10)",
+  ink:         "#1C1A17",
+  muted:       "#8E8B85",
+  hint:        "#C2BDB5",
   teal:        "#6ccf3e",
   tealBg:      "#E8FAF7",
   tealText:    "#1A7A6A",
@@ -993,7 +996,7 @@ const C = {
 
 // ─── Filters ─────────────────────────────────────────────────────────────────
 type Filter     = { key: string; label: string; icon: any };
-type KindFilter = { key: string; label: string; dotColor: string; activeBg: string; activeText: string };
+type KindFilter = { key: string; label: string; dotColor: string; activeBg: string; activeText: string; icon?: any; };
 
 const ACTIVITY_FILTERS: Filter[] = [
   { key: "coffee",  label: "Coffee",  icon: "cafe-outline" },
@@ -1011,7 +1014,7 @@ const ACTIVITY_FILTERS: Filter[] = [
 const KIND_FILTERS: KindFilter[] = [
   { key: "free",    label: "Free",    dotColor: "#22C55E", activeBg: "#DCFCE7", activeText: "#166534", icon: "gift-outline" },
   { key: "paid",    label: "Paid",    dotColor: "#F59E0B", activeBg: "#FEF3C7", activeText: "#92400E", icon: "cash-outline" },
-  { key: "service", label: "Service", dotColor: "#8B5CF6", activeBg: "#F3E8FF", activeText: "#5B21B6", icon: "briefcase-outline" },
+  { key: "recurring", label: "Recurring", dotColor: "#14B8A6", activeBg: "#CCFBF1", activeText: "#115E59", icon: "repeat-outline" },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────

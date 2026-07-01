@@ -32,6 +32,7 @@ const C = {
   purpleSoft:  "rgba(99,102,241,0.08)",
   purpleBorder: "rgba(99,102,241,0.15)",
   purpleDark:  "#4F46E5",
+  green:       "#10B981",
   amber:       "#F59E0B",
   amberSoft:   "rgba(245,158,11,0.10)",
   red:         "#EF4444",
@@ -42,7 +43,7 @@ const C = {
 };
 
 type EventKind = "free" | "paid" | "event_free" | "event_paid" | "service";
-type Screen = "booking" | "payment" | "confirmed";
+type Screen = "calendar" | "booking" | "payment" | "confirmed";
 
 type Props = {
   eventId:     string;
@@ -58,10 +59,13 @@ type Props = {
   startDate?: string;
   endDate?: string;
   durationHrs?: number;
-  customTrigger?: (onPress: () => React.ReactNode) => React.ReactNode;
+  customTrigger?: (onPress: () => void) => React.ReactNode;
   autoOpen?: boolean;
   eventLat?: number;
   eventLng?: number;
+  isRecurring?: boolean;
+  recurringSchedule?: { day: number; startTime: string; endTime: string }[];
+  bookingWindowDays?: number;
 };
 
 export default function JoinEventButton({
@@ -82,6 +86,9 @@ export default function JoinEventButton({
   autoOpen = false,
   eventLat,
   eventLng,
+  isRecurring,
+  recurringSchedule,
+  bookingWindowDays,
 }: Props) {
   const router    = useRouter();
   const { userId } = useAuth();
@@ -139,7 +146,7 @@ export default function JoinEventButton({
   const [bookedSlots,   setBookedSlots]   = useState<any[]>([]);
 
   // Date selection
-  const [selectedDate, setSelectedDate] = useState(startDate || new Date().toISOString().split("T")[0]);
+  const [selectedDate, setSelectedDate] = useState<string>(startDate || new Date().toISOString().split("T")[0]);
 
   // Generate next 14 days
   const availableDates = useMemo(() => {
@@ -201,11 +208,44 @@ export default function JoinEventButton({
     }
   }, [showModal, user]);
 
+  /* ── open sheet ── */
+  const onPress = async () => {
+    if (disabled || loading || joined || pendingRequest) return;
+    if (!userId) {
+      Alert.alert("Sign in required", "Please sign in to continue.");
+      router.push("/sign-in" as any);
+      return;
+    }
+    setScreen(isRecurring ? "calendar" : "booking");
+    setSpots(1);
+    setDuration(durationHrs);
+    setSelectedSlot(null);
+    setSelectedDate(isRecurring ? "" : (startDate || new Date().toISOString().split("T")[0]));
+    setShowModal(true);
+
+    // Fetch booked slots if service
+    if (kind === "service" && API_BASE && eventId) {
+      fetchBookedSlots(selectedDate);
+    }
+  };
+
+  const fetchBookedSlots = async (date: string) => {
+    if (!API_BASE || !eventId) return;
+    try {
+      const r = await apiFetch(`${API_BASE}/api/bookings/service-bookings?eventId=${eventId}&date=${date}`, {
+        headers: EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : undefined,
+      });
+      const j = await r.json().catch(() => null);
+      if (r.ok) setBookedSlots(Array.isArray(j?.bookings) ? j.bookings : []);
+    } catch {}
+  };
+
   /* ── auto-open ── */
   useEffect(() => {
     if (autoOpen && !showModal && !joined && !pendingRequest && !loading) {
       onPress();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoOpen, joined, pendingRequest, loading]);
 
   /* ── check already joined ── */
@@ -228,43 +268,12 @@ export default function JoinEventButton({
     return () => { cancelled = true; };
   }, [API_BASE, EVENT_API_KEY, userId, eventId]);
 
-  /* ── open sheet ── */
-  const onPress = async () => {
-    if (disabled || loading || joined || pendingRequest) return;
-    if (!userId) {
-      Alert.alert("Sign in required", "Please sign in to continue.");
-      router.push("/sign-in" as any);
-      return;
-    }
-    setScreen("booking");
-    setSpots(1);
-    setDuration(durationHrs);
-    setSelectedSlot(null);
-    setSelectedDate(startDate || new Date().toISOString().split("T")[0]);
-    setShowModal(true);
-
-    // Fetch booked slots if service
-    if (kind === "service" && API_BASE && eventId) {
-      fetchBookedSlots(selectedDate);
-    }
-  };
-
-  const fetchBookedSlots = async (date: string) => {
-    if (!API_BASE || !eventId) return;
-    try {
-      const r = await apiFetch(`${API_BASE}/api/bookings/service-bookings?eventId=${eventId}&date=${date}`, {
-        headers: headers,
-      });
-      const j = await r.json().catch(() => null);
-      if (r.ok) setBookedSlots(Array.isArray(j?.bookings) ? j.bookings : []);
-    } catch {}
-  };
-
   useEffect(() => {
     if (showModal && kind === "service" && selectedDate) {
       fetchBookedSlots(selectedDate);
     }
   }, [selectedDate]);
+
 
   /* ── Confirm Booking → go to payment or free join ── */
   const handleConfirmBooking = async () => {
@@ -294,10 +303,10 @@ export default function JoinEventButton({
         const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
         const dist = getDistance(loc.coords.latitude, loc.coords.longitude, eventLat, eventLng);
         
-        if (dist > 100) {
+        if (dist > 50) {
           Alert.alert(
             "You are too far! 📍",
-            `This event is ${dist.toFixed(0)}km away. Free events are restricted to users within 100km to ensure local community engagement.`,
+            `This event is ${dist.toFixed(0)}km away. Free events are restricted to users within 50km to ensure local community engagement.`,
             [{ text: "Understood" }]
           );
           setLoading(false);
@@ -375,8 +384,26 @@ export default function JoinEventButton({
       });
 
       const json = await res.json().catch(() => null);
-      if (!res.ok || !json?.payment?.orderId) {
-        Alert.alert("Booking Error", json?.error || "Could not initiate booking.");
+      
+      // ✅ Check for specific errors with better messages
+      if (!res.ok) {
+        const errMsg = json?.error || "Could not initiate booking.";
+        if (res.status === 500 && (errMsg.includes("not configured") || errMsg.includes("Payment gateway"))) {
+          Alert.alert(
+            "Payment Not Available", 
+            "Payment gateway is not configured on the server. Please contact support.",
+            [{ text: "OK" }]
+          );
+        } else if (res.status === 409) {
+          Alert.alert("Already Booked", errMsg);
+        } else {
+          Alert.alert("Booking Error", errMsg);
+        }
+        return;
+      }
+
+      if (!json?.payment?.orderId) {
+        Alert.alert("Payment Error", json?.error || "Payment order could not be created. Please try again.");
         return;
       }
 
@@ -390,8 +417,8 @@ export default function JoinEventButton({
         description: `Join ${eventTitle}`,
       });
       setRazorpayVisible(true);
-    } catch {
-      Alert.alert("Network Error", "Please check your connection.");
+    } catch (e: any) {
+      Alert.alert("Network Error", "Please check your connection and try again.");
     } finally { setLoading(false); }
   };
 
@@ -486,7 +513,7 @@ export default function JoinEventButton({
     <>
       {/* ── MAIN CTA BUTTON ── */}
       {customTrigger ? (
-        customTrigger(onPress)
+        customTrigger(() => { onPress(); })
       ) : (
         <Pressable
           onPress={onPress}
@@ -549,12 +576,14 @@ export default function JoinEventButton({
             <View style={M.header}>
               <Pressable hitSlop={12} onPress={() => {
                 if (screen === "payment") { setScreen("booking"); }
+                else if (screen === "booking" && isRecurring) { setScreen("calendar"); }
                 else { setShowModal(false); }
               }} style={M.headerBack}>
                 <Ionicons name="chevron-back" size={18} color={C.ink} />
               </Pressable>
               <Text style={M.headerTitle}>
-                {screen === "booking"   ? "Book Event" :
+                {screen === "calendar"  ? "Select Date" :
+                 screen === "booking"   ? "Book Event" :
                  screen === "payment"   ? "Payment" :
                  "Booking Confirmed"}
               </Text>
@@ -562,6 +591,74 @@ export default function JoinEventButton({
                 <Ionicons name="close" size={18} color={C.muted} />
               </Pressable>
             </View>
+
+            {/* ═══ SCREEN: CALENDAR (Recurring Activities) ═══ */}
+            {screen === "calendar" && isRecurring && (
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={M.body}
+              >
+                <View style={M.section}>
+                  <Text style={M.sectionTitle}>Pick an upcoming date</Text>
+                  <Text style={[M.confirmSub, { marginBottom: 16, textAlign: "left" }]}>
+                    This activity occurs on specific days.
+                    {Number(bookingWindowDays) > 0 && (
+                      <Text style={{ color: C.red, fontWeight: "700" }}>
+                        {"\n"}You can book up to {Number(bookingWindowDays) === 1 ? "1 day" : `${bookingWindowDays} days`} in advance.
+                      </Text>
+                    )}
+                  </Text>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+                    {availableDates.map(dateStr => {
+                      const d = new Date(dateStr);
+                      const dayOfWeek = d.getDay();
+                      
+                      // Check if this day of week is allowed by the recurring schedule
+                      const isAllowedDay = !recurringSchedule || recurringSchedule.length === 0 || recurringSchedule.some(s => s.day === dayOfWeek);
+                      
+                      // Check booking advance window
+                      const today = new Date();
+                      today.setHours(0,0,0,0);
+                      const daysDiff = Math.round((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                      const isWithinWindow = Number(bookingWindowDays) > 0
+                        ? daysDiff <= Number(bookingWindowDays) 
+                        : true;
+
+                      const isValid = isAllowedDay && isWithinWindow;
+                      const active = selectedDate === dateStr;
+
+                      if (!isValid && !active) return null; // Or render grayed out
+
+                      return (
+                        <TouchableOpacity
+                          key={dateStr}
+                          style={[M.dateBtn, active && M.dateBtnActive, !isValid && { opacity: 0.3 }]}
+                          disabled={!isValid}
+                          onPress={() => {
+                            if (isValid) {
+                              setSelectedDate(dateStr);
+                            }
+                          }}
+                        >
+                          <Text style={[M.dateDay, active && M.dateTextActive]}>{d.toLocaleDateString('en-US', { weekday: 'short' })}</Text>
+                          <Text style={[M.dateNum, active && M.dateTextActive]}>{d.getDate()}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+                <View style={{ marginTop: 24 }}>
+                  <TouchableOpacity 
+                    style={[M.submitBtn, !selectedDate && { opacity: 0.5 }]} 
+                    disabled={!selectedDate}
+                    onPress={() => setScreen("booking")}
+                  >
+                    <Text style={M.submitBtnText}>Continue to Booking</Text>
+                    <Ionicons name="arrow-forward" size={16} color="#fff" />
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            )}
 
             {/* ═══ SCREEN: BOOKING ═══ */}
             {screen === "booking" && (
@@ -607,11 +704,18 @@ export default function JoinEventButton({
                         // In a real app we'd use the host's actual schedule.
                         const slots = ["09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "12:00", "12:30", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00"];
                         return slots.map(s => {
-                          const hour = parseInt(s.split(":")[0]);
+                          const [sh, sm] = s.split(":").map(Number);
+                          const slotStart = sh + (sm / 60);
+                          // The selected duration for THIS booking might overlap with others
+                          // But we just want to know if THIS starting slot falls inside any booked time
+                          // OR if the duration we want to book overlaps with them.
+                          // Simplest is to disable if the slot start time is within a booked slot.
                           const isBooked = bookedSlots.some(b => {
-                            const bStart = parseInt((b.startTime || "00:00").split(":")[0]);
+                            const [bh, bm] = (b.startTime || "00:00").split(":").map(Number);
+                            const bStart = bh + (bm / 60);
                             const bDur = b.duration || 1;
-                            return hour >= bStart && hour < bStart + bDur;
+                            const bEnd = bStart + bDur;
+                            return slotStart >= bStart && slotStart < bEnd;
                           });
                           const active = selectedSlot === s;
                           return (
@@ -1215,4 +1319,10 @@ const M = StyleSheet.create({
   dateDay: { fontSize: 11, fontWeight: "600", color: C.muted, textTransform: "uppercase" },
   dateNum: { fontSize: 18, fontWeight: "800", color: C.ink },
   dateTextActive: { color: "#fff" },
+  submitBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+    height: 54, borderRadius: 16, backgroundColor: C.purple,
+    shadowColor: C.purple, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4,
+  },
+  submitBtnText: { color: "#fff", fontSize: 16, fontFamily: C.fontExtraBold },
 });

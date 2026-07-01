@@ -37,7 +37,7 @@ type UserProfile = {
   rating?: number;
   eventsHosted?: number;
   totalAttendees?: number;
-  services?: string[];
+
   isVerified?: boolean;
 };
 
@@ -82,7 +82,7 @@ export default function PublicProfileScreen() {
         rating: json?.rating ?? 0,
         eventsHosted: json?.eventsHosted ?? 0,
         totalAttendees: json?.totalAttendees ?? 0,
-        services: Array.isArray(json?.services) ? json.services : [],
+
         isVerified: !!json?.isVerified,
       });
     } catch (e: any) {
@@ -92,7 +92,7 @@ export default function PublicProfileScreen() {
         name: initialName || "User",
         avatar: initialAvatar || null,
         photos: [], interests: [], languages: [],
-        rating: 0, eventsHosted: 0, totalAttendees: 0, services: [], isVerified: false,
+        rating: 0, eventsHosted: 0, totalAttendees: 0, isVerified: false,
       });
     } finally {
       setLoading(false); setRefreshing(false);

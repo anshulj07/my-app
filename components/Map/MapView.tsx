@@ -11,18 +11,19 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { buildMapHtml } from "./mapHtml";
 
 export type EventPin = {
-  
+
   _id: string;
   title: string;
   lat: number;
   lng: number;
   emoji: string;
   bannerImage?: string | null;
-bannerUri?: string | null;
+  bannerUri?: string | null;
   creatorClerkId?: string;
   kind?: "free" | "paid" | "service" | "event_free" | "event_paid";
   priceCents?: number | string | null;
   status?: string;
+  isRecurring?: boolean;
   tags?: string[];
   when?: string;
   address?: string;
@@ -37,7 +38,12 @@ bannerUri?: string | null;
   attendees?: any[];
   pendingRequests?: any[];
   startsAt?: string | null;
+  endsAt?: string | null;
+  endDate?: string | null;
+  endTime?: string | null;
   description?: string;
+  creatorName?: string | null;
+  creatorAvatar?: string | null;
   location?: {
     city?: string;
     state?: string;
@@ -48,7 +54,7 @@ bannerUri?: string | null;
     placeId?: string;
     lat?: number | string;
     lng?: number | string;
-   
+
   };
 };
 
@@ -92,6 +98,7 @@ function normalizeEvent(e: any, i: number): EventPin | null {
     joinPolicy: e?.joinPolicy ?? undefined,
     attendees: Array.isArray(e?.attendees) ? e.attendees : undefined,
     pendingRequests: Array.isArray(e?.pendingRequests) ? e.pendingRequests : undefined,
+    isRecurring: e?.isRecurring === true || String(e?.isRecurring) === "true",
     startsAt: e?.startsAt ?? null,
     description: typeof e?.description === "string" ? e.description : undefined,
     bannerUri: e?.bannerUri ?? e?.bannerImage ?? undefined,
@@ -104,7 +111,9 @@ function normalizeEvent(e: any, i: number): EventPin | null {
 export default function MapView({
   events,
   initialCenter,
+  searchLabel,
   locationStatus = "unknown",
+  initialLoadDone = false,
   onPinPress,
   onLocationUpdate,
   onStackOpen,
@@ -113,7 +122,9 @@ export default function MapView({
 }: {
   events: any[];
   initialCenter?: { lat: number; lng: number } | null;
+  searchLabel?: string | null;
   locationStatus?: "unknown" | "granted" | "denied";
+  initialLoadDone?: boolean;
   onPinPress?: (pin: EventPin) => void;
   /** Called with fresh lat/lng whenever the map pans to user's location */
   onLocationUpdate?: (lat: number, lng: number) => void;
@@ -169,22 +180,43 @@ export default function MapView({
 
   const safeEventsJson = useMemo(() => JSON.stringify(safeEvents), [safeEvents]);
 
-  // ✅ Use a ref to capture the initial center AND initial events for the HTML payload.
-  // This prevents the WebView from reloading when they change.
+  // ✅ Use refs to capture the initial center AND initial events for the HTML payload.
+  // This prevents the WebView from reloading when props change.
   const initialHtmlCenter = useRef(center);
   const initialEventsJson = useRef(safeEventsJson);
-  
-  const html = useMemo(
-    () => buildMapHtml({ googleKey: GOOGLE_KEY, eventsJson: initialEventsJson.current, center: initialHtmlCenter.current, zoom, userId }),
-    [GOOGLE_KEY, zoom, userId]
-  );
+  // ✅ FIX: Freeze the HTML after first render — it must never change
+  // Events are updated via postMessage, center via postMessage too
+  const htmlRef = useRef<string | null>(null);
+  if (!htmlRef.current) {
+    htmlRef.current = buildMapHtml({
+      googleKey: GOOGLE_KEY,
+      eventsJson: initialEventsJson.current,
+      center: initialHtmlCenter.current,
+      zoom,
+      userId,
+    });
+  }
+  const html = htmlRef.current;
 
   // ✅ Silently update events in the WebView without reloading the HTML
+  const [webViewReady, setWebViewReady] = useState(false);
+
   React.useEffect(() => {
-    if (webViewRef.current) {
-      webViewRef.current.postMessage(JSON.stringify({ type: "updateEvents", events: safeEvents }));
+    if (webViewReady && webViewRef.current) {
+      webViewRef.current.postMessage(JSON.stringify({ type: "updateEvents", events: safeEvents, initialLoadDone }));
     }
-  }, [safeEventsJson]);
+  }, [safeEventsJson, webViewReady, initialLoadDone]);
+
+  React.useEffect(() => {
+    if (webViewReady && webViewRef.current && initialCenter) {
+      webViewRef.current.postMessage(JSON.stringify({
+        type: "goToLocation",
+        lat: initialCenter.lat,
+        lng: initialCenter.lng,
+        label: searchLabel ?? undefined,
+      }));
+    }
+  }, [initialCenter?.lat, initialCenter?.lng, webViewReady]);
 
   const goToCurrentLocation = async () => {
     if (locLoading) return;
@@ -248,12 +280,17 @@ export default function MapView({
         javaScriptEnabled
         domStorageEnabled
         source={{ html }}
-        key={locationStatus}
+        // ✅ FIX: No key here — WebView should NEVER remount after first render
+        // locationStatus changes are handled via postMessage
         onMessage={(e) => {
           try {
             const msg = JSON.parse(e.nativeEvent.data);
             if (msg?.type === "log" || msg?.type === "error") {
               console.log("[MapView]", msg.msg || msg.message, msg.extra ?? "");
+              return;
+            }
+            if (msg?.type === "ready") {
+              setWebViewReady(true);
               return;
             }
             // ✅ Stack popup open — hide RN overlay UI

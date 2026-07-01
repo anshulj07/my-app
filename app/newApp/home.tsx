@@ -1,58 +1,58 @@
 // app/newApp/home.tsx
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   TouchableOpacity, Text, StyleSheet, Platform,
-  Modal, View, Pressable, Animated,
+  Modal, View, Pressable, Animated, Dimensions, Alert
 } from "react-native";
 import * as Location from "expo-location";
 import Constants from "expo-constants";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useRouter, useNavigation } from "expo-router";
 import { BlurView } from "expo-blur";
 import { useAuth } from "@clerk/clerk-expo";
 
 import MapView from "../../components/Map/MapView";
 import type { EventPin } from "../../components/Map/MapView";
+import type { ListingKind } from "../../components/AddEventModal/types";
 import MapSearchHeader from "../../components/SearchHeaderHomeScreen/MapSearchHeader";
 import ModalizeEventSheet from "../../components/AddEventModal/AddEvent";
 import EventsListModal from "../../components/List/EventsListModal";
-import EditServiceFlow from "../../components/EditServiceFlow/EditServiceFlow";
 import EditEventModal from "../../components/EditEventModal/EditEvent";
-import CreateServiceFlow from "../../components/CreateServiceFlow/CreateServiceFlow";
+import EditRecurringModal, { type RecurringEvent } from "../../components/EditRecurringModal/EditRecurring";
 
 // ─── Design tokens ───────────────────────────────────────────────────────────
 const C = {
-  bg:          "#0F0F0F",
-  card:        "#1A1A1A",
-  cardBorder:  "#2A2A2A",
-  glass:       "rgba(255,255,255,0.06)",
+  bg: "#0F0F0F",
+  card: "#1A1A1A",
+  cardBorder: "#2A2A2A",
+  glass: "rgba(255,255,255,0.06)",
   glassBorder: "rgba(255,255,255,0.10)",
-  inputBg:     "#141414",
+  inputBg: "#141414",
   inputBorder: "#2C2C2C",
-  ink:         "#F5F5F5",
-  muted:       "#888888",
-  hint:        "#444444",
+  ink: "#F5F5F5",
+  muted: "#888888",
+  hint: "#444444",
 
   // Green accent
-  green:       "#00E676",
-  greenDim:    "rgba(0,230,118,0.12)",
-  greenGlow:   "rgba(0,230,118,0.25)",
-  greenText:   "#00E676",
+  green: "#00E676",
+  greenDim: "rgba(0,230,118,0.12)",
+  greenGlow: "rgba(0,230,118,0.25)",
+  greenText: "#00E676",
 
   // Purple accent (Standardized to Indigo)
-  purple:      "#6366F1",
-  purpleDim:   "#EEF2FF",
-  purpleGlow:  "rgba(99,102,241,0.15)",
-  purpleText:  "#4F46E5",
+  purple: "#6366F1",
+  purpleDim: "#EEF2FF",
+  purpleGlow: "rgba(99,102,241,0.15)",
+  purpleText: "#4F46E5",
 
 
   // Amber for chat
-  amber:       "#FFB300",
-  amberDim:    "rgba(255,179,0,0.12)",
+  amber: "#FFB300",
+  amberDim: "rgba(255,179,0,0.12)",
 
-  white:       "#FFFFFF",
-  overlay:     "rgba(0,0,0,0.75)",
+  white: "#FFFFFF",
+  overlay: "rgba(0,0,0,0.75)",
 };
 
 // ─── Helpers (unchanged) ──────────────────────────────────────────────────────
@@ -68,29 +68,29 @@ function normalizeEvent(e: any): EventPin | null {
   const rawId = e?._id ?? e?.id ?? e?.eventId ?? "";
   const _id =
     typeof rawId === "string" && rawId.trim() ? rawId.trim()
-    : rawId && typeof rawId === "object" && (rawId.$oid || rawId.oid)
-      ? String(rawId.$oid || rawId.oid)
-      : `${lat}:${lng}:${String(e?.title ?? "")}`;
+      : rawId && typeof rawId === "object" && (rawId.$oid || rawId.oid)
+        ? String(rawId.$oid || rawId.oid)
+        : `${lat}:${lng}:${String(e?.title ?? "")}`;
 
   return {
     ...(e || {}),
     _id,
-    title:       e?.title ?? "",
+    title: e?.title ?? "",
     description: e?.description ?? "",
     lat, lng,
-    emoji:       e?.emoji ?? "📍",
+    emoji: e?.emoji ?? "📍",
     bannerImage: e?.bannerImage ?? null,
-    bannerUri:   e?.bannerUri   ?? null,
-    when:        [e?.date, e?.time].filter(Boolean).join(" · "),
-    address:     e?.location?.formattedAddress ?? e?.location?.address ?? e?.address ?? "",
-    status:      e?.status ?? "active",
+    bannerUri: e?.bannerUri ?? null,
+    when: [e?.date, e?.time].filter(Boolean).join(" · "),
+    address: e?.location?.formattedAddress ?? e?.location?.address ?? e?.address ?? "",
+    status: e?.status ?? "active",
     // ✅ Needed for live pin detection in map
-    startsAt:    e?.startsAt ?? null,
-    date:        e?.date ?? null,
-    time:        e?.time ?? null,
-    endsAt:      e?.endsAt ?? null,
-    endDate:     e?.endDate ?? null,
-    endTime:     e?.endTime ?? null,
+    startsAt: e?.startsAt ?? null,
+    date: e?.date ?? null,
+    time: e?.time ?? null,
+    endsAt: e?.endsAt ?? null,
+    endDate: e?.endDate ?? null,
+    endTime: e?.endTime ?? null,
   };
 }
 
@@ -104,109 +104,85 @@ function toEditableEvent(pin: EventPin): NonNullable<EditEventValue> {
       ...loc,
       lat: loc?.lat ?? pin.lat, lng: loc?.lng ?? pin.lng,
       formattedAddress: loc?.formattedAddress ?? loc?.address ?? (pin as any)?.address ?? "",
-      address:          loc?.address ?? (pin as any)?.address ?? "",
-      placeId:          loc?.placeId ?? "",
-      city:             loc?.city ?? (pin as any)?.city ?? "",
-      admin1Code:       loc?.admin1Code ?? loc?.stateCode ?? loc?.state ?? "",
-      admin1:           loc?.admin1 ?? loc?.region ?? loc?.state ?? "",
-      countryCode:      loc?.countryCode ?? loc?.country ?? "",
-      country:          loc?.country ?? "",
+      address: loc?.address ?? (pin as any)?.address ?? "",
+      placeId: loc?.placeId ?? "",
+      city: loc?.city ?? (pin as any)?.city ?? "",
+      admin1Code: loc?.admin1Code ?? loc?.stateCode ?? loc?.state ?? "",
+      admin1: loc?.admin1 ?? loc?.region ?? loc?.state ?? "",
+      countryCode: loc?.countryCode ?? loc?.country ?? "",
+      country: loc?.country ?? "",
     },
   } as NonNullable<EditEventValue>;
 }
 
-// ─── FAB Picker Option Component ─────────────────────────────────────────────
-interface PickerOptionProps {
-  onPress: () => void;
-  iconName: keyof typeof Ionicons.glyphMap;
-  iconColor: string;
-  iconBg: string;
-  borderColor: string;
-  title: string;
-  subtitle: string;
-  badgeText: string;
-  badgeColor: string;
-  badgeBg: string;
-  glowColor: string;
-}
-
-function PickerOption({
-  onPress, iconName, iconColor, iconBg, borderColor,
-  title, subtitle, badgeText, badgeColor, badgeBg, glowColor,
-}: PickerOptionProps) {
-  const scale = useMemo(() => new Animated.Value(1), []);
-
-  const onPressIn = () => Animated.spring(scale, { toValue: 0.97, useNativeDriver: true, speed: 40 }).start();
-  const onPressOut = () => Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 30 }).start();
-
+function PickerOption({ onPress, iconName, iconColor, iconBg, borderColor, glowColor, title, subtitle, badgeText, badgeColor, badgeBg }: any) {
   return (
-    <Animated.View style={{ transform: [{ scale }] }}>
-      <TouchableOpacity
-        style={[P.option, { borderColor }]}
-        activeOpacity={1}
-        onPress={onPress}
-        onPressIn={onPressIn}
-        onPressOut={onPressOut}
-      >
-        {/* Glow layer */}
-        <View style={[P.optionGlow, { backgroundColor: glowColor }]} />
-
-        {/* Icon */}
-        <View style={[P.iconWrap, { backgroundColor: iconBg, borderColor }]}>
-          <Ionicons name={iconName} size={24} color={iconColor} />
-        </View>
-
-        {/* Text */}
-        <View style={P.optionBody}>
-          <Text style={P.optionTitle}>{title}</Text>
-          <Text style={P.optionSub}>{subtitle}</Text>
-        </View>
-
-        {/* Badge */}
-        <View style={[P.badge, { backgroundColor: badgeBg, borderColor: badgeColor + "55" }]}>
-          <Text style={[P.badgeText, { color: badgeColor }]}>{badgeText}</Text>
-        </View>
-
-        {/* Arrow */}
-        <Ionicons name="chevron-forward" size={16} color={C.hint} style={{ marginLeft: 4 }} />
-      </TouchableOpacity>
-    </Animated.View>
+    <TouchableOpacity style={[P.option, { borderColor }]} activeOpacity={0.8} onPress={onPress}>
+      <BlurView intensity={20} style={[P.optionGlow, { backgroundColor: glowColor }]} />
+      <View style={[P.iconWrap, { backgroundColor: iconBg, borderColor }]}>
+        <Ionicons name={iconName as any} size={24} color={iconColor} />
+      </View>
+      <View style={P.optionBody}>
+        <Text style={P.optionTitle}>{title}</Text>
+        <Text style={P.optionSub}>{subtitle}</Text>
+      </View>
+      <View style={[P.badge, { backgroundColor: badgeBg, borderColor }]}>
+        <Text style={[P.badgeText, { color: badgeColor }]}>{badgeText}</Text>
+      </View>
+    </TouchableOpacity>
   );
 }
+
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function Home() {
   const { userId } = useAuth();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const navigation = useNavigation();
+  const lastTabPressRef = useRef(0);
 
-  const [open,        setOpen]        = useState(false);
-  const [showList,    setShowList]    = useState(false);
-  const [showPicker,  setShowPicker]  = useState(false);
-  const [showServiceFlow, setShowServiceFlow] = useState(false);
-  const [defaultKind, setDefaultKind] = useState<"event_free" | "service">("event_free");
+  const [open, setOpen] = useState(false);
+  const [showList, setShowList] = useState(false);
+  const [defaultKind, setDefaultKind] = useState<ListingKind>("event_free");
+  const [defaultIsRecurring, setDefaultIsRecurring] = useState(false);
+  const [showPicker, setShowPicker] = useState(false);
 
-  const [events,    setEvents]    = useState<EventPin[]>([]);
-  const [myLoc,     setMyLoc]     = useState<{ lat: number; lng: number } | null>(null);
-  const [myCity,    setMyCity]    = useState("");
+  const [events, setEvents] = useState<EventPin[]>([]);
+  const [myLoc, setMyLoc] = useState<{ lat: number; lng: number } | null>(null);
+  const [myCity, setMyCity] = useState("");
+  const [searchLabel, setSearchLabel] = useState<string | null>(null);
   const [locStatus, setLocStatus] = useState<"unknown" | "granted" | "denied">("unknown");
   // ✅ Don't render map until we have a real location OR permission is denied
-  const [locReady,  setLocReady]  = useState(false);
+  const [locReady, setLocReady] = useState(false);
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
 
-  const [editOpen,        setEditOpen]        = useState(false);
-  const [editEvent,       setEditEvent]       = useState<EditEventValue>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editEvent, setEditEvent] = useState<EditEventValue>(null);
 
-  // Edit Service Flow
-  const [showEditService, setShowEditService] = useState(false);
-  const [serviceToEdit, setServiceToEdit] = useState<any>(null);
+  // ✅ Recurring edit modal
+  const [editRecurringOpen, setEditRecurringOpen] = useState(false);
+  const [editRecurringEvent, setEditRecurringEvent] = useState<RecurringEvent | null>(null);
 
-  const [activeFilter,    setActiveFilter]    = useState<string | null>(null);
-  const [mapStackOpen,    setMapStackOpen]    = useState(false);
+  const [activeFilter, setActiveFilter] = useState<string | null>(null);
+  const [mapStackOpen, setMapStackOpen] = useState(false);
 
   const fabSize = useMemo(() => (Platform.OS === "ios" ? 58 : 62), []);
 
-  const API_BASE      = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
+  const API_BASE = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
   const EVENT_API_KEY = (Constants.expoConfig?.extra as any)?.eventApiKey as string | undefined;
+
+  // ✅ FIX: Use refs for location so loadEvents doesn't recreate on every GPS update
+  const myLocRef = useRef<{ lat: number; lng: number } | null>(null);
+  // ✅ FIX: In-flight guard — prevents duplicate concurrent fetches
+  const isFetchingRef = useRef(false);
+  // ✅ Delta sync: track last successful fetch time
+  const lastFetchRef = useRef<number>(0);
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    myLocRef.current = myLoc;
+  }, [myLoc]);
 
   // FAB pulse animation
   const fabPulse = useMemo(() => new Animated.Value(1), []);
@@ -221,52 +197,65 @@ export default function Home() {
     return () => loop.stop();
   }, []);
 
+  // ✅ FIX: loadEvents no longer depends on myLoc — reads from ref instead
+  // This prevents the polling useEffect from restarting on every GPS update
   const loadEvents = useCallback(async (customLat?: number, customLng?: number) => {
     if (!API_BASE) return [];
-    
-    const lat = customLat ?? myLoc?.lat;
-    const lng = customLng ?? myLoc?.lng;
-    
-    let baseQuery = `?limit=200`;
-    if (lat && lng) {
-      baseQuery += `&nearLat=${lat}&nearLng=${lng}&radiusM=50000`;
-    }
+    // ✅ Skip if a fetch is already in flight
+    if (isFetchingRef.current) return [];
 
+    const loc = myLocRef.current;
+    const lat = customLat ?? loc?.lat;
+    const lng = customLng ?? loc?.lng;
+
+    const baseQuery = `?limit=100&includePausedFor=${userId || ""}&_t=${Date.now()}`;
+
+    isFetchingRef.current = true;
     try {
-      // 1. Fetch DB events fast
-      const res = await fetch(`${API_BASE.replace(/\/$/, "")}/api/events/get-events${baseQuery}&source=db`, {
-        headers: { ...(EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {}), "ngrok-skip-browser-warning": "1" },
+      const res = await fetch(`${API_BASE.replace(/\/$/, "")}/api/events/get-events${baseQuery}`, {
+        headers: {
+          ...(EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {}),
+          "ngrok-skip-browser-warning": "1",
+          "Cache-Control": "no-cache",
+        },
       });
-      
+
       let dbEvents: EventPin[] = [];
       if (res.ok) {
         const json = await res.json().catch(() => ({}));
-        dbEvents = (Array.isArray(json?.events) ? json.events : []).map(normalizeEvent).filter(Boolean) as EventPin[];
+        dbEvents = (Array.isArray(json?.events) ? json.events : [])
+          .map(normalizeEvent)
+          .filter((ev: any) => {
+            if (!ev) return false;
+            const st = String(ev.status || "active").toLowerCase();
+            const isMine = userId && String(ev.creatorClerkId) === userId;
+            return st === "active" || st === "live" || (st === "paused" && isMine);
+          }) as EventPin[];
         setEvents(dbEvents);
+        setInitialLoadDone(true);
+        lastFetchRef.current = Date.now();
       }
-
-      // 2. Fetch Ticketmaster events in background
-      fetch(`${API_BASE.replace(/\/$/, "")}/api/events/get-events${baseQuery}&source=tm`, {
-        headers: { ...(EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {}), "ngrok-skip-browser-warning": "1" },
-      })
-      .then(r => r.json().catch(() => ({})))
-      .then(tmJson => {
-        const tmEvents = (Array.isArray(tmJson?.events) ? tmJson.events : []).map(normalizeEvent).filter(Boolean) as EventPin[];
-        if (tmEvents.length > 0) {
-          setEvents(prev => {
-            const existingIds = new Set(prev.map(p => p._id));
-            const newEvents = tmEvents.filter(t => !existingIds.has(t._id));
-            return [...prev, ...newEvents];
-          });
-        }
-      })
-      .catch(console.error);
 
       return dbEvents;
     } catch {
       return [];
+    } finally {
+      isFetchingRef.current = false;
     }
-  }, [API_BASE, EVENT_API_KEY, myLoc]);
+  }, [API_BASE, EVENT_API_KEY, userId]); // ✅ myLoc removed from deps — uses ref now
+
+  // Listen for double tab presses to refresh
+  useEffect(() => {
+    const unsubscribe = (navigation as any).addListener("tabPress", (e: any) => {
+      const now = Date.now();
+      if (now - lastTabPressRef.current < 500) {
+        // Double tap on tab
+        loadEvents();
+      }
+      lastTabPressRef.current = now;
+    });
+    return unsubscribe;
+  }, [navigation, loadEvents]);
 
   const loadMyLocation = useCallback(async () => {
     try {
@@ -287,6 +276,7 @@ export default function Home() {
       if (last) {
         resolvedLat = last.coords.latitude;
         resolvedLng = last.coords.longitude;
+        myLocRef.current = { lat: resolvedLat, lng: resolvedLng };
         setMyLoc({ lat: resolvedLat, lng: resolvedLng });
         setLocReady(true); // ✅ We have a cached location — show map immediately
         loadEvents(resolvedLat, resolvedLng);
@@ -295,7 +285,7 @@ export default function Home() {
             const c = (rev?.[0]?.city || rev?.[0]?.district || rev?.[0]?.subregion || rev?.[0]?.name || "").trim();
             if (c) setMyCity(c);
           })
-          .catch(() => {});
+          .catch(() => { });
       }
 
       // 2. Get fresh GPS fix with a timeout and High accuracy
@@ -311,12 +301,18 @@ export default function Home() {
 
       if (fresh) {
         const { latitude: flat, longitude: flng } = fresh.coords;
-        setMyLoc({ lat: flat, lng: flng });
+        // ✅ Only update loc if meaningfully different (>50m) to avoid re-renders
+        const prev = myLocRef.current;
+        const dist = prev ? Math.abs(flat - prev.lat) + Math.abs(flng - prev.lng) : 1;
+        if (dist > 0.0005) { // ~50m threshold
+          myLocRef.current = { lat: flat, lng: flng };
+          setMyLoc({ lat: flat, lng: flng });
+        }
         if (!last) {
           setLocReady(true); // ✅ Fresh GPS fix — map will update
           loadEvents(flat, flng);
         }
-        
+
         const rev = await Location.reverseGeocodeAsync({ latitude: flat, longitude: flng }).catch(() => null);
         if (rev?.[0]) {
           const c = (rev[0].city || rev[0].district || rev[0].subregion || rev[0].name || "").trim();
@@ -334,21 +330,26 @@ export default function Home() {
     }
   }, [loadEvents]);
 
-  useEffect(() => { 
-    loadMyLocation(); 
+  useEffect(() => {
+    loadMyLocation();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const filteredEvents = useMemo(() => {
-    // ✅ Show active events + live events (started but status still "active")
-    const now = Date.now();
-    const active = events.filter(e => {
-      const st = String(e.status ?? "active").toLowerCase();
-      const isMine = userId && String(e.creatorClerkId) === userId;
+  // ✅ FIX: Polling every 30s (was 15s). loadEvents is now stable — won't restart on GPS changes
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadEvents();
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [loadEvents]);
 
-      // ✅ AUTOMATIC ENDING: If event has an end time and it's in the past, hide it.
-      // ⚠️ EXCEPTION: Services never "end" automatically based on time. They stay on map.
-      if (e.kind !== "service" && e.endsAt) {
+  const filteredEvents = useMemo(() => {
+    const now = Date.now();
+    let active = events.filter(e => {
+      const st = String((e as any).status || "active").toLowerCase();
+      const isMine = userId && String((e as any).creatorClerkId) === userId;
+      
+      if (e.endsAt) {
         const endTs = new Date(e.endsAt).getTime();
         if (Number.isFinite(endTs) && now > endTs) return false;
       }
@@ -358,22 +359,24 @@ export default function Home() {
     if (!activeFilter) return active;
     return active.filter(e => {
       const kind = String((e as any).kind ?? "").toLowerCase(), f = activeFilter.toLowerCase();
-      if (f === "free"  || f === "event_free") return kind === "free"  || kind === "event_free";
-      if (f === "paid"  || f === "event_paid") return kind === "paid"  || kind === "event_paid";
-      if (f === "service") return kind === "service";
+      if (f === "free" || f === "event_free") return kind === "free" || kind === "event_free";
+      if (f === "paid" || f === "event_paid") return kind === "paid" || kind === "event_paid";
+      if (f === "recurring") return String((e as any).isRecurring) === "true" || kind === "recurring";
       return true;
     });
   }, [events, activeFilter, userId]);
 
+  // ✅ FIX: mapKey no longer includes activeFilter — filter changes now go via postMessage
+  // Only bump pinsVersion when events are truly added/deleted (not just filtered)
   const [pinsVersion, setPinsVersion] = useState(0);
-  const mapKey = `map:${activeFilter ?? "all"}:${pinsVersion}`;
+  const mapKey = `map:${pinsVersion}`;
 
   const onPinPress = useCallback((pin: EventPin) => {
     router.push({
       pathname: "/newApp/event-detail",
-      params: { 
-        eventId: pin._id, 
-        title: pin.title, 
+      params: {
+        eventId: pin._id,
+        title: pin.title,
         emoji: pin.emoji,
         bannerUri: pin.bannerUri || (pin as any).bannerImage || "",
         date: pin.date || "",
@@ -385,10 +388,24 @@ export default function Home() {
         kind: (pin as any).kind || "event",
         priceCents: String((pin as any).priceCents ?? 0),
         joinPolicy: (pin as any).joinPolicy || "anyone_can_join",
+        isRecurring: String((pin as any).isRecurring === true),
         eventStr: JSON.stringify(pin)
       }
     });
   }, [router]);
+
+  // ✅ Stable callbacks for MapView — wrapped in useCallback to prevent prop churn
+  const handleLocationUpdate = useCallback((lat: number, lng: number) => {
+    const prev = myLocRef.current;
+    const dist = prev ? Math.abs(lat - prev.lat) + Math.abs(lng - prev.lng) : 1;
+    if (dist > 0.0005) { // Only update state if moved >50m
+      myLocRef.current = { lat, lng };
+      setMyLoc({ lat, lng });
+    }
+  }, []);
+
+  const handleStackOpen = useCallback(() => setMapStackOpen(true), []);
+  const handleStackClose = useCallback(() => setMapStackOpen(false), []);
 
   return (
     <>
@@ -397,19 +414,24 @@ export default function Home() {
         <MapView
           key={mapKey}
           events={filteredEvents}
+          initialLoadDone={initialLoadDone}
           initialCenter={myLoc}
+          searchLabel={searchLabel}
           locationStatus={locStatus}
           onPinPress={onPinPress}
           userId={userId}
-          onLocationUpdate={(lat, lng) => setMyLoc({ lat, lng })}
-          onStackOpen={() => setMapStackOpen(true)}
-          onStackClose={() => setMapStackOpen(false)}
+          onLocationUpdate={handleLocationUpdate}
+          onStackOpen={handleStackOpen}
+          onStackClose={handleStackClose}
         />
       )}
 
       <MapSearchHeader
         top={insets.top + 10}
-        onPick={(lat, lng) => setMyLoc({ lat, lng })}
+        onPick={(lat, lng, label) => {
+          setMyLoc({ lat, lng });
+          setSearchLabel(label ?? null);
+        }}
         activeFilter={activeFilter}
         onFilterChange={setActiveFilter}
       />
@@ -423,12 +445,46 @@ export default function Home() {
         <Ionicons name="chatbubble-ellipses" size={18} color={C.amber} />
       </TouchableOpacity>
 
+      {/* ── Refresh button ────────────────────────────── */}
+      {!mapStackOpen && (
+        <TouchableOpacity
+          style={[OL.refreshBtn, { top: insets.top + 125 }]}
+          onPress={() => loadEvents()}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="refresh" size={20} color={C.greenText} />
+        </TouchableOpacity>
+      )}
+
       {/* ── Sheets ───────────────────────────────────── */}
       <EditEventModal
         visible={editOpen} event={editEvent}
         onClose={() => { setEditOpen(false); setEditEvent(null); }}
         onUpdated={() => { setEditOpen(false); setEditEvent(null); loadEvents(); }}
         onDeleted={() => { setEditOpen(false); setEditEvent(null); loadEvents(); }}
+      />
+
+      {/* ✅ RECURRING activity edit modal with Pause/Resume */}
+      <EditRecurringModal
+        visible={editRecurringOpen}
+        event={editRecurringEvent}
+        onClose={() => { setEditRecurringOpen(false); setEditRecurringEvent(null); }}
+        onUpdated={() => { setEditRecurringOpen(false); setEditRecurringEvent(null); loadEvents(); }}
+        onDeleted={(_id) => {
+          setEditRecurringOpen(false);
+          setEditRecurringEvent(null);
+          // Remove pin immediately from local state
+          setEvents(prev => prev.filter(e => e._id !== _id));
+        }}
+        onPauseToggled={(_id, status) => {
+          // Immediately update local event status so the pin hides/shows without a full reload
+          setEvents(prev => prev.map(e =>
+            e._id === _id ? { ...e, status } : e
+          ));
+          if (editRecurringEvent) {
+            setEditRecurringEvent(prev => prev ? { ...prev, status } : prev);
+          }
+        }}
       />
 
       {/* ── FAB ──────────────────────────────────────── */}
@@ -457,13 +513,13 @@ export default function Home() {
         visible={showList} onClose={() => setShowList(false)}
         events={filteredEvents as any} myCity={myCity}
         myLoc={myLoc}
-        onPinPress={onPinPress}
+        onPinPress={onPinPress as any}
       />
 
       {/* ── FAB Picker Modal ─────────────────────────── */}
       <Modal visible={showPicker} transparent animationType="none" onRequestClose={() => setShowPicker(false)}>
         <Pressable style={P.backdrop} onPress={() => setShowPicker(false)}>
-          <Pressable style={P.sheet} onPress={() => {}}>
+          <Pressable style={P.sheet} onPress={() => { }}>
 
             {/* Handle */}
             <View style={P.grabber} />
@@ -484,34 +540,33 @@ export default function Home() {
 
             {/* Option — Event */}
             <PickerOption
-              onPress={() => { setDefaultKind("event_free"); setShowPicker(false); setTimeout(() => setOpen(true), 120); }}
+              onPress={() => { setDefaultKind("event_free"); setDefaultIsRecurring(false); setShowPicker(false); setTimeout(() => setOpen(true), 120); }}
               iconName="calendar"
               iconColor={C.purpleText}
               iconBg={C.purpleDim}
               borderColor={C.purple + "30"}
               glowColor={C.purpleGlow}
-              title="Event"
+              title="One-time Event"
               subtitle="Free or paid · People join & attend"
               badgeText="Free / Paid"
               badgeColor={C.purpleText}
               badgeBg={C.purpleDim}
             />
 
-            {/* Option — Service */}
+            {/* Option — Recurring Activity */}
             <PickerOption
-              onPress={() => { setShowPicker(false); setTimeout(() => setShowServiceFlow(true), 120); }}
-              iconName="briefcase"
-              iconColor={C.purpleText}
-              iconBg={C.purpleDim}
-              borderColor={C.purple + "30"}
-              glowColor={C.purpleGlow}
-              title="Service"
-              subtitle="Bookable slots · Clients book you"
-              badgeText="Bookable"
-              badgeColor={C.purpleText}
-              badgeBg={C.purpleDim}
+              onPress={() => { setDefaultKind("event_free"); setDefaultIsRecurring(true); setShowPicker(false); setTimeout(() => setOpen(true), 120); }}
+              iconName="repeat"
+              iconColor={C.greenText}
+              iconBg={C.greenDim}
+              borderColor={C.green + "30"}
+              glowColor={C.greenGlow}
+              title="Recurring Event"
+              subtitle="Daily or weekly · Stays on map"
+              badgeText="Perpetual"
+              badgeColor={C.greenText}
+              badgeBg={C.greenDim}
             />
-
             {/* Cancel */}
             <TouchableOpacity style={P.cancelBtn} activeOpacity={0.8} onPress={() => setShowPicker(false)}>
               <Text style={P.cancelText}>Cancel</Text>
@@ -521,39 +576,21 @@ export default function Home() {
         </Pressable>
       </Modal>
 
-      <EditServiceFlow
-        visible={showEditService}
-        service={serviceToEdit}
-        onClose={() => { setShowEditService(false); setServiceToEdit(null); }}
-        onUpdated={() => { 
-          setShowEditService(false); 
-          setServiceToEdit(null);
-          loadEvents();
-        }}
-      />
-
       <ModalizeEventSheet
-        visible={open} onClose={() => setOpen(false)} defaultKind={defaultKind}
+        visible={open} onClose={() => setOpen(false)} defaultKind={defaultKind} defaultIsRecurring={defaultIsRecurring}
         onCreate={(e: any) => {
           const n = normalizeEvent(e) ?? (e as EventPin);
           setEvents(prev => [n, ...prev]);
           setOpen(false);
           loadEvents();
-        }}
-      />
-
-      <CreateServiceFlow
-        visible={showServiceFlow}
-        cityName={myCity}
-        onClose={() => setShowServiceFlow(false)}
-        onCreate={(e) => {
-          const n = normalizeEvent(e) ?? (e as EventPin);
-          setEvents(prev => [n, ...prev]);
-          loadEvents();
-        }}
-        onBackToPicker={() => {
-          setShowServiceFlow(false);
-          setTimeout(() => setShowPicker(true), 300);
+          
+          if (e.distanceKm && e.distanceKm > 100) {
+            Alert.alert(
+              "Event Published",
+              `You've created an event approx ${Math.round(e.distanceKm)} km away. Have a safe trip!`,
+              [{ text: "OK" }]
+            );
+          }
         }}
       />
     </>
@@ -564,36 +601,45 @@ export default function Home() {
 const OL = StyleSheet.create({
   chatBtn: {
     position: "absolute", left: 16,
-    width: 42, height: 42, borderRadius: 14,
-    backgroundColor: C.amberDim,
-    borderWidth: 1, borderColor: C.amber + "40",
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: "rgba(255,255,255,0.9)",
+    borderWidth: 1, borderColor: "rgba(0,0,0,0.05)",
     alignItems: "center", justifyContent: "center",
-    shadowColor: C.amber, shadowOpacity: 0.2, shadowRadius: 10, shadowOffset: { width: 0, height: 4 },
-    elevation: 5, zIndex: 10,
+    shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 15, shadowOffset: { width: 0, height: 6 },
+    elevation: 8, zIndex: 10,
+  },
+  refreshBtn: {
+    position: "absolute", right: 16,
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: "rgba(255,255,255,0.9)",
+    borderWidth: 1, borderColor: "rgba(0,0,0,0.05)",
+    alignItems: "center", justifyContent: "center",
+    shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 15, shadowOffset: { width: 0, height: 6 },
+    elevation: 8, zIndex: 10,
   },
   fabGlow: {
-    position: "absolute", bottom: 28, right: 12,
+    position: "absolute", bottom: Platform.OS === "ios" ? 40 : 30, right: 12,
     width: 84, height: 84, borderRadius: 42,
     backgroundColor: C.greenGlow,
     zIndex: 9,
   },
   fab: {
-    position: "absolute", bottom: 38, right: 22,
+    position: "absolute", bottom: Platform.OS === "ios" ? 50 : 40, right: 22,
     backgroundColor: C.green,
     alignItems: "center", justifyContent: "center",
-    shadowColor: C.green, shadowOpacity: 0.5, shadowRadius: 16, shadowOffset: { width: 0, height: 8 },
-    elevation: 10, zIndex: 10,
+    shadowColor: "#000", shadowOpacity: 0.25, shadowRadius: 20, shadowOffset: { width: 0, height: 10 },
+    elevation: 15, zIndex: 10,
   },
   nearbyPill: {
-    position: "absolute", bottom: 42, left: "50%",
+    position: "absolute", bottom: Platform.OS === "ios" ? 60 : 50, left: "50%",
     transform: [{ translateX: -58 }],
-    width: 116, height: 42,
+    width: 116, height: 44,
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
     borderRadius: 999,
-    backgroundColor: "rgba(76, 80, 78, 0.7)",
-    borderWidth: 1, borderColor: C.green + "40",
-    shadowColor: C.green, shadowOpacity: 0.2, shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
-    elevation: 6, zIndex: 10,
+    backgroundColor: "rgba(255, 255, 255, 0.95)",
+    borderWidth: 1, borderColor: "rgba(0,0,0,0.05)",
+    shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 15, shadowOffset: { width: 0, height: 8 },
+    elevation: 10, zIndex: 10,
   },
   nearbyText: { color: C.greenText, fontWeight: "700", fontSize: 13, letterSpacing: 0.3 },
 });
@@ -625,7 +671,7 @@ const P = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 18,
   },
-  heading:    { fontSize: 24, fontWeight: "900", color: "#111111", letterSpacing: -0.6 },
+  heading: { fontSize: 24, fontWeight: "900", color: "#111111", letterSpacing: -0.6 },
   subheading: { fontSize: 14, fontWeight: "500", color: "#666666", marginTop: 4 },
   closeBtn: {
     width: 36, height: 36, borderRadius: 18,
@@ -661,7 +707,7 @@ const P = StyleSheet.create({
   },
   optionBody: { flex: 1 },
   optionTitle: { fontSize: 17, fontWeight: "800", color: "#111111", letterSpacing: -0.2 },
-  optionSub:   { fontSize: 12, fontWeight: "500", color: "#888888", marginTop: 3 },
+  optionSub: { fontSize: 12, fontWeight: "500", color: "#888888", marginTop: 3 },
 
   badge: {
     paddingHorizontal: 10, paddingVertical: 5,

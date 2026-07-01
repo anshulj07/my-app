@@ -1,12 +1,13 @@
 // components/MyBookings/NotificationSheet.tsx
-import React from "react";
+import React, { useState } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity,
   StyleSheet, Platform, Modal, Image, ActivityIndicator, Pressable,
+  RefreshControl
 } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { BlurView } from "expo-blur";
-import { NotifItem } from "../../context/NotificationContext";
+import { NotifItem, useNotifications } from "../../context/NotificationContext";
 
 // ─────────────────────────────────────────────────────────────
 //  TOKENS
@@ -23,6 +24,8 @@ const C = {
   coral:   "#FF6F6F",
   coralBg: "#FFF0F0",
   brandSoft: "#EEF2FF",
+  green:     "#10B981",
+  greenText: "#059669",
 };
 
 function timeAgo(iso: string) {
@@ -48,8 +51,24 @@ export default function NotificationSheet({
   onPressUser: (clerkUserId: string) => void;
   onMarkRead: () => void;
 }) {
+  const [filter, setFilter] = useState<"All" | "Approved" | "Rejected" | "Events">("All");
+
   const pending = items.filter(i => i.type === "pending");
   const joined  = items.filter(i => i.type === "joined");
+  const botAlerts = items.filter(i => i.type === "bot_alert");
+
+  const showPending = filter === "All" || filter === "Events";
+  const showJoined = filter === "All" || filter === "Events";
+  const filteredBotAlerts = botAlerts.filter(i => {
+    if (filter === "All") return true;
+    if (filter === "Approved") return i.isApproved;
+    if (filter === "Rejected") return !i.isApproved;
+    return false;
+  });
+
+  const hasVisibleItems = (showPending && pending.length > 0) || (showJoined && joined.length > 0) || (filteredBotAlerts.length > 0);
+
+  const { refresh: refreshContext } = useNotifications();
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -74,27 +93,105 @@ export default function NotificationSheet({
                 </TouchableOpacity>
               </View>
             </View>
+
+            {/* Filter Pills */}
+            <View style={S.filterRow}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={S.filterScroll}>
+                {(["All", "Approved", "Rejected", "Events"] as const).map(f => {
+                  const counts = {
+                    All: items.length,
+                    Approved: botAlerts.filter(i => i.isApproved).length,
+                    Rejected: botAlerts.filter(i => !i.isApproved).length,
+                    Events: pending.length + joined.length
+                  };
+                  return (
+                    <TouchableOpacity 
+                      key={f} 
+                      onPress={() => setFilter(f)}
+                      style={[S.filterPill, filter === f && S.filterPillActive]}
+                    >
+                      <Text style={[S.filterPillTxt, filter === f && S.filterPillTxtActive]}>
+                        {f} ({counts[f]})
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={S.scroll}>
-            {loading && (
-              <View style={S.center}>
-                <ActivityIndicator color={C.primary} size="large" />
-              </View>
-            )}
-
-            {!loading && items.length === 0 && (
+          <ScrollView 
+            showsVerticalScrollIndicator={false} 
+            contentContainerStyle={S.scroll}
+            refreshControl={<RefreshControl refreshing={loading} onRefresh={refreshContext} tintColor={C.primary} colors={[C.primary]} />}
+          >
+            {!loading && !hasVisibleItems && (
               <View style={S.empty}>
                 <View style={S.emptyIcon}>
                    <Ionicons name="notifications-off-outline" size={32} color={C.muted} />
                 </View>
                 <Text style={S.emptyTitle}>All caught up!</Text>
-                <Text style={S.emptySub}>Join requests and recent activity will appear here.</Text>
+                <Text style={S.emptySub}>Join requests, alerts, and recent activity will appear here.</Text>
+              </View>
+            )}
+
+            {/* AI Rejections & Approvals / Bot Alerts */}
+            {filteredBotAlerts.length > 0 && (
+              <View style={S.section}>
+                <View style={S.sectionHead}>
+                  <Text style={[S.sectionTitle, { color: C.ink }]}>LISTING ALERTS</Text>
+                  <View style={S.badge}><Text style={S.badgeTxt}>{filteredBotAlerts.length}</Text></View>
+                </View>
+                {filteredBotAlerts.map(item => {
+                  const isApproved = item.isApproved;
+                  const themeColor = isApproved ? C.greenText : C.coral;
+                  const themeBg = isApproved ? C.green : C.coralBg;
+                  
+                  return (
+                  <View key={item.id} style={[S.card, { borderColor: themeBg, borderWidth: 2 }]}>
+                    <View style={S.cardRow}>
+                      <View style={[S.avatar, { backgroundColor: themeBg }]}>
+                        <Text style={S.avatarLetter}>{item.eventEmoji}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={S.cardText} numberOfLines={2}>
+                          Your listing <Text style={S.eventText} onPress={() => onPressEvent(item.eventId)}>
+                            {item.eventTitle}
+                          </Text> was {isApproved ? "approved" : "rejected"}.
+                        </Text>
+                        <Text style={S.timeText}>{timeAgo(item.timestamp)}</Text>
+                      </View>
+                    </View>
+                    
+                    {!!item.message && (
+                      <View style={[S.msgBox, { borderColor: themeBg, backgroundColor: isApproved ? "#F0FDF4" : "#fffafa" }]}>
+                        <Text style={[S.msgText, { color: themeColor, fontStyle: "normal", fontWeight: "800" }]}>
+                          {isApproved ? "Success: " : "Reason: "} {item.message}
+                        </Text>
+
+                      </View>
+                    )}
+
+                    {!isApproved && (
+                      <View style={S.actionRow}>
+                        <TouchableOpacity 
+                          onPress={() => {
+                            onClose();
+                            onPressEvent(item.eventId);
+                          }} 
+                          style={[S.admitBtn, { backgroundColor: C.coral, shadowColor: C.coral }]}
+                        >
+                          <Text style={S.admitTxt}>Fix Issues</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </View>
+                )})}
               </View>
             )}
 
             {/* Join Requests */}
-            {pending.length > 0 && (
+            {showPending && pending.length > 0 && (
               <View style={S.section}>
                 <View style={S.sectionHead}>
                   <Text style={S.sectionTitle}>JOIN REQUESTS</Text>
@@ -156,7 +253,7 @@ export default function NotificationSheet({
             )}
 
             {/* Recent Activity */}
-            {joined.length > 0 && (
+            {showJoined && joined.length > 0 && (
               <View style={S.section}>
                 <View style={S.sectionHead}>
                   <Text style={S.sectionTitle}>RECENT ACTIVITY</Text>
@@ -216,6 +313,13 @@ const S = StyleSheet.create({
   markTxt: { fontSize: 12, fontWeight: "800", color: C.primary },
   closeBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(0,0,0,0.04)", alignItems: "center", justifyContent: "center" },
   
+  filterRow: { marginTop: 16 },
+  filterScroll: { gap: 8 },
+  filterPill: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: C.surface, borderWidth: 1, borderColor: C.border },
+  filterPillActive: { backgroundColor: C.primary, borderColor: C.primary },
+  filterPillTxt: { fontSize: 13, fontWeight: "700", color: C.muted },
+  filterPillTxtActive: { color: "#fff" },
+
   scroll: { paddingHorizontal: 24, paddingBottom: 60, paddingTop: 20 },
   center: { paddingVertical: 40, alignItems: "center" },
   

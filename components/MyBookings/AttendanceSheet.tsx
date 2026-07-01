@@ -63,7 +63,10 @@ export default function AttendanceSheet({ visible, onClose, attendees, title }: 
                   style={S.avatar} 
                 />
                 <View style={S.info}>
-                  <Text style={S.name}>{att.name || "Guest"}</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                    <Text style={S.name}>{att.name || "Guest"}</Text>
+                    {att.isVerified && <Ionicons name="checkmark-circle" size={16} color="#0A84FF" />}
+                  </View>
                   <Text style={S.status}>
                     {att.checkedIn ? "Checked in" : "Not checked in"} • {timeAgo(att.joinedAt)}
                   </Text>

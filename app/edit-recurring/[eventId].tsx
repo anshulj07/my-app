@@ -4,13 +4,13 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useAuth } from "@clerk/clerk-expo";
 import Constants from "expo-constants";
 import { apiFetch } from "../../lib/apiFetch";
-import EditServiceFlow from "../../components/EditServiceFlow/EditServiceFlow";
+import EditRecurringModal from "../../components/EditRecurringModal/EditRecurring";
 
-export default function EditServicePage() {
+export default function EditRecurringPage() {
   const { eventId } = useLocalSearchParams<{ eventId: string }>();
   const router = useRouter();
   const { userId } = useAuth();
-  const [serviceData, setServiceData] = useState<any>(null);
+  const [eventData, setEventData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   const API_BASE = (Constants.expoConfig?.extra as any)?.apiBaseUrl;
@@ -26,10 +26,10 @@ export default function EditServicePage() {
         });
         const json = await res.json();
         if (json.ok) {
-          setServiceData(json.event);
+          setEventData(json.event);
         }
       } catch (err) {
-        console.error("Failed to load service for editing:", err);
+        console.error("Failed to load recurring event for editing:", err);
       } finally {
         setLoading(false);
       }
@@ -40,19 +40,26 @@ export default function EditServicePage() {
   if (loading) {
     return (
       <View style={s.center}>
-        <ActivityIndicator size="large" color="#6C5CE7" />
+        <ActivityIndicator size="large" color="#10B981" />
       </View>
     );
   }
 
   return (
     <View style={s.container}>
-      <EditServiceFlow
+      <EditRecurringModal
         visible={true}
-        service={serviceData}
+        event={eventData}
         onClose={() => router.back()}
         onUpdated={() => {
+          // You might want to refresh state or just go back
           router.back();
+        }}
+        onDeleted={() => {
+          router.replace("/newApp/mybookings");
+        }}
+        onPauseToggled={(_id, status) => {
+          // Just let the user interact with the pause button; changes apply and persist
         }}
       />
     </View>
@@ -60,6 +67,6 @@ export default function EditServicePage() {
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
-  center: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#fff" }
+  container: { flex: 1, backgroundColor: "#FFFFFF" },
+  center: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#FFFFFF" }
 });

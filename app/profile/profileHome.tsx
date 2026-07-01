@@ -4,7 +4,7 @@ import React, {
 import {
   View, Text, TouchableOpacity, Animated, ActivityIndicator,
   Image, RefreshControl, Modal, Dimensions,
-  StyleSheet, StatusBar, Platform, Linking,
+  StyleSheet, StatusBar, Platform, Linking, Alert,
 } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useRouter, useFocusEffect } from "expo-router";
@@ -75,8 +75,9 @@ type ProfileData = {
   newAttendees?: number;
   thisMonthEarning?: number;
   overallEarning?: number;
-  services?: string[] | null;
+
   reviewsCount?: number;
+  verificationStatus?: "unverified" | "pending" | "verified" | "rejected";
 };
 function sanitizePhotos(p?: unknown): string[] {
   if (!Array.isArray(p)) return [];
@@ -127,9 +128,13 @@ export default function ProfileHome() {
 
   const photos = useMemo(() => sanitizePhotos(profile.photos), [profile.photos]);
   const previewPhotos = photos.slice(0, 4);
-  const mainPhoto = photos[0] ?? profile.avatar ?? user?.imageUrl ?? null;
+  const mainPhoto = profile.avatar ?? user?.imageUrl ?? null;
   const hasAvatar = !!mainPhoto;
   const avatarUri = mainPhoto;
+
+  // ✅ Instant name/username from Clerk while DB loads
+  const displayName = profile.name || user?.fullName || user?.firstName || "";
+  const displayUsername = profile.username || user?.username || "";
 
   const scrollY = useRef(new Animated.Value(0)).current;
 
@@ -192,11 +197,12 @@ export default function ProfileHome() {
         newAttendees: s?.newAttendees ?? 0,
         thisMonthEarning: s?.thisMonthEarning ?? 0,
         overallEarning: s?.overallEarning ?? 0,
-        services: Array.isArray(s?.services) && s.services.length > 0 ? s.services : null,
+
         reviewsCount: s?.reviewsCount ?? 0,
         email: s?.email ?? "",
         city: s?.city ?? "",
         country: s?.country ?? "",
+        verificationStatus: s?.verificationStatus ?? "unverified",
       };
       setProfile(next);
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
@@ -370,7 +376,7 @@ export default function ProfileHome() {
           <View style={S.stickyActions}>
             <TouchableOpacity
               style={S.stickyBtn}
-              onPress={() => router.push("/profile/settings/PersonalInfo" as any)}
+              onPress={() => { uploadPhoto(null, true).catch(e => Alert.alert("Upload Error", e.message)); }}
             >
               <Ionicons name="pencil" size={16} color="#fff" />
             </TouchableOpacity>
@@ -463,7 +469,7 @@ export default function ProfileHome() {
             <View style={S.coverTopRight}>
               <TouchableOpacity
                 style={S.coverBtn}
-                onPress={() => router.push("/profile/settings/PersonalInfo" as any)}
+                onPress={() => { uploadPhoto(null, true).catch(e => Alert.alert("Upload Error", e.message)); }}
               >
                 <Ionicons name="pencil" size={18} color="#fff" />
               </TouchableOpacity>
@@ -477,7 +483,7 @@ export default function ProfileHome() {
           </Animated.View>
 
           {!hasAvatar && (
-            <TouchableOpacity style={S.addPhotoBtn} onPress={() => setMenuOpen(true)}>
+            <TouchableOpacity style={S.addPhotoBtn} onPress={() => { uploadPhoto(null, true).catch(e => Alert.alert("Upload Error", e.message)); }}>
               <Ionicons name="camera-outline" size={14} color="rgba(255,255,255,0.9)" />
               <Text style={S.addPhotoTxt}>Add Photo</Text>
             </TouchableOpacity>
@@ -485,9 +491,9 @@ export default function ProfileHome() {
 
           {/* Cover info */}
           <Animated.View style={[S.coverInfo, { opacity: coverInfoOpacity }]}>
-            <Text style={S.coverName}>{profile.name || "User Name"}</Text>
+            <Text style={S.coverName}>{displayName || "Your Name"}</Text>
             <Text style={S.coverUsername}>
-              {profile.username ? `@${profile.username}` : "Name"}
+              {displayUsername ? `@${displayUsername}` : "Set your username"}
             </Text>
             <View style={S.coverMetaRow}>
               <Ionicons name="mail-outline" size={11} color="rgba(255,255,255,0.75)" />
@@ -515,14 +521,26 @@ export default function ProfileHome() {
         >
           {/* Stats + Verify card */}
           <View style={S.statsCard}>
-            <TouchableOpacity style={S.verifyCardInner} activeOpacity={0.92}>
+            <TouchableOpacity 
+              style={S.verifyCardInner} 
+              activeOpacity={0.92}
+              onPress={() => router.push("/profile/verify" as any)}
+            >
               <View style={S.verifyIcon}>
-                <Ionicons name="shield-checkmark" size={20} color="#6C63FF" />
+                <Ionicons 
+                  name={profile.verificationStatus === "verified" ? "shield-checkmark" : (profile.verificationStatus === "pending" ? "time-outline" : "shield-half-outline")} 
+                  size={20} 
+                  color={profile.verificationStatus === "verified" ? "#22c55e" : "#6C63FF"} 
+                />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={S.verifyTitle}>Get verified</Text>
+                <Text style={S.verifyTitle}>
+                  {profile.verificationStatus === "verified" ? "Verified" : (profile.verificationStatus === "pending" ? "Verification Pending" : "Get verified")}
+                </Text>
                 <Text style={S.verifySub}>
-                  Lorem ipsum is simply dummy text of the industry.
+                  {profile.verificationStatus === "verified" 
+                    ? "You are a verified user." 
+                    : (profile.verificationStatus === "pending" ? "Your verification is under review." : "Build trust with attendees by verifying your identity.")}
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color="#6C63FF" />
@@ -676,42 +694,7 @@ export default function ProfileHome() {
             </View>
           </View>
 
-          {/* Services Provided */}
-          <View style={S.secDiv} />
-          <View style={S.sec}>
-            <View style={S.secHead}>
-              <Text style={S.secTitle}>Services Provided</Text>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-                {profile.services?.length ? (
-                  <TouchableOpacity
-                    activeOpacity={0.8}
-                    onPress={() => router.push("/newApp/home" as any)}
-                  >
-                    <Text style={S.viewAllText}>View All</Text>
-                  </TouchableOpacity>
-                ) : null}
-                <TouchableOpacity
-                  style={S.secEdit}
-                  onPress={() => router.push("/profile/settings/Services" as any)}
-                >
-                  <Ionicons name="pencil" size={13} color="#6C63FF" />
-                </TouchableOpacity>
-              </View>
-            </View>
-            <View style={S.chipsWrap}>
-              {profile.services?.length ? (
-                profile.services.map(s => (
-                  <View key={s} style={S.chip}>
-                    <Text style={S.chipTxt}>{s}</Text>
-                  </View>
-                ))
-              ) : (
-                <TouchableOpacity onPress={() => router.push("/profile/settings/Services" as any)}>
-                  <Text style={{ color: "#9CA3AF", fontSize: 14 }}>No services provided. Tap to add.</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          </View>
+
 
           {/* Earning */}
           <View style={S.secDiv} />
@@ -1118,7 +1101,7 @@ const EC = {
 
 type MyEventDoc = {
   _id: string; title: string; emoji?: string;
-  kind: "free" | "paid" | "service";
+  kind: "free" | "paid";
   priceCents?: number | null;
   startsAt?: string | null;
   endsAt?: string | null;
@@ -1128,6 +1111,7 @@ type MyEventDoc = {
   attendance?: number | null; attendees?: any[];
   location?: { city?: string; admin1Code?: string; countryCode?: string };
   _role?: "created" | "attended";
+  isRecurring?: boolean;
 };
 type MyEventsTab = "created" | "going" | "past";
 
@@ -1439,7 +1423,6 @@ function MyEventCard({
 
   const isPast = tab === "past";
   const kindCfg =
-    ev.kind === "service" ? { accent: EC.purple, accentBg: EC.purpleBg, accentText: EC.purpleText, label: "Service" } :
     ev.kind === "paid"    ? { accent: EC.amber,  accentBg: EC.amberBg,  accentText: EC.amberText,  label: "Paid"    } :
                             { accent: EC.teal,   accentBg: EC.tealBg,   accentText: EC.tealText,   label: "Free"    };
 
@@ -1463,7 +1446,7 @@ function MyEventCard({
           <View style={ME.cardTop}>
             <View style={[ME.cardIconBox, { backgroundColor: kindCfg.accentBg }]}>
               <Text style={{ fontSize: 20 }}>
-                {ev.emoji || (ev.kind === "service" ? "🛠️" : ev.kind === "paid" ? "🎟" : "🎉")}
+                {ev.emoji || (ev.kind === "paid" ? "🎟" : "🎉")}
               </Text>
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
@@ -1472,6 +1455,11 @@ function MyEventCard({
                 <View style={[ME.badge, { backgroundColor: kindCfg.accentBg, borderColor: kindCfg.accent + "55" }]}>
                   <Text style={[ME.badgeText, { color: kindCfg.accentText }]}>{kindCfg.label}</Text>
                 </View>
+                {ev.isRecurring && (
+                  <View style={[ME.badge, { backgroundColor: EC.blueBg, borderColor: EC.blue + "55" }]}>
+                    <Text style={[ME.badgeText, { color: EC.blueText }]}>Recurring</Text>
+                  </View>
+                )}
                 {isLive && (
                   <View style={[ME.badge, { backgroundColor: "#FEE2E2", borderColor: "#FCA5A5", flexDirection: "row", alignItems: "center", gap: 3 }]}>
                     <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#EF4444" }} />

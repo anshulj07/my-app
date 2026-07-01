@@ -90,7 +90,7 @@ export default function EditEventModal({
   const [priceText, setPriceText] = useState("");
 
   const priceCents = useMemo(() => {
-    const needsPrice = kind === "service" || kind === ("event_paid" as ListingKind);
+    const needsPrice = kind === ("event_paid" as ListingKind);
     if (!needsPrice) return null;
     return parsePriceToCents(priceText);
   }, [kind, priceText]);
@@ -160,7 +160,7 @@ export default function EditEventModal({
     setTitle(eTitle);
     setDescription(eDesc); // ✅ NEW
     setKind(eKind);
-    setPriceText((eKind === "service" || eKind === "event_paid") ? ePrice : "");
+    setPriceText(eKind === "event_paid" ? ePrice : "");
     setDateISO(eDate);
     setTime24(eTime);
     setEndDateISO(eEndDate);
@@ -414,7 +414,7 @@ export default function EditEventModal({
     if (!API_BASE) return setErr("Missing API base URL (extra.apiBaseUrl).");
     if (!userId) return setErr("You must be signed in to edit an event.");
     if (!isCreator) return setErr("Only the creator can edit this event.");
-    if ((kind === "service" || kind === ("event_paid" as ListingKind)) && priceCents === null)
+    if (kind === ("event_paid" as ListingKind) && priceCents === null)
       return setErr("Enter a valid price.");
 
 
@@ -508,7 +508,7 @@ export default function EditEventModal({
         setKind(k);
         setErr(null);
 
-        const needsPrice = k === "service" || k === ("event_paid" as ListingKind);
+        const needsPrice = k === ("event_paid" as ListingKind);
         if (!needsPrice) setPriceText(""); // only clear for free
       }}
 
@@ -529,15 +529,7 @@ export default function EditEventModal({
       onPickSuggestion={handlePickSuggestion}
 
       coord={coord}
-      setCoord={setCoord}
       selectedAddress={selectedAddress}
-      setSelectedAddress={setSelectedAddress}
-
-      locationPayload={locationPayload}
-      setLocationPayload={setLocationPayload}
-
-      locLoading={locLoading}
-      setLocLoading={setLocLoading}
 
       mapRef={mapRef}
       mapHtml={mapHtml}

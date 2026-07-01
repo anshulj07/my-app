@@ -1,12 +1,14 @@
 
 // components/AddEventModal/AddEvent.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Dimensions, Keyboard } from "react-native";
+import { Dimensions, Keyboard, Alert } from "react-native";
 import { Modalize } from "react-native-modalize";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import { apiFetch } from "../../lib/apiFetch";
 import { WebView } from "react-native-webview";
 import { useAuth, useUser } from "@clerk/clerk-expo";
+import * as Location from "expo-location";
 
 import { styles } from "./AddEvent.styles";
 import AddEventFields from "./AddEventFields";
@@ -26,19 +28,21 @@ export default function AddEventModal({
   visible,
   onClose,
   onCreate,
-  defaultKind = "event_free",  // ✅ NEW prop — "event_free" | "event_paid" | "service"
+  defaultKind = "event_free",
+  defaultIsRecurring,
 }: {
   visible: boolean;
   onClose: () => void;
   onCreate: (e: CreateEvent) => void;
   defaultKind?: ListingKind;
+  defaultIsRecurring?: boolean;
 }) {
   const sheetRef = useRef<Modalize>(null);
   const mapRef = useRef<WebView>(null);
   const initialCenterRef = useRef<{ lat: number; lng: number }>(DEFAULT_CENTER);
 
   const { userId } = useAuth();
-  const { user }   = useUser();
+  const { user } = useUser();
 
   const GOOGLE_KEY = (Constants.expoConfig?.extra as any)?.googleMapsKey as string | undefined;
   const API_BASE = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
@@ -47,7 +51,8 @@ export default function AddEventModal({
   const H = Dimensions.get("window").height;
 
   const [title, setTitle] = useState("");
-  const [kind, setKind] = useState<ListingKind>(defaultKind);
+  const isRecurringFlow = defaultIsRecurring === true;
+  const [kind, setKind] = useState<ListingKind>(defaultKind || "event_free");
   const [joinPolicy, setJoinPolicy] = useState<"open" | "approval">("open"); // ✅ Who can join
   const [priceText, setPriceText] = useState("");
 
@@ -60,17 +65,18 @@ export default function AddEventModal({
   const [limitEnabled, setLimitEnabled] = useState(false);
   const [capacityText, setCapacityText] = useState("");
 
-  // Service-specific: slots
-  const [slots, setSlots] = useState<string[]>([]); // e.g. ["09:00", "10:00"]
-  const [slotDuration, setSlotDuration] = useState("60"); // minutes
+  // ✅ Recurring-specific fields
+  const [bookingWindowDays, setBookingWindowDays] = useState<number>(1); // default: 1 day ahead
+  const [dailyCapacityText, setDailyCapacityText] = useState<string>(""); // empty = unlimited
 
-  const [showDetails, setShowDetails] = useState(false);
   const [showWhen, setShowWhen] = useState(false);
 
   const [dateOpen, setDateOpen] = useState(false);
   const [timeOpen, setTimeOpen] = useState(false);
   const [endDateOpen, setEndDateOpen] = useState(false);
   const [endTimeOpen, setEndTimeOpen] = useState(false);
+
+  const [recurringSchedule, setRecurringSchedule] = useState<{day: number; startTime: string; endTime: string}[]>([]);
 
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
@@ -84,15 +90,40 @@ export default function AddEventModal({
 
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
- // console.log("BANNER SELECTED:", result.assets[0].uri);
-const [bannerUri, setBannerUri] = useState<string | null>(null);
+  // console.log("BANNER SELECTED:", result.assets[0].uri);
+  const [bannerUri, setBannerUri] = useState<string | null>(null);
   const emoji = useMemo(() => textToEmoji(title), [title]);
+
+  const [userLoc, setUserLoc] = useState<{lat: number; lng: number} | null>(null);
+  const [isVerified, setIsVerified] = useState(false);
+
+  useEffect(() => {
+    if (visible && userId && API_BASE) {
+      apiFetch(`${API_BASE}/api/profile?userId=${userId}`)
+        .then(res => res.json())
+        .then(data => setIsVerified(data?.profile?.verificationStatus === "verified" || data?.profile?.verification?.idVerified))
+        .catch(e => console.log("Failed to fetch profile verification:", e));
+    }
+    if (visible && !userLoc) {
+      (async () => {
+        try {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (status === "granted") {
+            const cur = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+            setUserLoc({ lat: cur.coords.latitude, lng: cur.coords.longitude });
+          }
+        } catch (e) {
+          console.warn("Failed to get user location on mount:", e);
+        }
+      })();
+    }
+  }, [visible, userId, API_BASE, userLoc]);
 
   // ✅ When defaultKind changes (user picks event vs service), update kind
   useEffect(() => {
-    if (visible) setKind(defaultKind);
+    if (visible) setKind(defaultKind || "event_free");
   }, [defaultKind, visible]);
- 
+
   // ✅ Auto-sync End Date with Start Date (single-date events)
   useEffect(() => {
     setEndDateISO(dateISO);
@@ -148,10 +179,75 @@ const [bannerUri, setBannerUri] = useState<string | null>(null);
   }, [kind, limitEnabled, capacityText]);
 
   const canCreate = useMemo(() => {
-    const needsPrice = kind === "event_paid" || kind === "service";
+    const needsPrice = kind === "event_paid";
     const priceOk = !needsPrice || priceCents !== null;
     return !!GOOGLE_KEY && !!API_BASE && !!userId && !!title.trim() && hasLocation && !submitting && !locLoading && priceOk && capacityOk;
   }, [GOOGLE_KEY, API_BASE, userId, title, hasLocation, submitting, locLoading, kind, priceCents, capacityOk]);
+
+  const draftKey = `event_draft_${isRecurringFlow ? "recurring" : "normal"}`;
+  const [draftLoaded, setDraftLoaded] = useState(false);
+  const isClosingRef = useRef(false);
+
+  // Load Draft
+  useEffect(() => {
+    if (visible) {
+      isClosingRef.current = false;
+      AsyncStorage.getItem(draftKey).then(str => {
+        if (str) {
+          try {
+            const data = JSON.parse(str);
+            if (data.title) setTitle(data.title);
+            if (data.kind) setKind(data.kind);
+            if (data.priceText) setPriceText(data.priceText);
+            if (data.joinPolicy) setJoinPolicy(data.joinPolicy);
+            if (data.description) setDescription(data.description);
+            if (data.dateISO) setDateISO(data.dateISO);
+            if (data.time24) setTime24(data.time24);
+            if (data.endDateISO) setEndDateISO(data.endDateISO);
+            if (data.endTime24) setEndTime24(data.endTime24);
+            if (data.limitEnabled !== undefined) setLimitEnabled(data.limitEnabled);
+            if (data.capacityText) setCapacityText(data.capacityText);
+            if (data.bookingWindowDays !== undefined) setBookingWindowDays(data.bookingWindowDays);
+            if (data.dailyCapacityText) setDailyCapacityText(data.dailyCapacityText);
+            if (data.recurringSchedule) setRecurringSchedule(data.recurringSchedule);
+            if (data.coord) setCoord(data.coord);
+            if (data.selectedAddress) setSelectedAddress(data.selectedAddress);
+            if (data.locationPayload) setLocationPayload(data.locationPayload);
+            if (data.bannerUri) setBannerUri(data.bannerUri);
+            if (data.query) setQuery(data.query);
+          } catch (e) {
+            console.warn("Failed to parse draft", e);
+          }
+        }
+        setDraftLoaded(true);
+      });
+    } else {
+      setDraftLoaded(false);
+    }
+  }, [visible, draftKey]);
+
+  // Save Draft
+  useEffect(() => {
+    if (!visible || !draftLoaded || isClosingRef.current) return;
+    const t = setTimeout(() => {
+      const draftData = {
+        title, description, kind, priceText, joinPolicy,
+        dateISO, time24, endDateISO, endTime24,
+        limitEnabled, capacityText,
+        bookingWindowDays, dailyCapacityText, recurringSchedule,
+        coord, selectedAddress, locationPayload, bannerUri, query
+      };
+      AsyncStorage.setItem(draftKey, JSON.stringify(draftData)).catch(() => {});
+    }, 1000);
+    return () => clearTimeout(t);
+  }, [
+    title, description, kind, priceText, joinPolicy,
+    dateISO, time24, endDateISO, endTime24,
+    limitEnabled, capacityText,
+    bookingWindowDays, dailyCapacityText, recurringSchedule,
+    coord, selectedAddress, locationPayload, bannerUri, query,
+    visible, draftLoaded, draftKey
+  ]);
 
   useEffect(() => {
     if (visible) sheetRef.current?.open();
@@ -178,17 +274,21 @@ const [bannerUri, setBannerUri] = useState<string | null>(null);
   }, [coord, mapReady]);
 
   const hardReset = () => {
-    setTitle(""); setKind(defaultKind); setPriceText(""); setDescription(""); setJoinPolicy("open");
+    setTitle(""); setKind(isRecurringFlow ? "event_free" : defaultKind); setPriceText(""); setDescription(""); setJoinPolicy("open");
     setDateISO(""); setTime24(""); setEndDateISO(""); setEndTime24(""); setLimitEnabled(false); setCapacityText("");
-    setSlots([]); setSlotDuration("60");
-    setShowDetails(false); setShowWhen(false); setDateOpen(false); setTimeOpen(false);
+    setShowWhen(false); setDateOpen(false); setTimeOpen(false);
     setEndDateOpen(false); setEndTimeOpen(false);
     setQuery(""); setSuggestions([]); setSelectedAddress(""); setCoord(null); setLocationPayload(null);
     setErr(null); setSubmitting(false); setMapReady(false); setLoadingSug(false); setLocLoading(false);
     setBannerUri(null);
+    setBookingWindowDays(1); setDailyCapacityText("");
   };
 
-  const handleFullClose = () => { hardReset(); onClose(); };
+  const handleFullClose = () => { 
+    isClosingRef.current = true;
+    hardReset(); 
+    onClose(); 
+  };
 
   const handlePickSuggestion = async (s: Suggestion) => {
     if (!GOOGLE_KEY) return;
@@ -239,38 +339,43 @@ const [bannerUri, setBannerUri] = useState<string | null>(null);
     finally { setLocLoading(false); }
   };
 
-  async function createListing() {
-    if (!API_BASE) throw new Error("Missing API base URL.");
-    if (!userId) throw new Error("You must be signed in.");
-    if (!coord) throw new Error("Pick a location.");
+  const saveToBackend = async (userCurrentLocation: any) => {
+    if (!coord || !locationPayload) throw new Error("Location details missing.");
     if (!locationPayload?.countryCode || !locationPayload?.city) throw new Error("Please select a place so city/country are available.");
 
-    const backendKind = kind === "event_free" ? "free" : kind === "event_paid" ? "paid" : "service";
-    const needsPrice = backendKind === "paid" || backendKind === "service";
+    let backendKind = kind === "event_free" ? "free" : "paid";
+
+    const needsPrice = backendKind === "paid" || (isRecurringFlow && kind === "event_paid");
     if (needsPrice && priceCents === null) throw new Error("Enter a valid price.");
-    if (backendKind === "free" && limitEnabled && !capacityOk) throw new Error("Enter a valid capacity.");
+    if (kind === "event_free" && limitEnabled && !capacityOk) throw new Error("Enter a valid capacity.");
+    if (isRecurringFlow && recurringSchedule.length === 0) throw new Error("Enable and configure at least one day for the recurring event.");
 
     const timezone = typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "Asia/Kolkata";
     const startsAt = dateISO && time24 ? new Date(`${dateISO}T${time24}:00`).toISOString() : undefined;
-    const endsAt   = endDateISO && endTime24 ? new Date(`${endDateISO}T${endTime24}:00`).toISOString() : undefined;
+    const endsAt = endDateISO && endTime24 ? new Date(`${endDateISO}T${endTime24}:00`).toISOString() : undefined;
 
-    console.log("SENDING DATES:", { startsAt, endsAt, timezone });
-
-    const payload = {
-      title: title.trim(), description: description.trim(), emoji,
+    const payload: any = {
+      isRecurring: isRecurringFlow,
+      title: title.trim(),
+      description: description.trim(), emoji,
       bannerUri: bannerUri || "",
       creatorClerkId: userId,
       creatorName: `${user?.firstName || ""} ${user?.lastName || ""}`.trim() || user?.username || "Local Host",
       kind: backendKind, priceCents: needsPrice ? priceCents : null,
       capacity: backendKind === "free" && limitEnabled ? capacity : null,
+      recurringDays: isRecurringFlow ? recurringSchedule.map(s => s.day) : [], // Keep for backward compat
+
+      recurringSchedule: isRecurringFlow ? recurringSchedule : undefined,
       timezone, startsAt, endsAt,
       date: (dateISO || "").trim(), time: (time24 || "").trim(),
       endDate: (endDateISO || "").trim(), endTime: (endTime24 || "").trim(),
-      // Service slots
-      ...(backendKind === "service" ? {
-        slots,
-        slotDurationMinutes: parseInt(slotDuration, 10) || 60,
-      } : {}),
+
+      // ✅ Recurring-specific: booking window & daily capacity
+      bookingWindowDays: isRecurringFlow ? bookingWindowDays : undefined,
+      dailyCapacity: isRecurringFlow
+        ? (dailyCapacityText.trim() ? parseInt(dailyCapacityText.trim(), 10) || null : null)
+        : undefined,
+
       joinPolicy, tags: [], visibility: "public", status: "active",
       location: {
         lat: coord.lat, lng: coord.lng,
@@ -283,6 +388,7 @@ const [bannerUri, setBannerUri] = useState<string | null>(null);
         postalCode: locationPayload.postalCode || "", neighborhood: locationPayload.neighborhood || "",
         source: locationPayload.source || "user_typed",
       },
+      userCurrentLocation,
     };
 
     const res = await apiFetch(`${API_BASE}/api/events/create-event`, {
@@ -294,7 +400,7 @@ const [bannerUri, setBannerUri] = useState<string | null>(null);
     const json = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(json?.error || "Failed to create");
     return json;
-  }
+  };
 
   const handleCreate = async () => {
     setErr(null);
@@ -302,12 +408,38 @@ const [bannerUri, setBannerUri] = useState<string | null>(null);
     if (!API_BASE) { setErr("API base missing (extra.apiBaseUrl)."); return; }
     if (!userId) { setErr("Sign in required."); return; }
 
+    if (!title.trim()) { setErr("Please enter an event title."); return; }
+    if (isRecurringFlow) {
+      if (recurringSchedule.length === 0) { setErr("Please select at least one day for the recurring event."); return; }
+    } else {
+      if (!dateISO || !time24) { setErr("Please select both date and time."); return; }
+    }
+    if (!hasLocation) { setErr("Please select a location on the map."); return; }
+    if (kind === "event_paid" && priceCents === null) { setErr("Please enter a valid price."); return; }
+    if (kind === "event_free" && limitEnabled && !capacityOk) { setErr("Please enter a valid capacity limit."); return; }
+
     setSubmitting(true);
     try {
-      const created = await createListing();
+      let userCurrentLocation = null;
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === "granted") {
+          const cur = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          userCurrentLocation = { lat: cur.coords.latitude, lng: cur.coords.longitude };
+        }
+      } catch (e) {
+        console.warn("Failed to get user location for event creation:", e);
+      }
+
+      const created = await saveToBackend(userCurrentLocation);
+      await AsyncStorage.removeItem(draftKey);
       const ev = created?.event;
-      onCreate({ title: ev?.title ?? title.trim(), lat: ev?.location?.lat ?? coord?.lat ?? DEFAULT_CENTER.lat, lng: ev?.location?.lng ?? coord?.lng ?? DEFAULT_CENTER.lng, emoji: ev?.emoji ?? emoji });
+      onCreate(ev ? { ...ev, distanceKm: created?.distanceKm } : { title: title.trim(), lat: coord?.lat ?? DEFAULT_CENTER.lat, lng: coord?.lng ?? DEFAULT_CENTER.lng, emoji, distanceKm: created?.distanceKm });
       sheetRef.current?.close();
+      Alert.alert(
+        "Under Review", 
+        "Your event has been submitted and is waiting for review. It will be live soon!"
+      );
     } catch (e: any) {
       setErr(e?.message || "Something went wrong. Please try again.");
       setSubmitting(false);
@@ -339,12 +471,15 @@ const [bannerUri, setBannerUri] = useState<string | null>(null);
       }}
     >
       <AddEventFields
-        emoji={emoji} title={title} kind={kind}
+        isRecurringFlow={isRecurringFlow}
+        userLoc={userLoc}
+        isVerified={isVerified}
+        emoji={emoji} title={title} setTitle={setTitle}
+        kind={kind}
         onClose={() => { hardReset(); sheetRef.current?.close(); }}
-        setTitle={setTitle}
+        setBannerUri={setBannerUri}
+        joinPolicy={joinPolicy} setJoinPolicy={setJoinPolicy}
         bannerUri={bannerUri}
-        
-setBannerUri={setBannerUri}
         setKind={(k) => {
           setKind(k);
           if (k === "event_free") setPriceText("");
@@ -354,20 +489,26 @@ setBannerUri={setBannerUri}
         priceText={priceText}
         setPriceText={(t) => { setPriceText(t); setErr(null); }}
         priceCents={priceCents}
-        showDetails={showDetails} setShowDetails={setShowDetails}
+        showDetails={false} setShowDetails={() => {}}
         description={description} setDescription={setDescription}
         limitEnabled={limitEnabled}
         setLimitEnabled={(v) => { setLimitEnabled(v); if (!v) setCapacityText(""); setErr(null); }}
         capacityText={capacityText}
         setCapacityText={(t) => { setCapacityText(t.replace(/[^\d]/g, "")); setErr(null); }}
         capacityOk={capacityOk}
-        slots={slots} setSlots={setSlots}
-        slotDuration={slotDuration} setSlotDuration={setSlotDuration}
+
+        // ✅ Recurring-specific
+        bookingWindowDays={bookingWindowDays}
+        setBookingWindowDays={setBookingWindowDays}
+        dailyCapacityText={dailyCapacityText}
+        setDailyCapacityText={(t) => { setDailyCapacityText(t.replace(/[^\d]/g, "")); setErr(null); }}
+
         showWhen={showWhen} setShowWhen={setShowWhen}
         dateISO={dateISO} setDateISO={setDateISO}
         time24={time24} setTime24={setTime24}
         endDateISO={endDateISO} setEndDateISO={setEndDateISO}
         endTime24={endTime24} setEndTime24={setEndTime24}
+        recurringSchedule={recurringSchedule} setRecurringSchedule={setRecurringSchedule}
         dateLabel={dateLabel} timeLabel={timeLabel}
         endDateLabel={endDateLabel} endTimeLabel={endTimeLabel}
         dateOpen={dateOpen} setDateOpen={setDateOpen}
@@ -380,14 +521,13 @@ setBannerUri={setBannerUri}
         onPickSuggestion={handlePickSuggestion}
         clearQuery={() => { setQuery(""); setSuggestions([]); setSelectedAddress(""); setLocationPayload(null); setErr(null); }}
         selectedAddress={selectedAddress} locLoading={locLoading}
-        googleKey={GOOGLE_KEY}
+        googleKey={GOOGLE_KEY} coord={coord}
         mapRef={mapRef as unknown as React.RefObject<WebView>}
         mapHtml={mapHtml} onMapMessage={onMapMessage}
         err={err} submitting={submitting} canCreate={canCreate}
         onCancel={() => { hardReset(); sheetRef.current?.close(); }}
         onCreate={handleCreate}
-        joinPolicy={joinPolicy} setJoinPolicy={setJoinPolicy}
-        isServiceMode={defaultKind === "service"}
+
       />
     </Modalize>
   );

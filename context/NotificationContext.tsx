@@ -3,10 +3,11 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import Constants from "expo-constants";
 import { apiFetch } from "../lib/apiFetch";
+import { usePushNotifications } from "../hooks/usePushNotifications";
 
 export type NotifItem = {
   id: string;
-  type: "joined" | "pending";
+  type: "joined" | "pending" | "bot_alert";
   eventId: string;
   eventTitle: string;
   eventEmoji: string;
@@ -16,6 +17,9 @@ export type NotifItem = {
   message: string;
   timestamp: string;
   paid?: boolean; // ✅ Added for payment tracking
+  flags?: any[];
+  moderatorNote?: string;
+  isApproved?: boolean;
 };
 
 type NotificationContextType = {
@@ -45,6 +49,22 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     "Content-Type": "application/json",
     ...(EVENT_API_KEY ? { "x-api-key": EVENT_API_KEY } : {}),
   }), [EVENT_API_KEY]);
+
+  const { expoPushToken } = usePushNotifications();
+
+  // Send push token to backend when it becomes available
+  useEffect(() => {
+    if (expoPushToken && userId && API_BASE) {
+      apiFetch(`${API_BASE}/api/profile`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({
+          clerkUserId: userId,
+          expoPushToken,
+        }),
+      }).catch(err => console.log("Failed to sync push token:", err));
+    }
+  }, [expoPushToken, userId, API_BASE, headers]);
 
   // Load last seen timestamp from storage
   useEffect(() => {
@@ -76,8 +96,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     if (userId) {
       refresh();
-      // Optional: Polling every 60 seconds
-      const timer = setInterval(refresh, 60000);
+      // Polling every 10 seconds for near real-time updates
+      const timer = setInterval(refresh, 10000);
       return () => clearInterval(timer);
     }
   }, [userId, refresh]);
